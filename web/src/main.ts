@@ -1,3 +1,4 @@
+import './style.css';
 import { reducer, type WorkspaceState } from './state';
 import { renderWorkspace } from './render';
 import { requestMagicLink, checkSession, submitQuery, approveEvents } from './api';

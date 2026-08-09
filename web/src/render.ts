@@ -13,7 +13,9 @@ export function renderWorkspace(
   handlers: WorkspaceHandlers
 ): void {
   container.innerHTML = '';
-  container.appendChild(render(state, handlers));
+  const wrapper = render(state, handlers);
+  wrapper.classList.add('workspace-enter');
+  container.appendChild(wrapper);
 }
 
 function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement {

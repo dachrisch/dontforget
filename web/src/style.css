@@ -1,0 +1,89 @@
+:root {
+  --paper: #f7f3e9;
+  --paper-alt: #efe8d8;
+  --ink: #1f1b16;
+  --ink-muted: #6b6255;
+  --rule: #d8cfb8;
+  --accent: #a4302a;
+
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --radius: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1c1a16;
+    --paper-alt: #262319;
+    --ink: #ede6d3;
+    --ink-muted: #a89e88;
+    --rule: #3a352a;
+    --accent: #d9714f;
+  }
+}
+
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('/fonts/playfair-display-700.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+#root {
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.error-banner {
+  max-width: 640px;
+  margin: 1rem auto 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+h1, h2 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.subtext {
+  color: var(--ink-muted);
+}
+
+@keyframes workspace-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-enter {
+  animation: workspace-enter 150ms ease-out;
+}

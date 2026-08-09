@@ -17,6 +17,7 @@ describe('renderWorkspace', () => {
     renderWorkspace(container, { kind: 'signedOut' }, handlers);
 
     expect(container.textContent).toContain('Sign in');
+    expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
     const input = container.querySelector<HTMLInputElement>('input[type=email]')!;
     input.value = 'a@example.com';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
