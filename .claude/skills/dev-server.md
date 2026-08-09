@@ -34,11 +34,12 @@ Creates/reuses the `dontforget-mongo-dev` container on `servyy-test.lxd`, port 2
 export DATABASE_URL="mongodb://<IP-printed-above>:27019/dontforget"
 export PUBLIC_BASE_URL="http://localhost:3000"
 export SEARXNG_BASE_URL="https://search.lehel.xyz"
+export SEARXNG_TOKEN="<container repo's ansible/plays/vars/secrets.yml, vault_searxng_brave_token>"
 export OPENCODE_BASE_URL="https://opencode.lehel.xyz"
-export OPENCODE_API_KEY="<from Vaultwarden, or servyy-container's ansible/plays/vars/secrets.yml once git-crypt unlocked>"
+export OPENCODE_API_KEY="<container repo's ansible/plays/vars/secrets.yml, opencode.api_key>"
 ```
 
-`OPENCODE_API_KEY` is required to actually run a query end-to-end (searches call the real `search.lehel.xyz` and `opencode.lehel.xyz` — nothing is mocked outside tests). Without it, sign-in and the empty workspace still work; submitting a query will fail.
+Both `SEARXNG_TOKEN` and `OPENCODE_API_KEY` are required to run a query end-to-end (searches call the real `search.lehel.xyz` and `opencode.lehel.xyz` — nothing is mocked outside tests). Without them, sign-in and the empty workspace still work; submitting a query will fail (or worse, silently return zero candidates — see Common Mistakes). Both values live in the `container` repo's `ansible/plays/vars/secrets.yml` (git-crypt encrypted, but plaintext on disk once unlocked).
 
 Leave `SMTP_HOST` unset — see step 4.
 
@@ -108,6 +109,14 @@ cd web && npm run dev
 **❌ Submitting a query with no `OPENCODE_API_KEY` set**
 - The request will fail — `extractDates()` calls the real opencode API and needs the key
 - Fix: export a real key before `npm run dev`
+
+**❌ A query returns zero candidates with no error**
+- Not a bug — this instance's search engines are SearXNG "private engines" and silently return nothing without a matching `SEARXNG_TOKEN`. See `src/search/searxngClient.ts`'s top comment.
+- Fix: export `SEARXNG_TOKEN` before `npm run dev`
+
+**❌ A query takes 10-40+ seconds, or times out / errors with an opencode 503**
+- Expected latency: `extractDates()` polls opencode for the reply (create session → send prompt → poll `GET .../message` up to 30s) rather than getting it back inline — see `src/search/opencodeClient.ts`'s top comment for the confirmed API shape
+- A "Provider request failed with HTTP 503: Endpoint is unavailable" or "opencode reply timed out" error is the upstream LLM provider being flaky, observed live 2026-08-09 — not a dontforget bug. Retry the query.
 
 **❌ Reusing the *test* database's connection string for dev, or vice versa**
 - `dontforget-mongo` (27018) is the test DB, reset routinely; `dontforget-mongo-dev` (27019) is dev, meant to persist
