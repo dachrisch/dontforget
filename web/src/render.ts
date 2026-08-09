@@ -82,8 +82,15 @@ function renderEmpty(handlers: WorkspaceHandlers): HTMLElement {
 function renderLoading(queryText: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <span class="chip">${escapeHtml(queryText)}</span>
-    <p>Searching → extracting dates…</p>
+    <span class="chip-torn">${escapeHtml(queryText)}</span>
+    <p class="loading-status">
+      Searching → extracting dates…
+      <span class="ticks">
+        <span class="tick"></span>
+        <span class="tick"></span>
+        <span class="tick"></span>
+      </span>
+    </p>
   `;
   return wrapper;
 }
