@@ -52,9 +52,10 @@ describe('approveEvents', () => {
     const statuses = await db
       .collection('events')
       .find({ query_id: new ObjectId(queryId) })
-      .sort({ start_date: 1 })
       .toArray();
-    expect(statuses.map(r => r.status)).toEqual(['approved', 'candidate']);
+    const byLabel = Object.fromEntries(statuses.map(r => [r.label as string, r.status as string]));
+    expect(byLabel['Frühjahrsdult']).toBe('approved');
+    expect(byLabel['Kirchweihdult (stale)']).toBe('candidate');
   });
 
   it('returns null for a query the user does not own', async () => {
