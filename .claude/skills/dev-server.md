@@ -95,6 +95,9 @@ cd web && npm run dev
 
 ## Common Mistakes
 
+**❌ Magic-link sign-in 404s with "Route GET:/ not found"**
+- Was a real bug: the callback redirect was hardcoded to `/`, which only exists on the backend in production (serving the built frontend statically). Fixed — the callback now redirects to `FRONTEND_URL` (defaults to `http://localhost:5173` outside production). If this recurs, check that fix wasn't reverted in `src/auth/routes.ts` / `src/server.ts`.
+
 **❌ Trying `docker compose up` locally**
 - Error: `docker: command not found`, or a permission denial
 - Fix: `./scripts/spinup_dev_db.sh` — Docker only runs on `servyy-test`

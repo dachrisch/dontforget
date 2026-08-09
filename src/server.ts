@@ -32,14 +32,22 @@ async function main() {
       extractDates(process.env.OPENCODE_BASE_URL!, process.env.OPENCODE_API_KEY!, query, results),
   });
 
+  const isProduction = process.env.NODE_ENV === 'production';
+
   const app = buildApp({
     db,
     emailSender,
     publicBaseUrl: process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000',
+    // In production the backend serves the built frontend itself (below),
+    // so the magic-link callback redirect stays same-origin ('/'). In dev
+    // the frontend is a separate Vite server — redirect there instead, or
+    // the callback 404s trying to GET '/' on a backend that has no such
+    // route outside production.
+    frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
   });
 
-  if (process.env.NODE_ENV === 'production') {
+  if (isProduction) {
     app.register(fastifyStatic, {
       root: join(dirname(fileURLToPath(import.meta.url)), '..', 'web', 'dist'),
     });

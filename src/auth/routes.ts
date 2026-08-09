@@ -5,6 +5,7 @@ import { SessionService, createRequireAuth, SESSION_COOKIE } from './session';
 export interface AuthRouteDeps {
   magicLinkService: MagicLinkService;
   sessionService: SessionService;
+  frontendUrl: string;
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
@@ -32,7 +33,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
       path: '/',
       maxAge: 30 * 24 * 60 * 60,
     });
-    return reply.redirect('/');
+    return reply.redirect(deps.frontendUrl);
   });
 
   const requireAuth = createRequireAuth(deps.sessionService);

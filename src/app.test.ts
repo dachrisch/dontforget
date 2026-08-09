@@ -8,6 +8,7 @@ describe('GET /health', () => {
       db: {} as any,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: async () => [],
     });
     const response = await app.inject({ method: 'GET', url: '/health' });

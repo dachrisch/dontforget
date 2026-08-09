@@ -13,6 +13,7 @@ export interface AppDeps {
   db: Db;
   emailSender: EmailSender;
   publicBaseUrl: string;
+  frontendUrl: string;
   runQuery: (query: string) => Promise<ExtractedEvent[]>;
 }
 
@@ -24,7 +25,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   const magicLinkService = new MagicLinkService(deps.db, deps.emailSender, deps.publicBaseUrl);
   const sessionService = new SessionService(deps.db);
-  registerAuthRoutes(app, { magicLinkService, sessionService });
+  registerAuthRoutes(app, { magicLinkService, sessionService, frontendUrl: deps.frontendUrl });
 
   const requireAuth = createRequireAuth(sessionService);
   registerQueryRoutes(app, {

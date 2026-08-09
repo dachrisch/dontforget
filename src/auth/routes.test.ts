@@ -7,7 +7,7 @@ function fakeDb(): Db {
   const collection = {
     updateOne: vi.fn().mockResolvedValue(undefined),
     insertOne: vi.fn().mockResolvedValue(undefined),
-    findOneAndUpdate: vi.fn().mockResolvedValue({ _id: 'user-1' }),
+    findOneAndUpdate: vi.fn().mockResolvedValue({ _id: 'user-1', user_id: 'user-1' }),
     findOne: vi.fn().mockResolvedValue({ _id: 'user-1' }),
     find: vi.fn().mockReturnValue({ toArray: () => Promise.resolve([]) }),
   };
@@ -21,6 +21,7 @@ describe('auth routes', () => {
       db: fakeDb(),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: async () => [],
     });
 
@@ -39,6 +40,7 @@ describe('auth routes', () => {
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
     });
 
@@ -51,6 +53,7 @@ describe('auth routes', () => {
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
     });
 
@@ -58,11 +61,27 @@ describe('auth routes', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('GET /api/auth/callback redirects to frontendUrl, not a hardcoded /', async () => {
+    const app = buildApp({
+      db: fakeDb(),
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: vi.fn(),
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/api/auth/callback?token=any-token' });
+
+    expect(response.statusCode).toBe(302);
+    expect(response.headers.location).toBe('http://localhost:5173');
+  });
+
   it('GET /api/me returns 401 with no session cookie', async () => {
     const app = buildApp({
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: async () => [],
     });
 

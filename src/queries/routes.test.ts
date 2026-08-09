@@ -8,6 +8,7 @@ describe('POST /api/queries', () => {
       db: {} as any,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
     });
 
