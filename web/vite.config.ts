@@ -12,7 +12,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:3000',
-      '/f': 'http://localhost:3000',
+      // Trailing slash matters: a bare '/f' prefix-matches any path
+      // starting with those two characters, including /fonts/*, which
+      // Vite would then proxy to the backend (404) instead of serving
+      // from public/. Feed URLs are always /f/<token>, so this is safe.
+      '/f/': 'http://localhost:3000',
     },
   },
 });
