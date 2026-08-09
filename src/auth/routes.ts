@@ -1,0 +1,36 @@
+import type { FastifyInstance } from 'fastify';
+import { MagicLinkService } from './magicLink';
+import { SessionService, createRequireAuth, SESSION_COOKIE } from './session';
+
+export interface AuthRouteDeps {
+  magicLinkService: MagicLinkService;
+  sessionService: SessionService;
+}
+
+export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
+  app.post<{ Body: { email: string } }>('/api/auth/magic-link', async (request, reply) => {
+    const { email } = request.body;
+    if (!email || !email.includes('@')) {
+      return reply.code(400).send({ error: 'invalid email' });
+    }
+    await deps.magicLinkService.requestLink(email);
+    return reply.code(202).send({ sent: true });
+  });
+
+  app.get<{ Querystring: { token: string } }>('/api/auth/callback', async (request, reply) => {
+    const userId = await deps.magicLinkService.verifyToken(request.query.token);
+    if (!userId) {
+      return reply.code(400).send({ error: 'invalid or expired link' });
+    }
+    const sessionId = await deps.sessionService.createSession(userId);
+    reply.setCookie(SESSION_COOKIE, sessionId, {
+      httpOnly: true,
+      path: '/',
+      maxAge: 30 * 24 * 60 * 60,
+    });
+    return reply.redirect('/');
+  });
+
+  const requireAuth = createRequireAuth(deps.sessionService);
+  app.get('/api/me', { preHandler: requireAuth }, async () => ({ authenticated: true }));
+}

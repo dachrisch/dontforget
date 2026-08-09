@@ -1,0 +1,10 @@
+services:
+  mongo:
+    image: mongo:8
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - dontforget-dev-db:/data/db
+
+volumes:
+  dontforget-dev-db:
