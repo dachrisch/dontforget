@@ -118,7 +118,7 @@ describe('renderWorkspace', () => {
     expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(false);
   });
 
-  it('renders the feed-ready state with both URLs', () => {
+  it('renders the feed-ready state as ledger rows with both URLs', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
@@ -133,5 +133,6 @@ describe('renderWorkspace', () => {
 
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
+    expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
   });
 });

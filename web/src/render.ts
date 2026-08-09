@@ -159,9 +159,15 @@ function renderReview(
 function renderFeedReady(icsUrl: string, rssUrl: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <p>Future runs add new dates automatically — nothing to approve next time.</p>
-    <div>ICS: <a href="${escapeHtml(icsUrl)}">${escapeHtml(icsUrl)}</a></div>
-    <div>RSS: <a href="${escapeHtml(rssUrl)}">${escapeHtml(rssUrl)}</a></div>
+    <p class="subtext">Future runs add new dates automatically — nothing to approve next time.</p>
+    <div class="ledger-row">
+      <span class="ledger-label">Calendar (ICS)</span>
+      <a class="ledger-value" href="${escapeHtml(icsUrl)}">${escapeHtml(icsUrl)}</a>
+    </div>
+    <div class="ledger-row">
+      <span class="ledger-label">RSS</span>
+      <a class="ledger-value" href="${escapeHtml(rssUrl)}">${escapeHtml(rssUrl)}</a>
+    </div>
   `;
   return wrapper;
 }
