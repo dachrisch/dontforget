@@ -4,9 +4,9 @@
 
 **Goal:** Build the first-time happy path end to end — magic-link sign-in, submit a query, watch it resolve synchronously, review and approve candidate dates, get an ICS + RSS feed link — as one working full-stack slice.
 
-**Architecture:** A Fastify + TypeScript backend (Postgres via `pg`, no ORM) exposing a small JSON API, and a plain-TypeScript (no framework) single-page frontend built with Vite that renders one workspace page whose results card morphs through five states. Backend and frontend are two sibling npm packages in this repo; deployment automation stays in the `servyy-container` infra repo per `docs/design.md` §6 and is out of scope here.
+**Architecture:** A Fastify + TypeScript backend (MongoDB via the official `mongodb` driver, no ORM) exposing a small JSON API, and a plain-TypeScript (no framework) single-page frontend built with Vite that renders one workspace page whose results card morphs through five states. Backend and frontend are two sibling npm packages in this repo; deployment automation stays in the `servyy-container` infra repo per `docs/design.md` §6 and is out of scope here.
 
-**Tech Stack:** Node 20, TypeScript 5, Fastify 4, `pg` (no ORM — hand-written SQL + a tiny migration runner), Vitest, Vite, `nodemailer`, `ics`, `feed`.
+**Tech Stack:** Node 20, TypeScript 5, Fastify 4, `mongodb` (official driver, no ORM), an in-tree migration runner, Vitest, Vite, `nodemailer`, `ics`, `feed`.
 
 ## Global Constraints
 
@@ -17,7 +17,7 @@
 - Approval is per-event (§7 decision) — never a single approve/reject action for the whole batch.
 - Both ICS and RSS ship together (§7 decision) — every task that touches feeds implements both formats, never one alone.
 - Auth is magic link, no password (§7 decision, 2026-08-09 addendum) — no password field, hash, or login form appears anywhere in this plan.
-- Tests that touch Postgres run against a real local database (via `docker-compose.dev.yml`), never a mocked DB layer. Tests that touch the network (searxng, opencode, SMTP) mock `fetch` / inject a fake transporter — never hit real external services from a test run.
+- Tests that touch MongoDB run against a real local instance (via `docker-compose.dev.yml`), never a mocked DB layer. Tests that touch the network (searxng, opencode, SMTP) mock `fetch` / inject a fake transporter — never hit real external services from a test run.
 
 ---
 
@@ -59,14 +59,14 @@ Read this before Task 6 — it's the actual, verified contract for the two exter
 ```
 dontforget/
 ├── package.json, tsconfig.json, vitest.config.ts   (backend)
-├── docker-compose.dev.yml                          (local Postgres for dev + tests)
+├── docker-compose.dev.yml                          (local MongoDB for dev + tests)
 ├── .env.example
-├── migrations/001_init.sql
 ├── src/
 │   ├── types.ts
-│   ├── server.ts                 # entrypoint: build app, connect pool, listen
+│   ├── server.ts                 # entrypoint: build app, connect client, listen
 │   ├── app.ts                    # buildApp(deps) -> Fastify instance (used by tests + server.ts)
-│   ├── db/{pool.ts,migrate.ts}
+│   ├── db/{client.ts,migrate.ts}
+│   ├── migrations/001_init.ts    # migration modules live under src so tsc/tsx build them
 │   ├── email/EmailSender.ts
 │   ├── auth/{magicLink.ts,session.ts,routes.ts}
 │   ├── search/{searxngClient.ts,opencodeClient.ts,searchOrchestrator.ts}
@@ -107,7 +107,7 @@ dontforget/
     "fastify": "^4.28.0",
     "@fastify/cookie": "^9.3.0",
     "@fastify/static": "^7.0.0",
-    "pg": "^8.11.5",
+    "mongodb": "^6.7.0",
     "nodemailer": "^6.9.13",
     "ics": "^3.7.2",
     "feed": "^4.2.2"
@@ -117,7 +117,6 @@ dontforget/
     "tsx": "^4.7.2",
     "vitest": "^1.6.0",
     "@types/node": "^20.12.7",
-    "@types/pg": "^8.11.6",
     "@types/nodemailer": "^6.4.15"
   }
 }
@@ -237,31 +236,27 @@ git commit -m "feat: scaffold backend with health check"
 
 ---
 
-### Task 2: Postgres schema, migrations & pool
+### Task 2: MongoDB schema, client & migration runner
 
 **Files:**
 - Create: `docker-compose.dev.yml`, `.env.example`
-- Create: `migrations/001_init.sql`
-- Create: `src/db/pool.ts`, `src/db/migrate.ts`
+- Create: `src/migrations/001_init.ts`
+- Create: `src/db/client.ts`, `src/db/migrate.ts`
 - Test: `src/db/migrate.test.ts`
 
 **Interfaces:**
-- Produces: `createPool(connectionString: string): Pool`, `runMigrations(pool: Pool): Promise<string[]>` (returns names of newly-applied migration files). Every later DB-touching task imports `createPool`.
+- Produces: `createClient(connectionString: string): Promise<MongoClient>` and `runMigrations(db: Db): Promise<string[]>` (returns names of newly-applied migration files). Every later DB-touching task imports `createClient`.
 
 - [ ] **Step 1: Create `docker-compose.dev.yml`**
 
 ```yaml
 services:
-  db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: dontforget
-      POSTGRES_PASSWORD: dontforget
-      POSTGRES_DB: dontforget
+  mongo:
+    image: mongo:8
     ports:
-      - "5432:5432"
+      - "127.0.0.1:27017:27017"
     volumes:
-      - dontforget-dev-db:/var/lib/postgresql/data
+      - dontforget-dev-db:/data/db
 
 volumes:
   dontforget-dev-db:
@@ -270,7 +265,7 @@ volumes:
 - [ ] **Step 2: Create `.env.example`**
 
 ```
-DATABASE_URL=postgres://dontforget:dontforget@localhost:5432/dontforget
+DATABASE_URL=mongodb://localhost:27017/dontforget
 PUBLIC_BASE_URL=http://localhost:3000
 SEARXNG_BASE_URL=https://search.lehel.xyz
 OPENCODE_BASE_URL=https://opencode.lehel.xyz
@@ -282,64 +277,44 @@ SMTP_PASS=
 SMTP_FROM=dontforget@lehel.xyz
 ```
 
-- [ ] **Step 3: Start local Postgres**
+- [ ] **Step 3: Start local MongoDB**
 
-Run: `docker compose -f docker-compose.dev.yml up -d db`
-Verify: `docker compose -f docker-compose.dev.yml ps` shows `db` healthy/running.
+Run: `docker compose -f docker-compose.dev.yml up -d mongo`
+Verify: `docker compose -f docker-compose.dev.yml ps` shows `mongo` running.
 
 - [ ] **Step 4: Create the schema migration**
 
-`migrations/001_init.sql`:
+MongoDB needs no table DDL, so a migration here means: ensure collections exist, create the unique indexes that enforce the data-model invariants (unique emails, unique tokens, unique feed token per user), and record itself in `schema_migrations`.
 
-```sql
-create extension if not exists pgcrypto;
+`src/migrations/001_init.ts`:
 
-create table users (
-  id uuid primary key default gen_random_uuid(),
-  email text not null unique,
-  created_at timestamptz not null default now()
-);
+```ts
+import type { Db } from 'mongodb';
 
-create table magic_links (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id),
-  token text not null unique,
-  expires_at timestamptz not null,
-  used_at timestamptz,
-  created_at timestamptz not null default now()
-);
+export async function migrate(db: Db): Promise<void> {
+  await db.createCollection('users');
+  await db.collection('users').createIndex({ email: 1 }, { unique: true });
 
-create table sessions (
-  id text primary key,
-  user_id uuid not null references users(id),
-  expires_at timestamptz not null,
-  created_at timestamptz not null default now()
-);
+  await db.createCollection('magic_links');
+  await db.collection('magic_links').createIndex({ token: 1 }, { unique: true });
+  await db.collection('magic_links').createIndex({ user_id: 1 });
+  await db.collection('magic_links').createIndex({ expires_at: 1 });
 
-create table queries (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references users(id),
-  query_text text not null,
-  recurrence_interval text not null default 'monthly',
-  created_at timestamptz not null default now()
-);
+  await db.createCollection('sessions');
+  await db.collection('sessions').createIndex({ user_id: 1 });
+  await db.collection('sessions').createIndex({ expires_at: 1 });
 
-create table events (
-  id uuid primary key default gen_random_uuid(),
-  query_id uuid not null references queries(id),
-  label text not null,
-  start_date date not null,
-  end_date date not null,
-  source_url text not null,
-  status text not null default 'candidate' check (status in ('candidate', 'approved')),
-  created_at timestamptz not null default now()
-);
+  await db.createCollection('queries');
+  await db.collection('queries').createIndex({ user_id: 1 });
 
-create table feed_tokens (
-  user_id uuid primary key references users(id),
-  token text not null unique,
-  created_at timestamptz not null default now()
-);
+  await db.createCollection('events');
+  await db.collection('events').createIndex({ query_id: 1 });
+
+  await db.createCollection('feed_tokens');
+  // one token per user — enforced like the old PRIMARY KEY on user_id
+  await db.collection('feed_tokens').createIndex({ user_id: 1 }, { unique: true });
+  await db.collection('feed_tokens').createIndex({ token: 1 }, { unique: true });
+}
 ```
 
 - [ ] **Step 5: Write the failing test**
@@ -348,39 +323,42 @@ create table feed_tokens (
 
 ```ts
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { createPool } from './pool';
+import type { Db, MongoClient } from 'mongodb';
+import { createClient } from './client';
 import { runMigrations } from './migrate';
-import type { Pool } from 'pg';
 
 const TEST_DB_URL =
   process.env.TEST_DATABASE_URL ??
-  'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  'mongodb://localhost:27017/dontforget';
 
 describe('runMigrations', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
 
-  beforeAll(() => {
-    pool = createPool(TEST_DB_URL);
+  beforeAll(async () => {
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('applies pending migrations and is idempotent', async () => {
-    await pool.query('drop schema public cascade; create schema public;');
+    await db.dropDatabase();
 
-    const firstRun = await runMigrations(pool);
-    expect(firstRun).toEqual(['001_init.sql']);
+    const firstRun = await runMigrations(db);
+    expect(firstRun).toEqual(['001_init.ts']);
 
-    const tables = await pool.query(
-      `select table_name from information_schema.tables where table_schema = 'public' order by table_name`
-    );
-    expect(tables.rows.map(r => r.table_name)).toEqual(
+    const collections = await db.listCollections().toArray();
+    expect(collections.map(c => c.name)).toEqual(
       expect.arrayContaining(['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens'])
     );
 
-    const secondRun = await runMigrations(pool);
+    const indexes = await db.collection('feed_tokens').indexes();
+    expect(indexes.map(i => i.name)).toEqual(expect.arrayContaining(['user_id_1', 'token_1']));
+
+    const secondRun = await runMigrations(db);
     expect(secondRun).toEqual([]);
   });
 });
@@ -389,64 +367,51 @@ describe('runMigrations', () => {
 - [ ] **Step 6: Run test to verify it fails**
 
 Run: `npx vitest run src/db/migrate.test.ts`
-Expected: FAIL — `Cannot find module './pool'`
+Expected: FAIL — `Cannot find module './client'`
 
 - [ ] **Step 7: Write minimal implementation**
 
-`src/db/pool.ts`:
+`src/db/client.ts`:
 
 ```ts
-import { Pool } from 'pg';
+import { MongoClient } from 'mongodb';
 
-export function createPool(connectionString: string): Pool {
-  return new Pool({ connectionString });
+export async function createClient(connectionString: string): Promise<MongoClient> {
+  const client = new MongoClient(connectionString);
+  await client.connect();
+  return client;
 }
 ```
 
 `src/db/migrate.ts`:
 
 ```ts
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
+import { migrate as migrate001 } from '../migrations/001_init';
 
-const MIGRATIONS_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'migrations');
+interface Migration {
+  name: string;
+  migrate: (db: Db) => Promise<void>;
+}
 
-export async function runMigrations(pool: Pool): Promise<string[]> {
-  await pool.query(`
-    create table if not exists schema_migrations (
-      name text primary key,
-      applied_at timestamptz not null default now()
-    )
-  `);
+// Migrations live under src/ so tsc, tsx, and vitest all resolve them the same way.
+// Add new migrations by importing them here and appending to this registry.
+const MIGRATIONS: Migration[] = [{ name: '001_init.ts', migrate: migrate001 }];
+
+export async function runMigrations(db: Db): Promise<string[]> {
+  await db.createCollection('schema_migrations');
 
   const applied = new Set(
-    (await pool.query('select name from schema_migrations')).rows.map(r => r.name as string)
+    (await db.collection('schema_migrations').find().toArray()).map(r => r.name as string)
   );
-
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter(f => f.endsWith('.sql'))
-    .sort();
 
   const newlyApplied: string[] = [];
 
-  for (const file of files) {
-    if (applied.has(file)) continue;
-    const sql = readFileSync(join(MIGRATIONS_DIR, file), 'utf8');
-    const client = await pool.connect();
-    try {
-      await client.query('begin');
-      await client.query(sql);
-      await client.query('insert into schema_migrations (name) values ($1)', [file]);
-      await client.query('commit');
-    } catch (err) {
-      await client.query('rollback');
-      throw err;
-    } finally {
-      client.release();
-    }
-    newlyApplied.push(file);
+  for (const { name, migrate } of MIGRATIONS) {
+    if (applied.has(name)) continue;
+    await migrate(db);
+    await db.collection('schema_migrations').insertOne({ name, applied_at: new Date() });
+    newlyApplied.push(name);
   }
 
   return newlyApplied;
@@ -461,8 +426,8 @@ Expected: PASS
 - [ ] **Step 9: Commit**
 
 ```bash
-git add docker-compose.dev.yml .env.example migrations/001_init.sql src/db
-git commit -m "feat: add Postgres schema, migration runner, and dev DB"
+git add docker-compose.dev.yml .env.example src/migrations src/db
+git commit -m "feat: add MongoDB schema, migration runner, and dev DB"
 ```
 
 ---
@@ -569,7 +534,7 @@ git commit -m "feat: add EmailSender with SMTP and capturing implementations"
 - Test: `src/auth/magicLink.test.ts`, `src/auth/session.test.ts`
 
 **Interfaces:**
-- Consumes: `EmailSender` (Task 3), `createPool`/`runMigrations` (Task 2).
+- Consumes: `EmailSender` (Task 3), `createClient`/`runMigrations` (Task 2).
 - Produces: `class MagicLinkService { requestLink(email): Promise<void>; verifyToken(token): Promise<string|null> }`, `class SessionService { createSession(userId): Promise<string>; getUserId(sessionId): Promise<string|null> }`, `createRequireAuth(sessionService): preHandlerHookHandler`. Task 5 (auth routes) and Task 8/10 (queries/feed routes) consume all three.
 
 - [ ] **Step 1: Write the failing tests**
@@ -578,34 +543,38 @@ git commit -m "feat: add EmailSender with SMTP and capturing implementations"
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import type { Db, MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { MagicLinkService } from './magicLink';
 import { CapturingEmailSender } from '../email/EmailSender';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('MagicLinkService', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('emails a link containing a token that verifies to the same user', async () => {
     const emailSender = new CapturingEmailSender();
-    const service = new MagicLinkService(pool, emailSender, 'http://localhost:3000');
+    const service = new MagicLinkService(db, emailSender, 'http://localhost:3000');
 
     await service.requestLink('a@example.com');
 
@@ -618,13 +587,13 @@ describe('MagicLinkService', () => {
   });
 
   it('rejects an unknown token', async () => {
-    const service = new MagicLinkService(pool, new CapturingEmailSender(), 'http://localhost:3000');
+    const service = new MagicLinkService(db, new CapturingEmailSender(), 'http://localhost:3000');
     expect(await service.verifyToken('not-a-real-token')).toBeNull();
   });
 
   it('is single-use', async () => {
     const emailSender = new CapturingEmailSender();
-    const service = new MagicLinkService(pool, emailSender, 'http://localhost:3000');
+    const service = new MagicLinkService(db, emailSender, 'http://localhost:3000');
     await service.requestLink('b@example.com');
     const token = new URL(emailSender.sent[0].body.match(/https?:\/\/\S+/)![0]).searchParams.get(
       'token'
@@ -640,42 +609,44 @@ describe('MagicLinkService', () => {
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import type { Db, MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { SessionService } from './session';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('SessionService', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('creates a session that resolves back to the same user', async () => {
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('c@example.com') returning id`
-    );
-    const service = new SessionService(pool);
+    const { insertedId } = await db.collection('users').insertOne({ email: 'c@example.com' });
+    const service = new SessionService(db);
 
-    const sessionId = await service.createSession(rows[0].id);
-    expect(await service.getUserId(sessionId)).toBe(rows[0].id);
+    const sessionId = await service.createSession(insertedId.toString());
+    expect(await service.getUserId(sessionId)).toBe(insertedId.toString());
   });
 
   it('returns null for an unknown session', async () => {
-    const service = new SessionService(pool);
+    const service = new SessionService(db);
     expect(await service.getUserId('nope')).toBeNull();
   });
 });
@@ -692,46 +663,45 @@ Expected: FAIL — `Cannot find module './magicLink'` / `'./session'`
 
 ```ts
 import { randomBytes } from 'node:crypto';
-import type { Pool } from 'pg';
+import { ObjectId, type Db } from 'mongodb';
 import type { EmailSender } from '../email/EmailSender';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 
 export class MagicLinkService {
   constructor(
-    private pool: Pool,
+    private db: Db,
     private emailSender: EmailSender,
     private baseUrl: string
   ) {}
 
   async requestLink(email: string): Promise<void> {
-    const userResult = await this.pool.query<{ id: string }>(
-      `insert into users (email) values ($1)
-       on conflict (email) do update set email = excluded.email
-       returning id`,
-      [email]
-    );
-    const userId = userResult.rows[0].id;
+    const users = this.db.collection<{ _id: ObjectId }>('users');
+    // idempotent upsert on email; the unique email index keeps one user per address
+    await users.updateOne({ email }, { $setOnInsert: { email } }, { upsert: true });
+
+    const user = await users.findOne({ email });
+    const userId = user!._id.toString();
 
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
-    await this.pool.query(
-      `insert into magic_links (user_id, token, expires_at) values ($1, $2, $3)`,
-      [userId, token, expiresAt]
-    );
+    await this.db.collection('magic_links').insertOne({
+      user_id: userId,
+      token,
+      expires_at: expiresAt,
+      used_at: null,
+    });
 
     const link = `${this.baseUrl}/api/auth/callback?token=${token}`;
     await this.emailSender.send(email, 'Your dontforget sign-in link', `Sign in: ${link}`);
   }
 
   async verifyToken(token: string): Promise<string | null> {
-    const result = await this.pool.query<{ user_id: string }>(
-      `update magic_links set used_at = now()
-       where token = $1 and used_at is null and expires_at > now()
-       returning user_id`,
-      [token]
+    const result = await this.db.collection('magic_links').findOneAndUpdate(
+      { token, used_at: null, expires_at: { $gt: new Date() } },
+      { $set: { used_at: new Date() } }
     );
-    return result.rows[0]?.user_id ?? null;
+    return result ? (result.user_id as string) : null;
   }
 }
 ```
@@ -740,7 +710,7 @@ export class MagicLinkService {
 
 ```ts
 import { randomBytes } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 import type { FastifyRequest, FastifyReply, preHandlerHookHandler } from 'fastify';
 
 declare module 'fastify' {
@@ -753,25 +723,21 @@ const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_COOKIE = 'df_session';
 
 export class SessionService {
-  constructor(private pool: Pool) {}
+  constructor(private db: Db) {}
 
   async createSession(userId: string): Promise<string> {
     const id = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
-    await this.pool.query(`insert into sessions (id, user_id, expires_at) values ($1, $2, $3)`, [
-      id,
-      userId,
-      expiresAt,
-    ]);
+    await this.db.collection('sessions').insertOne({ _id: id, user_id: userId, expires_at: expiresAt });
     return id;
   }
 
   async getUserId(sessionId: string): Promise<string | null> {
-    const result = await this.pool.query<{ user_id: string }>(
-      `select user_id from sessions where id = $1 and expires_at > now()`,
-      [sessionId]
-    );
-    return result.rows[0]?.user_id ?? null;
+    const result = await this.db.collection('sessions').findOne({
+      _id: sessionId,
+      expires_at: { $gt: new Date() },
+    });
+    return result ? (result.user_id as string) : null;
   }
 }
 
@@ -793,7 +759,7 @@ export { SESSION_COOKIE };
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run src/auth`
-Expected: PASS (requires `docker compose -f docker-compose.dev.yml up -d db` running from Task 2)
+Expected: PASS (requires `docker compose -f docker-compose.dev.yml up -d mongo` running from Task 2)
 
 - [ ] **Step 5: Commit**
 
@@ -823,23 +789,27 @@ git commit -m "feat: add magic-link and session services"
 import { describe, it, expect, vi } from 'vitest';
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 
-function fakePool(): Pool {
-  return {} as Pool;
+function fakeDb(): Db {
+  const collection = {
+    updateOne: vi.fn().mockResolvedValue(undefined),
+    insertOne: vi.fn().mockResolvedValue(undefined),
+    findOneAndUpdate: vi.fn().mockResolvedValue(null),
+    findOne: vi.fn().mockResolvedValue({ _id: 'user-1' }),
+    find: vi.fn().mockReturnValue({ toArray: () => Promise.resolve([]) }),
+  };
+  return { collection: vi.fn().mockReturnValue(collection) } as unknown as Db;
 }
 
 describe('auth routes', () => {
   it('POST /api/auth/magic-link accepts an email and returns 202', async () => {
     const emailSender = new CapturingEmailSender();
     const app = buildApp({
-      pool: fakePool(),
+      db: fakeDb(),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
     });
-
-    // stub the DB call inside MagicLinkService by spying on the pool's query method
-    (app as any).__deps.pool.query = vi.fn().mockResolvedValue({ rows: [{ id: 'user-1' }] });
 
     const response = await app.inject({
       method: 'POST',
@@ -853,7 +823,7 @@ describe('auth routes', () => {
 
   it('GET /api/me returns 401 with no session cookie', async () => {
     const app = buildApp({
-      pool: fakePool(),
+      db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
     });
@@ -917,14 +887,14 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 ```ts
 import Fastify, { FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 import type { EmailSender } from './email/EmailSender';
 import { MagicLinkService } from './auth/magicLink';
 import { SessionService } from './auth/session';
 import { registerAuthRoutes } from './auth/routes';
 
 export interface AppDeps {
-  pool: Pool;
+  db: Db;
   emailSender: EmailSender;
   publicBaseUrl: string;
 }
@@ -935,8 +905,8 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  const magicLinkService = new MagicLinkService(deps.pool, deps.emailSender, deps.publicBaseUrl);
-  const sessionService = new SessionService(deps.pool);
+  const magicLinkService = new MagicLinkService(deps.db, deps.emailSender, deps.publicBaseUrl);
+  const sessionService = new SessionService(deps.db);
   registerAuthRoutes(app, { magicLinkService, sessionService });
 
   (app as any).__deps = deps;
@@ -949,14 +919,15 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
 ```ts
 import { buildApp } from './app';
-import { createPool } from './db/pool';
+import { createClient } from './db/client';
 import { runMigrations } from './db/migrate';
 import { SmtpEmailSender, CapturingEmailSender, type EmailSender } from './email/EmailSender';
 import nodemailer from 'nodemailer';
 
 async function main() {
-  const pool = createPool(process.env.DATABASE_URL!);
-  await runMigrations(pool);
+  const client = await createClient(process.env.DATABASE_URL!);
+  const db = client.db();
+  await runMigrations(db);
 
   const emailSender: EmailSender = process.env.SMTP_HOST
     ? new SmtpEmailSender(
@@ -970,7 +941,7 @@ async function main() {
     : new CapturingEmailSender(); // dev fallback — logs nothing sent; see Task 14 for console logging
 
   const app = buildApp({
-    pool,
+    db,
     emailSender,
     publicBaseUrl: process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000',
   });
@@ -988,7 +959,7 @@ main().catch(err => {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `npx vitest run src/auth/routes.test.ts src/app.test.ts`
-Expected: PASS. (Update `src/app.test.ts` from Task 1 to call `buildApp({ pool: {} as any, emailSender: new CapturingEmailSender(), publicBaseUrl: 'http://localhost:3000' })` — the health check doesn't touch the pool, so a stub is fine there.)
+Expected: PASS. (Update `src/app.test.ts` from Task 1 to call `buildApp({ db: {} as any, emailSender: new CapturingEmailSender(), publicBaseUrl: 'http://localhost:3000' })` — the health check doesn't touch the DB, so a stub is fine there.)
 
 - [ ] **Step 5: Commit**
 
@@ -1359,7 +1330,7 @@ git commit -m "feat: add search orchestrator composing searxng and opencode"
 
 **Interfaces:**
 - Consumes: `CandidateEvent`/`ExtractedEvent` (Task 6 types), `runQuery` (Task 7), `createRequireAuth` (Task 4).
-- Produces: `createQueryWithCandidates(pool, userId, queryText, events): Promise<{queryId, candidates}>`. Task 10 (approve) consumes the `queries`/`events` tables this writes to.
+- Produces: `createQueryWithCandidates(db, userId, queryText, events): Promise<{queryId, candidates}>`. Task 10 (approve) consumes the `queries`/`events` collections this writes to.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1367,37 +1338,39 @@ git commit -m "feat: add search orchestrator composing searxng and opencode"
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import { ObjectId, type Db, type MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { createQueryWithCandidates } from './queriesRepo';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('createQueryWithCandidates', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
   let userId: string;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('d@example.com') returning id`
-    );
-    userId = rows[0].id;
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
+    const { insertedId } = await db.collection('users').insertOne({ email: 'd@example.com' });
+    userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('inserts the query and one candidate row per event', async () => {
-    const { queryId, candidates } = await createQueryWithCandidates(pool, userId, 'Auer Dult Munich', [
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
       { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://muenchen.de' },
     ]);
@@ -1406,8 +1379,8 @@ describe('createQueryWithCandidates', () => {
     expect(candidates).toHaveLength(2);
     expect(candidates.every(c => c.status === 'candidate')).toBe(true);
 
-    const stored = await pool.query('select count(*) from events where query_id = $1', [queryId]);
-    expect(Number(stored.rows[0].count)).toBe(2);
+    const stored = await db.collection('events').countDocuments({ query_id: new ObjectId(queryId) });
+    expect(stored).toBe(2);
   });
 });
 ```
@@ -1422,7 +1395,7 @@ import { CapturingEmailSender } from '../email/EmailSender';
 describe('POST /api/queries', () => {
   it('requires auth', async () => {
     const app = buildApp({
-      pool: {} as any,
+      db: {} as any,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
       runQuery: vi.fn(),
@@ -1444,30 +1417,35 @@ Expected: FAIL — modules don't exist / `runQuery` not accepted by `AppDeps`
 `src/queries/queriesRepo.ts`:
 
 ```ts
-import type { Pool } from 'pg';
+import { ObjectId, type Db } from 'mongodb';
 import type { ExtractedEvent, CandidateEvent } from '../types';
 
 export async function createQueryWithCandidates(
-  pool: Pool,
+  db: Db,
   userId: string,
   queryText: string,
   events: ExtractedEvent[]
 ): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
-  const queryResult = await pool.query<{ id: string }>(
-    `insert into queries (user_id, query_text) values ($1, $2) returning id`,
-    [userId, queryText]
-  );
-  const queryId = queryResult.rows[0].id;
+  const queryResult = await db.collection('queries').insertOne({
+    user_id: userId,
+    query_text: queryText,
+    recurrence_interval: 'monthly',
+    created_at: new Date(),
+  });
+  const queryId = queryResult.insertedId.toString();
 
   const candidates: CandidateEvent[] = [];
   for (const event of events) {
-    const eventResult = await pool.query<{ id: string; status: 'candidate' | 'approved' }>(
-      `insert into events (query_id, label, start_date, end_date, source_url)
-       values ($1, $2, $3, $4, $5)
-       returning id, status`,
-      [queryId, event.label, event.startDate, event.endDate, event.sourceUrl]
-    );
-    candidates.push({ ...event, id: eventResult.rows[0].id, status: eventResult.rows[0].status });
+    const { insertedId } = await db.collection('events').insertOne({
+      query_id: new ObjectId(queryId),
+      label: event.label,
+      start_date: event.startDate,
+      end_date: event.endDate,
+      source_url: event.sourceUrl,
+      status: 'candidate',
+      created_at: new Date(),
+    });
+    candidates.push({ ...event, id: insertedId.toString(), status: 'candidate' });
   }
 
   return { queryId, candidates };
@@ -1478,13 +1456,13 @@ export async function createQueryWithCandidates(
 
 ```ts
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 import { createQueryWithCandidates } from './queriesRepo';
 import type { ExtractedEvent } from '../types';
 import type { preHandlerHookHandler } from 'fastify';
 
 export interface QueryRouteDeps {
-  pool: Pool;
+  db: Db;
   runQuery: (query: string) => Promise<ExtractedEvent[]>;
   requireAuth: preHandlerHookHandler;
 }
@@ -1500,7 +1478,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       }
       const events = await deps.runQuery(text);
       const { queryId, candidates } = await createQueryWithCandidates(
-        deps.pool,
+        deps.db,
         request.userId!,
         text,
         events
@@ -1521,7 +1499,7 @@ import type { ExtractedEvent } from './types';
 
 // AppDeps gains:
 export interface AppDeps {
-  pool: Pool;
+  db: Db;
   emailSender: EmailSender;
   publicBaseUrl: string;
   runQuery: (query: string) => Promise<ExtractedEvent[]>;
@@ -1529,7 +1507,7 @@ export interface AppDeps {
 
 // inside buildApp, after sessionService is created:
 const requireAuth = createRequireAuth(sessionService);
-registerQueryRoutes(app, { pool: deps.pool, runQuery: deps.runQuery, requireAuth });
+registerQueryRoutes(app, { db: deps.db, runQuery: deps.runQuery, requireAuth });
 ```
 
 `src/server.ts` — construct the real orchestrator and pass it in:
@@ -1573,7 +1551,7 @@ git commit -m "feat: add POST /api/queries running the search orchestrator synch
 - Test: `src/feed/feedToken.test.ts`, `src/feed/icsGenerator.test.ts`, `src/feed/rssGenerator.test.ts`
 
 **Interfaces:**
-- Produces: `getOrCreateFeedToken(pool, userId): Promise<string>`, `buildIcs(events: CandidateEvent[]): string`, `buildRss(events: CandidateEvent[], feedBaseUrl: string): string`. Task 10 consumes all three.
+- Produces: `getOrCreateFeedToken(db, userId): Promise<string>`, `buildIcs(events: CandidateEvent[]): string`, `buildRss(events: CandidateEvent[], feedBaseUrl: string): string`. Task 10 consumes all three.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1581,42 +1559,44 @@ git commit -m "feat: add POST /api/queries running the search orchestrator synch
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import type { Db, MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { getOrCreateFeedToken } from './feedToken';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('getOrCreateFeedToken', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
   let userId: string;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('e@example.com') returning id`
-    );
-    userId = rows[0].id;
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
+    const { insertedId } = await db.collection('users').insertOne({ email: 'e@example.com' });
+    userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('creates a token once and reuses it on subsequent calls', async () => {
-    const first = await getOrCreateFeedToken(pool, userId);
-    const second = await getOrCreateFeedToken(pool, userId);
+    const first = await getOrCreateFeedToken(db, userId);
+    const second = await getOrCreateFeedToken(db, userId);
     expect(first).toBe(second);
 
-    const rows = await pool.query('select count(*) from feed_tokens where user_id = $1', [userId]);
-    expect(Number(rows.rows[0].count)).toBe(1);
+    const count = await db.collection('feed_tokens').countDocuments({ user_id: userId });
+    expect(count).toBe(1);
   });
 });
 ```
@@ -1677,21 +1657,29 @@ Expected: FAIL — modules don't exist
 
 ```ts
 import { randomBytes } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
 
-export async function getOrCreateFeedToken(pool: Pool, userId: string): Promise<string> {
-  const candidateToken = randomBytes(24).toString('hex');
-  const result = await pool.query<{ token: string }>(
-    `insert into feed_tokens (user_id, token) values ($1, $2)
-     on conflict (user_id) do update set user_id = excluded.user_id
-     returning token`,
-    [userId, candidateToken]
-  );
-  return result.rows[0].token;
+export async function getOrCreateFeedToken(db: Db, userId: string): Promise<string> {
+  const existing = await db.collection('feed_tokens').findOne({ user_id: userId });
+  if (existing) {
+    return existing.token as string;
+  }
+
+  const token = randomBytes(24).toString('hex');
+  try {
+    await db.collection('feed_tokens').insertOne({ user_id: userId, token });
+  } catch (err) {
+    // unique index on user_id: a concurrent request already created a token — return theirs
+    if ((err as { code?: number }).code !== 11000) throw err;
+    const concurrent = await db.collection('feed_tokens').findOne({ user_id: userId });
+    if (concurrent) return concurrent.token as string;
+    throw err;
+  }
+  return token;
 }
 ```
 
-(The `on conflict` clause never touches the `token` column, so `RETURNING` always yields the *existing* token when one is already there — atomic, race-safe, single round trip.)
+(MongoDB has no `INSERT ... ON CONFLICT`; the unique index on `user_id` plus the `code 11000` catch makes this atomic and race-safe: two concurrent calls both see no doc, one insert wins, the other catches the duplicate-key error and returns the winner's token.)
 
 `src/feed/icsGenerator.ts`:
 
@@ -1781,7 +1769,7 @@ git commit -m "feat: add feed token minting and ICS/RSS generators"
 
 **Interfaces:**
 - Consumes: `getOrCreateFeedToken`, `buildIcs`, `buildRss` (Task 9).
-- Produces: `approveEvents(pool, userId, queryId, eventIds, publicBaseUrl): Promise<{icsUrl,rssUrl}|null>`.
+- Produces: `approveEvents(db, userId, queryId, eventIds, publicBaseUrl): Promise<{icsUrl,rssUrl}|null>`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1789,44 +1777,46 @@ git commit -m "feat: add feed token minting and ICS/RSS generators"
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import { ObjectId, type Db, type MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { createQueryWithCandidates } from './queriesRepo';
 import { approveEvents } from './approveEvents';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('approveEvents', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
   let userId: string;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('f@example.com') returning id`
-    );
-    userId = rows[0].id;
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
+    const { insertedId } = await db.collection('users').insertOne({ email: 'f@example.com' });
+    userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('approves only the selected events and returns feed URLs', async () => {
-    const { queryId, candidates } = await createQueryWithCandidates(pool, userId, 'Auer Dult Munich', [
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
       { label: 'Kirchweihdult (stale)', startDate: '2024-10-20', endDate: '2024-10-29', sourceUrl: 'https://eventbrite.com' },
     ]);
 
     const result = await approveEvents(
-      pool,
+      db,
       userId,
       queryId,
       [candidates[0].id],
@@ -1837,19 +1827,20 @@ describe('approveEvents', () => {
     expect(result!.icsUrl).toMatch(/^http:\/\/localhost:3000\/f\/.+\.ics$/);
     expect(result!.rssUrl).toMatch(/^http:\/\/localhost:3000\/f\/.+\.rss$/);
 
-    const statuses = await pool.query('select status from events where query_id = $1 order by start_date', [
-      queryId,
-    ]);
-    expect(statuses.rows.map(r => r.status)).toEqual(['approved', 'candidate']);
+    const statuses = await db
+      .collection('events')
+      .find({ query_id: new ObjectId(queryId) })
+      .sort({ start_date: 1 })
+      .toArray();
+    expect(statuses.map(r => r.status)).toEqual(['approved', 'candidate']);
   });
 
   it('returns null for a query the user does not own', async () => {
-    const { rows: otherUser } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('g@example.com') returning id`
-    );
-    const { queryId } = await createQueryWithCandidates(pool, otherUser[0].id, 'Not yours', []);
+    const { insertedId } = await db.collection('users').insertOne({ email: 'g@example.com' });
+    const otherUserId = insertedId.toString();
+    const { queryId } = await createQueryWithCandidates(db, otherUserId, 'Not yours', []);
 
-    const result = await approveEvents(pool, userId, queryId, [], 'http://localhost:3000');
+    const result = await approveEvents(db, userId, queryId, [], 'http://localhost:3000');
     expect(result).toBeNull();
   });
 });
@@ -1859,8 +1850,8 @@ describe('approveEvents', () => {
 
 ```ts
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import type { Pool } from 'pg';
-import { createPool } from '../db/pool';
+import type { Db, MongoClient } from 'mongodb';
+import { createClient } from '../db/client';
 import { runMigrations } from '../db/migrate';
 import { createQueryWithCandidates } from '../queries/queriesRepo';
 import { approveEvents } from '../queries/approveEvents';
@@ -1868,37 +1859,39 @@ import { registerFeedRoutes } from './routes';
 import Fastify from 'fastify';
 
 const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'postgres://dontforget:dontforget@localhost:5432/dontforget';
+  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('feed routes', () => {
-  let pool: Pool;
+  let client: MongoClient;
+  let db: Db;
 
   beforeAll(async () => {
-    pool = createPool(TEST_DB_URL);
-    await runMigrations(pool);
+    client = await createClient(TEST_DB_URL);
+    db = client.db();
+    await runMigrations(db);
   });
 
   beforeEach(async () => {
-    await pool.query('truncate magic_links, sessions, feed_tokens, events, queries, users cascade');
+    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
+      await db.collection(name).deleteMany({});
+    }
   });
 
   afterAll(async () => {
-    await pool.end();
+    await client.close();
   });
 
   it('serves ICS and RSS for a valid token, 404 for an unknown one', async () => {
-    const { rows } = await pool.query<{ id: string }>(
-      `insert into users (email) values ('h@example.com') returning id`
-    );
-    const userId = rows[0].id;
-    const { queryId, candidates } = await createQueryWithCandidates(pool, userId, 'Auer Dult Munich', [
+    const { insertedId } = await db.collection('users').insertOne({ email: 'h@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
     ]);
-    const { icsUrl } = (await approveEvents(pool, userId, queryId, [candidates[0].id], 'http://x'))!;
+    const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
     const token = icsUrl.split('/f/')[1].replace('.ics', '');
 
     const app = Fastify();
-    registerFeedRoutes(app, { pool });
+    registerFeedRoutes(app, { db });
 
     const icsResponse = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
     expect(icsResponse.statusCode).toBe(200);
@@ -1924,32 +1917,35 @@ Expected: FAIL — modules don't exist
 `src/queries/approveEvents.ts`:
 
 ```ts
-import type { Pool } from 'pg';
+import { ObjectId, type Db } from 'mongodb';
 import { getOrCreateFeedToken } from '../feed/feedToken';
 
 export async function approveEvents(
-  pool: Pool,
+  db: Db,
   userId: string,
   queryId: string,
   eventIds: string[],
   publicBaseUrl: string
 ): Promise<{ icsUrl: string; rssUrl: string } | null> {
-  const ownership = await pool.query('select id from queries where id = $1 and user_id = $2', [
-    queryId,
-    userId,
-  ]);
-  if (ownership.rows.length === 0) {
+  const ownership = await db.collection('queries').findOne({
+    _id: new ObjectId(queryId),
+    user_id: userId,
+  });
+  if (!ownership) {
     return null;
   }
 
   if (eventIds.length > 0) {
-    await pool.query(
-      `update events set status = 'approved' where query_id = $1 and id = any($2::uuid[])`,
-      [queryId, eventIds]
+    await db.collection('events').updateMany(
+      {
+        query_id: new ObjectId(queryId),
+        _id: { $in: eventIds.map(id => new ObjectId(id)) },
+      },
+      { $set: { status: 'approved' } }
     );
   }
 
-  const token = await getOrCreateFeedToken(pool, userId);
+  const token = await getOrCreateFeedToken(db, userId);
   return {
     icsUrl: `${publicBaseUrl}/f/${token}.ics`,
     rssUrl: `${publicBaseUrl}/f/${token}.rss`,
@@ -1961,13 +1957,14 @@ export async function approveEvents(
 
 ```ts
 import type { FastifyInstance } from 'fastify';
-import type { Pool } from 'pg';
+import type { Db } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { buildIcs } from './icsGenerator';
 import { buildRss } from './rssGenerator';
 import type { CandidateEvent } from '../types';
 
 export interface FeedRouteDeps {
-  pool: Pool;
+  db: Db;
 }
 
 export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): void {
@@ -1980,23 +1977,26 @@ export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): v
       return reply.code(404).send();
     }
 
-    const tokenRow = await deps.pool.query<{ user_id: string }>(
-      'select user_id from feed_tokens where token = $1',
-      [token]
-    );
-    if (tokenRow.rows.length === 0) {
+    const tokenRow = await deps.db.collection('feed_tokens').findOne<{ user_id: string }>({ token });
+    if (!tokenRow) {
       return reply.code(404).send();
     }
 
-    const eventsResult = await deps.pool.query<CandidateEvent & { start_date: string; end_date: string; source_url: string }>(
-      `select e.id, e.label, e.start_date, e.end_date, e.source_url, e.status
-       from events e
-       join queries q on q.id = e.query_id
-       where q.user_id = $1 and e.status = 'approved'`,
-      [tokenRow.rows[0].user_id]
-    );
-    const events: CandidateEvent[] = eventsResult.rows.map(r => ({
-      id: r.id,
+    // all approved events belonging to the user's queries
+    const queries = await deps.db
+      .collection('queries')
+      .find<{ _id: import('mongodb').ObjectId }>({ user_id: tokenRow.user_id })
+      .toArray();
+    const queryIds = queries.map(q => q._id);
+    const eventRows = await deps.db
+      .collection('events')
+      .find({
+        query_id: { $in: queryIds },
+        status: 'approved',
+      })
+      .toArray();
+    const events: CandidateEvent[] = eventRows.map(r => ({
+      id: r._id.toString(),
       label: r.label,
       startDate: r.start_date,
       endDate: r.end_date,
@@ -2026,7 +2026,7 @@ app.post<{ Params: { id: string }; Body: { eventIds: string[] } }>(
   { preHandler: deps.requireAuth },
   async (request, reply) => {
     const result = await approveEvents(
-      deps.pool,
+      deps.db,
       request.userId!,
       request.params.id,
       request.body.eventIds ?? [],
@@ -2040,7 +2040,7 @@ app.post<{ Params: { id: string }; Body: { eventIds: string[] } }>(
 );
 ```
 
-`QueryRouteDeps` in `src/queries/routes.ts` gains `publicBaseUrl: string`; `src/app.ts`'s call to `registerQueryRoutes` passes `publicBaseUrl: deps.publicBaseUrl`, and gains a call to `registerFeedRoutes(app, { pool: deps.pool })`.
+`QueryRouteDeps` in `src/queries/routes.ts` gains `publicBaseUrl: string`; `src/app.ts`'s call to `registerQueryRoutes` passes `publicBaseUrl: deps.publicBaseUrl`, and gains a call to `registerFeedRoutes(app, { db: deps.db })`.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -2808,7 +2808,7 @@ Append:
 ```markdown
 ## Running locally
 
-1. `docker compose -f docker-compose.dev.yml up -d db`
+1. `docker compose -f docker-compose.dev.yml up -d mongo`
 2. `cp .env.example .env` and fill in `SEARXNG_BASE_URL`, `OPENCODE_BASE_URL`, `OPENCODE_API_KEY`
    (see `docs/superpowers/plans/2026-08-09-first-time-user-journey.md` → External Service Reference
    for where to find the opencode key)
