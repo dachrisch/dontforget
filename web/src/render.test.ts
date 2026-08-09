@@ -57,7 +57,7 @@ describe('renderWorkspace', () => {
     expect(container.querySelectorAll('.tick')).toHaveLength(3);
   });
 
-  it('renders candidate rows and toggles on click', () => {
+  it('renders candidates as calendar-day tiles and toggles selection on click', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
@@ -66,18 +66,56 @@ describe('renderWorkspace', () => {
         kind: 'review',
         queryId: 'q1',
         candidates: [
-          { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate', selected: true },
+          {
+            id: 'e1',
+            label: 'Frühjahrsdult',
+            startDate: '2026-04-11',
+            endDate: '2026-04-11',
+            sourceUrl: 'u',
+            status: 'candidate',
+            selected: true,
+          },
         ],
       },
       handlers
     );
 
     expect(container.textContent).toContain('Frühjahrsdult');
+    expect(container.textContent).toContain('APR');
+    expect(container.textContent).toContain('11');
+    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(true);
+
     container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();
     expect(handlers.onToggleCandidate).toHaveBeenCalledWith('e1');
 
     container.querySelector<HTMLButtonElement>('button[data-action=approve]')!.click();
     expect(handlers.onApprove).toHaveBeenCalled();
+  });
+
+  it('shows a date range and an unselected style when start and end differ', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'review',
+        queryId: 'q1',
+        candidates: [
+          {
+            id: 'e2',
+            label: 'Oktoberfest',
+            startDate: '2026-09-19',
+            endDate: '2026-10-04',
+            sourceUrl: 'u',
+            status: 'candidate',
+            selected: false,
+          },
+        ],
+      },
+      noopHandlers()
+    );
+
+    expect(container.textContent).toContain('SEP 19, 2026–OCT 4, 2026');
+    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(false);
   });
 
   it('renders the feed-ready state with both URLs', () => {
