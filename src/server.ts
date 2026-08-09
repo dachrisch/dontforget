@@ -1,10 +1,10 @@
-import { buildApp } from './app';
-import { createClient } from './db/client';
-import { runMigrations } from './db/migrate';
-import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/EmailSender';
-import { searxngSearch } from './search/searxngClient';
-import { extractDates } from './search/opencodeClient';
-import { createSearchOrchestrator } from './search/searchOrchestrator';
+import { buildApp } from './app.js';
+import { createClient } from './db/client.js';
+import { runMigrations } from './db/migrate.js';
+import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/EmailSender.js';
+import { searxngSearch } from './search/searxngClient.js';
+import { extractDates } from './search/opencodeClient.js';
+import { createSearchOrchestrator } from './search/searchOrchestrator.js';
 import nodemailer from 'nodemailer';
 import fastifyStatic from '@fastify/static';
 import { join, dirname } from 'node:path';

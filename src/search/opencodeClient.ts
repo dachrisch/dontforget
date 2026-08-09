@@ -1,4 +1,4 @@
-import type { SearchResult, ExtractedEvent } from '../types';
+import type { SearchResult, ExtractedEvent } from '../types.js';
 
 // Contract confirmed live against opencode.lehel.xyz on 2026-08-09 — the
 // plan's original guess (single POST .../message returning parts[] inline)

@@ -1,13 +1,13 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
 import type { Db } from 'mongodb';
-import type { EmailSender } from './email/EmailSender';
-import { MagicLinkService } from './auth/magicLink';
-import { SessionService, createRequireAuth } from './auth/session';
-import { registerAuthRoutes } from './auth/routes';
-import { registerQueryRoutes } from './queries/routes';
-import { registerFeedRoutes } from './feed/routes';
-import type { ExtractedEvent } from './types';
+import type { EmailSender } from './email/EmailSender.js';
+import { MagicLinkService } from './auth/magicLink.js';
+import { SessionService, createRequireAuth } from './auth/session.js';
+import { registerAuthRoutes } from './auth/routes.js';
+import { registerQueryRoutes } from './queries/routes.js';
+import { registerFeedRoutes } from './feed/routes.js';
+import type { ExtractedEvent } from './types.js';
 
 export interface AppDeps {
   db: Db;

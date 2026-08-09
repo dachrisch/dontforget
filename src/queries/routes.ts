@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from 'mongodb';
-import { createQueryWithCandidates } from './queriesRepo';
-import { approveEvents } from './approveEvents';
-import type { ExtractedEvent } from '../types';
+import { createQueryWithCandidates } from './queriesRepo.js';
+import { approveEvents } from './approveEvents.js';
+import type { ExtractedEvent } from '../types.js';
 import type { preHandlerHookHandler } from 'fastify';
 
 export interface QueryRouteDeps {

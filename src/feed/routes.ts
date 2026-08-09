@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Db } from 'mongodb';
-import { buildIcs } from './icsGenerator';
-import { buildRss } from './rssGenerator';
-import type { CandidateEvent } from '../types';
+import { buildIcs } from './icsGenerator.js';
+import { buildRss } from './rssGenerator.js';
+import type { CandidateEvent } from '../types.js';
 
 export interface FeedRouteDeps {
   db: Db;

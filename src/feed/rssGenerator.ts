@@ -1,5 +1,5 @@
 import { Feed } from 'feed';
-import type { CandidateEvent } from '../types';
+import type { CandidateEvent } from '../types.js';
 
 export function buildRss(events: CandidateEvent[], feedBaseUrl: string): string {
   const feed = new Feed({
