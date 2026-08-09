@@ -24,6 +24,12 @@ describe('renderWorkspace', () => {
     expect(handlers.onRequestMagicLink).toHaveBeenCalledWith('a@example.com');
   });
 
+  it('renders the link-sent confirmation', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, { kind: 'linkSent' }, noopHandlers());
+    expect(container.textContent).toMatch(/check your inbox/i);
+  });
+
   it('renders the empty workspace and submits a query on enter', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();

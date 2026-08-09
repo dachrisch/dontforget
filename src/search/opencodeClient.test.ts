@@ -50,4 +50,36 @@ describe('extractDates', () => {
       },
     ]);
   });
+
+  it('parses the JSON reply even when the model appends trailing commentary', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'ses_456' }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          parts: [
+            {
+              type: 'text',
+              text:
+                '{"events":[{"label":"Jakobidult","startDate":"2026-07-25","endDate":"2026-08-03","sourceUrl":"https://muenchen.de"}]}\n\nNote: excluded {ongoing fairs} without a specific date.',
+            },
+          ],
+        }),
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const events = await extractDates('https://opencode.lehel.xyz', 'test-key', 'Auer Dult Munich', [
+      { title: 'Jakobidult', url: 'https://muenchen.de', content: 'Summer dates' },
+    ]);
+
+    expect(events).toEqual([
+      {
+        label: 'Jakobidult',
+        startDate: '2026-07-25',
+        endDate: '2026-08-03',
+        sourceUrl: 'https://muenchen.de',
+      },
+    ]);
+  });
 });

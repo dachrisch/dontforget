@@ -1,12 +1,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
-import { createClient } from '../db/client';
-import { runMigrations } from '../db/migrate';
+import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { createQueryWithCandidates } from './queriesRepo';
 import { approveEvents } from './approveEvents';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('approveEvents', () => {
   let client: MongoClient;
@@ -14,21 +10,17 @@ describe('approveEvents', () => {
   let userId: string;
 
   beforeAll(async () => {
-    client = await createClient(TEST_DB_URL);
-    db = client.db();
-    await runMigrations(db);
+    ({ client, db } = await setupTestDb());
   });
 
   beforeEach(async () => {
-    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
-      await db.collection(name).deleteMany({});
-    }
+    await cleanTestDb(db);
     const { insertedId } = await db.collection('users').insertOne({ email: 'f@example.com' });
     userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('approves only the selected events and returns feed URLs', async () => {
@@ -65,5 +57,28 @@ describe('approveEvents', () => {
 
     const result = await approveEvents(db, userId, queryId, [], 'http://localhost:3000');
     expect(result).toBeNull();
+  });
+
+  it('returns null instead of throwing for a malformed query id', async () => {
+    const result = await approveEvents(db, userId, 'not-a-real-id', [], 'http://localhost:3000');
+    expect(result).toBeNull();
+  });
+
+  it('ignores malformed event ids instead of throwing', async () => {
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+
+    const result = await approveEvents(
+      db,
+      userId,
+      queryId,
+      [candidates[0].id, 'not-a-real-id'],
+      'http://localhost:3000'
+    );
+
+    expect(result).not.toBeNull();
+    const stored = await db.collection('events').findOne({ query_id: new ObjectId(queryId) });
+    expect(stored!.status).toBe('approved');
   });
 });

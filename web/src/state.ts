@@ -6,19 +6,25 @@ export interface SelectableCandidate extends CandidateEvent {
 
 export type WorkspaceState =
   | { kind: 'signedOut' }
+  | { kind: 'linkSent' }
   | { kind: 'empty' }
   | { kind: 'loading'; queryText: string }
   | { kind: 'review'; queryId: string; candidates: SelectableCandidate[] }
   | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
 
 export type WorkspaceEvent =
+  | { type: 'MAGIC_LINK_SENT' }
   | { type: 'SUBMIT_QUERY'; text: string }
   | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[] }
   | { type: 'TOGGLE_CANDIDATE'; id: string }
-  | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string };
+  | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
+    case 'MAGIC_LINK_SENT':
+      if (state.kind !== 'signedOut') return state;
+      return { kind: 'linkSent' };
+
     case 'SUBMIT_QUERY':
       if (state.kind !== 'empty') return state;
       return { kind: 'loading', queryText: event.text };
@@ -40,11 +46,15 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
 
     case 'APPROVE_RESOLVED':
       if (state.kind !== 'review') return state;
+      // `approved` comes from the event, not state.candidates here — the
+      // caller must snapshot selections at the moment it sent the approve
+      // request, since the user can keep toggling checkboxes while that
+      // request is in flight and state.candidates would have moved on.
       return {
         kind: 'feedReady',
         icsUrl: event.icsUrl,
         rssUrl: event.rssUrl,
-        approved: state.candidates.filter(c => c.selected),
+        approved: event.approved,
       };
 
     default:

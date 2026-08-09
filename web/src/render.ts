@@ -20,6 +20,8 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
   switch (state.kind) {
     case 'signedOut':
       return renderSignedOut(handlers);
+    case 'linkSent':
+      return renderLinkSent();
     case 'empty':
       return renderEmpty(handlers);
     case 'loading':
@@ -46,6 +48,12 @@ function renderSignedOut(handlers: WorkspaceHandlers): HTMLElement {
     const email = wrapper.querySelector<HTMLInputElement>('input[type=email]')!.value;
     handlers.onRequestMagicLink(email);
   });
+  return wrapper;
+}
+
+function renderLinkSent(): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `<p>Check your inbox — the link signs you in.</p>`;
   return wrapper;
 }
 

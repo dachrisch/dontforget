@@ -1,33 +1,25 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
-import { createClient } from '../db/client';
-import { runMigrations } from '../db/migrate';
+import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { createQueryWithCandidates } from '../queries/queriesRepo';
 import { approveEvents } from '../queries/approveEvents';
 import { registerFeedRoutes } from './routes';
 import Fastify from 'fastify';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('feed routes', () => {
   let client: MongoClient;
   let db: Db;
 
   beforeAll(async () => {
-    client = await createClient(TEST_DB_URL);
-    db = client.db();
-    await runMigrations(db);
+    ({ client, db } = await setupTestDb());
   });
 
   beforeEach(async () => {
-    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
-      await db.collection(name).deleteMany({});
-    }
+    await cleanTestDb(db);
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('serves ICS and RSS for a valid token, 404 for an unknown one', async () => {
@@ -52,5 +44,33 @@ describe('feed routes', () => {
 
     const missing = await app.inject({ method: 'GET', url: '/f/does-not-exist.ics' });
     expect(missing.statusCode).toBe(404);
+  });
+
+  it('lists approved events chronologically regardless of insertion order', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'i@example.com' });
+    const userId = insertedId.toString();
+    // Later-dated event inserted first, on purpose — the feed must sort by
+    // date itself rather than relying on insertion/natural order.
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://muenchen.de' },
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { icsUrl } = (await approveEvents(
+      db,
+      userId,
+      queryId,
+      candidates.map(c => c.id),
+      'http://x'
+    ))!;
+    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db });
+
+    const icsResponse = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
+    expect(icsResponse.body.indexOf('Frühjahrsdult')).toBeLessThan(icsResponse.body.indexOf('Jakobidult'));
+
+    const rssResponse = await app.inject({ method: 'GET', url: `/f/${token}.rss` });
+    expect(rssResponse.body.indexOf('Frühjahrsdult')).toBeLessThan(rssResponse.body.indexOf('Jakobidult'));
   });
 });

@@ -1,30 +1,22 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
-import { createClient } from '../db/client';
-import { runMigrations } from '../db/migrate';
+import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { SessionService } from './session';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('SessionService', () => {
   let client: MongoClient;
   let db: Db;
 
   beforeAll(async () => {
-    client = await createClient(TEST_DB_URL);
-    db = client.db();
-    await runMigrations(db);
+    ({ client, db } = await setupTestDb());
   });
 
   beforeEach(async () => {
-    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
-      await db.collection(name).deleteMany({});
-    }
+    await cleanTestDb(db);
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('creates a session that resolves back to the same user', async () => {

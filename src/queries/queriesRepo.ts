@@ -15,19 +15,31 @@ export async function createQueryWithCandidates(
   });
   const queryId = queryResult.insertedId.toString();
 
-  const candidates: CandidateEvent[] = [];
-  for (const event of events) {
-    const { insertedId } = await db.collection('events').insertOne({
-      query_id: new ObjectId(queryId),
-      label: event.label,
-      start_date: event.startDate,
-      end_date: event.endDate,
-      source_url: event.sourceUrl,
-      status: 'candidate',
-      created_at: new Date(),
-    });
-    candidates.push({ ...event, id: insertedId.toString(), status: 'candidate' });
+  if (events.length === 0) {
+    return { queryId, candidates: [] };
   }
+
+  // insertMany() rather than N sequential insertOne() calls — this runs
+  // inline on the synchronous POST /api/queries hot path, already paying
+  // for a live searxng call plus an opencode round trip.
+  const now = new Date();
+  const docs = events.map(event => ({
+    _id: new ObjectId(),
+    query_id: queryResult.insertedId,
+    label: event.label,
+    start_date: event.startDate,
+    end_date: event.endDate,
+    source_url: event.sourceUrl,
+    status: 'candidate' as const,
+    created_at: now,
+  }));
+  await db.collection('events').insertMany(docs);
+
+  const candidates: CandidateEvent[] = docs.map((doc, i) => ({
+    ...events[i],
+    id: doc._id.toString(),
+    status: 'candidate',
+  }));
 
   return { queryId, candidates };
 }

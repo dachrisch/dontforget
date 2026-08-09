@@ -60,10 +60,52 @@ function buildPrompt(query: string, results: SearchResult[]): string {
 }
 
 function parseEvents(replyText: string): ExtractedEvent[] {
-  const jsonMatch = replyText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
+  const jsonText = extractFirstJsonObject(replyText);
+  const parsed = JSON.parse(jsonText) as { events: ExtractedEvent[] };
+  return parsed.events;
+}
+
+// A plain /\{[\s\S]*\}/ match greedily spans from the first '{' to the very
+// LAST '}' in the whole reply, so any trailing prose after valid JSON (or
+// the literal `{...}` example syntax in the prompt itself) breaks JSON.parse
+// even though a complete, valid object was present. Walk brace depth
+// instead, string-aware, and stop at the first balanced object.
+function extractFirstJsonObject(text: string): string {
+  const start = text.indexOf('{');
+  if (start === -1) {
     throw new Error('opencode reply did not contain JSON');
   }
-  const parsed = JSON.parse(jsonMatch[0]) as { events: ExtractedEvent[] };
-  return parsed.events;
+
+  let depth = 0;
+  let inString = false;
+  let escapeNext = false;
+
+  for (let i = start; i < text.length; i++) {
+    const char = text[i];
+
+    if (escapeNext) {
+      escapeNext = false;
+      continue;
+    }
+    if (char === '\\') {
+      escapeNext = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+
+    if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(start, i + 1);
+      }
+    }
+  }
+
+  throw new Error('opencode reply contained an unterminated JSON object');
 }

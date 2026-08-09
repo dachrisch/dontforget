@@ -35,6 +35,7 @@ export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): v
         query_id: { $in: queryIds },
         status: 'approved',
       })
+      .sort({ start_date: 1 })
       .toArray();
     const events: CandidateEvent[] = eventRows.map(r => ({
       id: r._id.toString(),

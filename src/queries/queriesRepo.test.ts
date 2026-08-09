@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
-import { createClient } from '../db/client';
-import { runMigrations } from '../db/migrate';
+import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { createQueryWithCandidates } from './queriesRepo';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('createQueryWithCandidates', () => {
   let client: MongoClient;
@@ -13,21 +9,17 @@ describe('createQueryWithCandidates', () => {
   let userId: string;
 
   beforeAll(async () => {
-    client = await createClient(TEST_DB_URL);
-    db = client.db();
-    await runMigrations(db);
+    ({ client, db } = await setupTestDb());
   });
 
   beforeEach(async () => {
-    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
-      await db.collection(name).deleteMany({});
-    }
+    await cleanTestDb(db);
     const { insertedId } = await db.collection('users').insertOne({ email: 'd@example.com' });
     userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('inserts the query and one candidate row per event', async () => {

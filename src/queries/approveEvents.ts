@@ -8,19 +8,25 @@ export async function approveEvents(
   eventIds: string[],
   publicBaseUrl: string
 ): Promise<{ icsUrl: string; rssUrl: string } | null> {
+  const queryObjectId = toObjectId(queryId);
+  if (!queryObjectId) {
+    return null;
+  }
+
   const ownership = await db.collection('queries').findOne({
-    _id: new ObjectId(queryId),
+    _id: queryObjectId,
     user_id: userId,
   });
   if (!ownership) {
     return null;
   }
 
-  if (eventIds.length > 0) {
+  const eventObjectIds = eventIds.map(toObjectId).filter((id): id is ObjectId => id !== null);
+  if (eventObjectIds.length > 0) {
     await db.collection('events').updateMany(
       {
-        query_id: new ObjectId(queryId),
-        _id: { $in: eventIds.map(id => new ObjectId(id)) },
+        query_id: queryObjectId,
+        _id: { $in: eventObjectIds },
       },
       { $set: { status: 'approved' } }
     );
@@ -31,4 +37,8 @@ export async function approveEvents(
     icsUrl: `${publicBaseUrl}/f/${token}.ics`,
     rssUrl: `${publicBaseUrl}/f/${token}.rss`,
   };
+}
+
+function toObjectId(id: string): ObjectId | null {
+  return ObjectId.isValid(id) ? new ObjectId(id) : null;
 }

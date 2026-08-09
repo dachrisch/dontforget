@@ -40,7 +40,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         deps.db,
         request.userId!,
         request.params.id,
-        request.body.eventIds ?? [],
+        request.body?.eventIds ?? [],
         deps.publicBaseUrl
       );
       if (!result) {

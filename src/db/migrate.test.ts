@@ -2,10 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
 import { createClient } from './client';
 import { runMigrations } from './migrate';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ??
-  'mongodb://localhost:27017/dontforget';
+import { TEST_DB_URL, teardownTestDb } from '../testSupport';
 
 describe('runMigrations', () => {
   let client: MongoClient;
@@ -17,7 +14,7 @@ describe('runMigrations', () => {
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('applies pending migrations and is idempotent', async () => {

@@ -1,11 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
-import { createClient } from '../db/client';
-import { runMigrations } from '../db/migrate';
+import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { getOrCreateFeedToken } from './feedToken';
-
-const TEST_DB_URL =
-  process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget';
 
 describe('getOrCreateFeedToken', () => {
   let client: MongoClient;
@@ -13,21 +9,17 @@ describe('getOrCreateFeedToken', () => {
   let userId: string;
 
   beforeAll(async () => {
-    client = await createClient(TEST_DB_URL);
-    db = client.db();
-    await runMigrations(db);
+    ({ client, db } = await setupTestDb());
   });
 
   beforeEach(async () => {
-    for (const name of ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens']) {
-      await db.collection(name).deleteMany({});
-    }
+    await cleanTestDb(db);
     const { insertedId } = await db.collection('users').insertOne({ email: 'e@example.com' });
     userId = insertedId.toString();
   });
 
   afterAll(async () => {
-    await client.close();
+    await teardownTestDb(client);
   });
 
   it('creates a token once and reuses it on subsequent calls', async () => {

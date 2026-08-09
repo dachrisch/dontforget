@@ -2,6 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { reducer, type WorkspaceState } from './state';
 
 describe('reducer', () => {
+  it('moves from signedOut to linkSent on MAGIC_LINK_SENT', () => {
+    const state: WorkspaceState = { kind: 'signedOut' };
+    const next = reducer(state, { type: 'MAGIC_LINK_SENT' });
+    expect(next).toEqual({ kind: 'linkSent' });
+  });
+
   it('moves from empty to loading on SUBMIT_QUERY', () => {
     const state: WorkspaceState = { kind: 'empty' };
     const next = reducer(state, { type: 'SUBMIT_QUERY', text: 'Auer Dult Munich' });
@@ -42,19 +48,22 @@ describe('reducer', () => {
     });
   });
 
-  it('moves from review to feedReady keeping only selected candidates', () => {
+  it('moves from review to feedReady using the approved list from the event, not live state', () => {
     const state: WorkspaceState = {
       kind: 'review',
       queryId: 'q1',
       candidates: [
         { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
-        { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: false },
+        // Selection changed after the approve request was already sent —
+        // the event's own `approved` snapshot must win, not this state.
+        { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: true },
       ],
     };
     const next = reducer(state, {
       type: 'APPROVE_RESOLVED',
       icsUrl: 'https://x/f/t.ics',
       rssUrl: 'https://x/f/t.rss',
+      approved: [{ ...state.candidates[0], selected: true }],
     });
     expect(next).toEqual({
       kind: 'feedReady',

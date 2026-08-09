@@ -1,8 +1,14 @@
 import { randomBytes } from 'node:crypto';
-import { ObjectId, type Db } from 'mongodb';
+import { ObjectId, type Collection, type Db } from 'mongodb';
 import type { EmailSender } from '../email/EmailSender';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
+const DUPLICATE_KEY_ERROR_CODE = 11000;
+
+interface UserRow {
+  _id: ObjectId;
+  email: string;
+}
 
 export class MagicLinkService {
   constructor(
@@ -11,12 +17,9 @@ export class MagicLinkService {
     private baseUrl: string
   ) {}
 
-  async requestLink(email: string): Promise<void> {
-    const users = this.db.collection<{ _id: ObjectId }>('users');
-    await users.updateOne({ email }, { $setOnInsert: { email } }, { upsert: true });
-
-    const user = await users.findOne({ email });
-    const userId = user!._id.toString();
+  async requestLink(rawEmail: string): Promise<void> {
+    const email = normalizeEmail(rawEmail);
+    const userId = await this.findOrCreateUserId(email);
 
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
@@ -31,6 +34,26 @@ export class MagicLinkService {
     await this.emailSender.send(email, 'Your dontforget sign-in link', `Sign in: ${link}`);
   }
 
+  private async findOrCreateUserId(email: string): Promise<string> {
+    const users: Collection<UserRow> = this.db.collection<UserRow>('users');
+    try {
+      const result = await users.findOneAndUpdate(
+        { email },
+        { $setOnInsert: { email } },
+        { upsert: true, returnDocument: 'after' }
+      );
+      return result!._id.toString();
+    } catch (err) {
+      // Two concurrent first-time requests for the same email can both miss
+      // and both attempt the insert half of the upsert; one loses the unique
+      // index race even with findOneAndUpdate. The other request already
+      // created the user, so just look it up.
+      if ((err as { code?: number }).code !== DUPLICATE_KEY_ERROR_CODE) throw err;
+      const existing = await users.findOne({ email });
+      return existing!._id.toString();
+    }
+  }
+
   async verifyToken(token: string): Promise<string | null> {
     const result = await this.db.collection('magic_links').findOneAndUpdate(
       { token, used_at: null, expires_at: { $gt: new Date() } },
@@ -38,4 +61,8 @@ export class MagicLinkService {
     );
     return result ? (result.user_id as string) : null;
   }
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
 }

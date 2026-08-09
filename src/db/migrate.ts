@@ -11,7 +11,9 @@ interface Migration {
 const MIGRATIONS: Migration[] = [{ name: '001_init.ts', migrate: migrate001 }];
 
 export async function runMigrations(db: Db): Promise<string[]> {
-  await db.createCollection('schema_migrations');
+  // No explicit createCollection here: Mongo creates a collection lazily on
+  // first write, and createCollection() throws NamespaceExists if called
+  // again on a database that's already been migrated once.
 
   const applied = new Set(
     (await db.collection('schema_migrations').find().toArray()).map(r => r.name as string)
