@@ -1,4 +1,4 @@
-import type { SearchResult, ExtractedEvent } from '../types';
+import type { SearchResult, ExtractedEvent } from '../types.js';
 
 export interface SearchOrchestratorDeps {
   searxngSearch: (query: string) => Promise<SearchResult[]>;

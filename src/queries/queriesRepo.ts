@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
-import type { ExtractedEvent, CandidateEvent } from '../types';
+import type { ExtractedEvent, CandidateEvent } from '../types.js';
 
 export async function createQueryWithCandidates(
   db: Db,

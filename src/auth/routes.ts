@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { MagicLinkService } from './magicLink';
-import { SessionService, createRequireAuth, SESSION_COOKIE } from './session';
+import { MagicLinkService } from './magicLink.js';
+import { SessionService, createRequireAuth, SESSION_COOKIE } from './session.js';
 
 export interface AuthRouteDeps {
   magicLinkService: MagicLinkService;

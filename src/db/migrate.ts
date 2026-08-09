@@ -1,5 +1,5 @@
 import type { Db } from 'mongodb';
-import { migrate as migrate001 } from '../migrations/001_init';
+import { migrate as migrate001 } from '../migrations/001_init.js';
 
 interface Migration {
   name: string;

@@ -1,5 +1,5 @@
 import { createEvents, type EventAttributes } from 'ics';
-import type { CandidateEvent } from '../types';
+import type { CandidateEvent } from '../types.js';
 
 export function buildIcs(events: CandidateEvent[]): string {
   const { error, value } = createEvents(events.map(toIcsEvent));

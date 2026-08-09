@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
-import { getOrCreateFeedToken } from '../feed/feedToken';
+import { getOrCreateFeedToken } from '../feed/feedToken.js';
 
 export async function approveEvents(
   db: Db,

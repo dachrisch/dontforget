@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { ObjectId, type Collection, type Db } from 'mongodb';
-import type { EmailSender } from '../email/EmailSender';
+import type { EmailSender } from '../email/EmailSender.js';
 
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 const DUPLICATE_KEY_ERROR_CODE = 11000;

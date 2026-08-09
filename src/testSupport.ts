@@ -1,6 +1,6 @@
 import { MongoClient, type Db } from 'mongodb';
-import { createClient } from './db/client';
-import { runMigrations } from './db/migrate';
+import { createClient } from './db/client.js';
+import { runMigrations } from './db/migrate.js';
 
 // Deliberately distinct from .env.example's DATABASE_URL (dev DB name
 // "dontforget") — tests deleteMany() every collection in beforeEach, and

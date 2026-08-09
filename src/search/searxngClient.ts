@@ -1,4 +1,4 @@
-import type { SearchResult } from '../types';
+import type { SearchResult } from '../types.js';
 
 // This instance's general-category engines (google, duckduckgo, brave,
 // startpage, mojeek, qwant, bing) are configured as SearXNG "private
