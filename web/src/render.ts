@@ -39,10 +39,10 @@ function renderSignedOut(handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <h1>Sign in</h1>
-    <p>No password — we'll email you a link.</p>
-    <form>
-      <input type="email" name="email" placeholder="you@example.com" required />
-      <button type="submit">Email me a link</button>
+    <p class="subtext">No password — we'll email you a link.</p>
+    <form class="ruled-form">
+      <input class="ruled-input" type="email" name="email" placeholder="you@example.com" required />
+      <button class="stamp-button" type="submit">Email me a link</button>
     </form>
   `;
   wrapper.querySelector('form')!.addEventListener('submit', e => {
@@ -55,16 +55,20 @@ function renderSignedOut(handlers: WorkspaceHandlers): HTMLElement {
 
 function renderLinkSent(): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.innerHTML = `<p>Check your inbox — the link signs you in.</p>`;
+  wrapper.innerHTML = `
+    <p class="ornament">※</p>
+    <p>Check your inbox — the link signs you in.</p>
+  `;
   return wrapper;
 }
 
 function renderEmpty(handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <form>
-      <input name="query" placeholder="What do you want to track?" required />
-      <button type="submit">Search</button>
+    <form class="ruled-form">
+      <label class="entry-label" for="query-input">What do you want to track?</label>
+      <input class="ruled-input" id="query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
+      <button class="stamp-button" type="submit">Search</button>
     </form>
   `;
   wrapper.querySelector('form')!.addEventListener('submit', e => {

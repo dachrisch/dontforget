@@ -18,7 +18,9 @@ describe('renderWorkspace', () => {
 
     expect(container.textContent).toContain('Sign in');
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
+    expect(container.querySelector('.stamp-button')).not.toBeNull();
     const input = container.querySelector<HTMLInputElement>('input[type=email]')!;
+    expect(input.classList.contains('ruled-input')).toBe(true);
     input.value = 'a@example.com';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
@@ -29,6 +31,7 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(container, { kind: 'linkSent' }, noopHandlers());
     expect(container.textContent).toMatch(/check your inbox/i);
+    expect(container.querySelector('.ornament')).not.toBeNull();
   });
 
   it('renders the empty workspace and submits a query on enter', () => {
@@ -36,7 +39,9 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(container, { kind: 'empty' }, handlers);
 
+    expect(container.querySelector('.stamp-button')).not.toBeNull();
     const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
+    expect(input.classList.contains('ruled-input')).toBe(true);
     input.value = 'Auer Dult Munich';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
