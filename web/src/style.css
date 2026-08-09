@@ -87,3 +87,30 @@ h1, h2 {
 .workspace-enter {
   animation: workspace-enter 150ms ease-out;
 }
+
+.masthead {
+  max-width: 640px;
+  margin: 2rem auto 0;
+  padding: 0 2rem;
+  text-align: center;
+}
+
+.masthead-title {
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+}
+
+.masthead-rule {
+  height: 4px;
+  margin: 0.5rem 0;
+  border-top: 3px solid var(--ink);
+  border-bottom: 1px solid var(--ink);
+}
+
+.masthead-dateline {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}

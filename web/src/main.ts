@@ -2,8 +2,10 @@ import './style.css';
 import { reducer, type WorkspaceState } from './state';
 import { renderWorkspace } from './render';
 import { requestMagicLink, checkSession, submitQuery, approveEvents } from './api';
+import { renderMasthead } from './masthead';
 
 const root = document.getElementById('root')!;
+root.before(renderMasthead());
 
 const errorBanner = document.createElement('p');
 errorBanner.className = 'error-banner';
