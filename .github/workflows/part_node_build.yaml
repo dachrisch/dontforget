@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: 🟢🏗️🧪📊 Build & run node tests
+
+on:
+  workflow_call:
+    inputs:
+      project:
+        required: true
+        description: The project to build
+        type: string
+
+permissions:
+  checks: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:8
+        ports:
+          - 27017:27017
+    defaults:
+      run:
+        working-directory: ${{ inputs.project }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: 🟢⚙️ Setup node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24.x"
+          cache: "npm"
+          cache-dependency-path: ${{ inputs.project }}/package.json
+      - name: ⬇️ Install dependencies
+        run: npm ci
+      - name: 👷 Building ${{ inputs.project }}
+        run: npm run build > typescript.log
+      - name: 🔍📝 Annotate TypeScript results
+        if: always()
+        uses: DerLev/eslint-annotations@v2
+        with:
+          typescript-log: ${{ inputs.project }}/typescript.log
+      - name: 🧪 Run vitest
+        env:
+          TEST_DATABASE_URL: mongodb://localhost:27017/dontforget-test
+        run: npm run test
+      - name: 📊 Publish test results
+        if: always()
+        uses: dorny/test-reporter@v3
+        with:
+          name: Node Test Results (${{ inputs.project }})
+          path: ${{ inputs.project }}/test-results/junit.xml
+          reporter: java-junit

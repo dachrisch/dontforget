@@ -1,0 +1,30 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
+name: 🏗️🧪🚀 Build, Test and Deploy everything
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+  checks: write
+  security-events: write
+
+concurrency:
+  group: build-test-deploy
+  cancel-in-progress: true
+
+jobs:
+  node-project:
+    uses: ./.github/workflows/part_node_build.yaml
+    secrets: inherit
+    with:
+      project: .
+
+  web-project:
+    uses: ./.github/workflows/part_node_build.yaml
+    secrets: inherit
+    with:
+      project: web

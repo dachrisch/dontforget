@@ -1,0 +1,58 @@
+import type { CandidateEvent } from './types';
+
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+async function handle<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+  return response.json() as Promise<T>;
+}
+
+export async function requestMagicLink(email: string): Promise<void> {
+  const response = await fetch('/api/auth/magic-link', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, 'failed to request link');
+  }
+}
+
+export async function checkSession(): Promise<boolean> {
+  const response = await fetch('/api/me', { credentials: 'include' });
+  return response.ok;
+}
+
+export async function submitQuery(
+  text: string
+): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
+  const response = await fetch('/api/queries', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  });
+  return handle(response);
+}
+
+export async function approveEvents(
+  queryId: string,
+  eventIds: string[]
+): Promise<{ icsUrl: string; rssUrl: string }> {
+  const response = await fetch(`/api/queries/${queryId}/approve`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ eventIds }),
+  });
+  return handle(response);
+}
