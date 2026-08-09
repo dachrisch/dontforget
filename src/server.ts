@@ -27,7 +27,8 @@ async function main() {
     : new ConsoleEmailSender(); // dev fallback — prints the magic link to stdout
 
   const runQuery = createSearchOrchestrator({
-    searxngSearch: query => searxngSearch(process.env.SEARXNG_BASE_URL!, query),
+    searxngSearch: query =>
+      searxngSearch(process.env.SEARXNG_BASE_URL!, query, process.env.SEARXNG_TOKEN!),
     extractDates: (query, results) =>
       extractDates(process.env.OPENCODE_BASE_URL!, process.env.OPENCODE_API_KEY!, query, results),
   });

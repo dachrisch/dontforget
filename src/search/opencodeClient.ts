@@ -1,5 +1,26 @@
 import type { SearchResult, ExtractedEvent } from '../types';
 
+// Contract confirmed live against opencode.lehel.xyz on 2026-08-09 — the
+// plan's original guess (single POST .../message returning parts[] inline)
+// was wrong on every point. The real shape:
+//   POST /api/session            -> {"data": {"id": "ses_...", ...}}
+//   POST /api/session/:id/prompt -> {"data": {"id":"msg_...", "delivery":"steer", ...}} (an ack, not the reply)
+//   GET  /api/session/:id/wait   -> 503 "Session wait is not available yet" (not usable)
+//   GET  /api/session/:id/message -> {"data": [<newest message first>, ...]}
+// So the reply has to be polled for: keep GETting .../message until the
+// newest entry is an assistant message with `finish` set (or `finish:
+// "error"`, e.g. a transient upstream 503 from the model provider — seen
+// live during this same verification).
+const POLL_INTERVAL_MS = 1000;
+const POLL_TIMEOUT_MS = 30_000;
+
+interface OpencodeMessage {
+  type: 'user' | 'assistant';
+  finish?: string;
+  content?: Array<{ type: string; text?: string }>;
+  error?: { message: string };
+}
+
 export async function extractDates(
   baseUrl: string,
   apiKey: string,
@@ -7,7 +28,8 @@ export async function extractDates(
   results: SearchResult[]
 ): Promise<ExtractedEvent[]> {
   const sessionId = await createSession(baseUrl, apiKey);
-  const replyText = await sendMessage(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+  await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+  const replyText = await pollForReply(baseUrl, apiKey, sessionId);
   return parseEvents(replyText);
 }
 
@@ -20,30 +42,53 @@ async function createSession(baseUrl: string, apiKey: string): Promise<string> {
   if (!response.ok) {
     throw new Error(`opencode session create failed: ${response.status}`);
   }
-  const data = (await response.json()) as { id: string };
-  return data.id;
+  const data = (await response.json()) as { data: { id: string } };
+  return data.data.id;
 }
 
-async function sendMessage(
-  baseUrl: string,
-  apiKey: string,
-  sessionId: string,
-  text: string
-): Promise<string> {
-  const response = await fetch(`${baseUrl}/api/session/${sessionId}/message`, {
+async function sendPrompt(baseUrl: string, apiKey: string, sessionId: string, text: string): Promise<void> {
+  const response = await fetch(`${baseUrl}/api/session/${sessionId}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-    body: JSON.stringify({ parts: [{ type: 'text', text }] }),
+    body: JSON.stringify({ prompt: { text } }),
   });
   if (!response.ok) {
-    throw new Error(`opencode message failed: ${response.status}`);
+    throw new Error(`opencode prompt failed: ${response.status}`);
   }
-  const data = (await response.json()) as { parts: Array<{ type: string; text?: string }> };
-  const textPart = data.parts.find(p => p.type === 'text' && p.text);
-  if (!textPart?.text) {
-    throw new Error('opencode reply had no text part');
+}
+
+async function pollForReply(baseUrl: string, apiKey: string, sessionId: string): Promise<string> {
+  const deadline = Date.now() + POLL_TIMEOUT_MS;
+
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/api/session/${sessionId}/message`, {
+      headers: { 'X-Api-Key': apiKey },
+    });
+    if (!response.ok) {
+      throw new Error(`opencode message poll failed: ${response.status}`);
+    }
+    const data = (await response.json()) as { data: OpencodeMessage[] };
+    const latest = data.data[0];
+
+    if (latest?.type === 'assistant' && latest.finish) {
+      if (latest.finish === 'error') {
+        throw new Error(`opencode generation failed: ${latest.error?.message ?? 'unknown error'}`);
+      }
+      const textPart = latest.content?.find(p => p.type === 'text' && p.text);
+      if (!textPart?.text) {
+        throw new Error('opencode reply had no text content');
+      }
+      return textPart.text;
+    }
+
+    await sleep(POLL_INTERVAL_MS);
   }
-  return textPart.text;
+
+  throw new Error('opencode reply timed out');
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function buildPrompt(query: string, results: SearchResult[]): string {

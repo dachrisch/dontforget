@@ -16,10 +16,10 @@ describe('searxngSearch', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    const results = await searxngSearch('https://search.lehel.xyz', 'Auer Dult Munich');
+    const results = await searxngSearch('https://search.lehel.xyz', 'Auer Dult Munich', 'test-token');
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://search.lehel.xyz/search?q=Auer%20Dult%20Munich&format=json'
+      'https://search.lehel.xyz/search?q=Auer%20Dult%20Munich&format=json&tokens=test-token'
     );
     expect(results).toEqual([
       { title: 'Auer Dult', url: 'https://auerdult.de', content: 'Spring fair dates' },
@@ -28,6 +28,6 @@ describe('searxngSearch', () => {
 
   it('throws on a non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
-    await expect(searxngSearch('https://search.lehel.xyz', 'x')).rejects.toThrow('503');
+    await expect(searxngSearch('https://search.lehel.xyz', 'x', 'test-token')).rejects.toThrow('503');
   });
 });
