@@ -118,6 +118,59 @@ describe('renderWorkspace', () => {
     expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(false);
   });
 
+  it('only replays the enter animation on an actual state change, not a same-state re-render', () => {
+    const container = document.createElement('div');
+    const candidate = {
+      id: 'e1',
+      label: 'Frühjahrsdult',
+      startDate: '2026-04-11',
+      endDate: '2026-04-11',
+      sourceUrl: 'u',
+      status: 'candidate' as const,
+      selected: true,
+    };
+    renderWorkspace(container, { kind: 'review', queryId: 'q1', candidates: [candidate] }, noopHandlers());
+    expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
+
+    renderWorkspace(
+      container,
+      { kind: 'review', queryId: 'q1', candidates: [{ ...candidate, selected: false }] },
+      noopHandlers()
+    );
+    expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(false);
+
+    renderWorkspace(container, { kind: 'loading', queryText: 'x' }, noopHandlers());
+    expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
+  });
+
+  it('falls back to the raw string for a malformed date instead of "undefined"', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'review',
+        queryId: 'q1',
+        candidates: [
+          {
+            id: 'e3',
+            label: 'Mystery Fest',
+            startDate: 'not-a-date',
+            endDate: 'not-a-date',
+            sourceUrl: 'u',
+            status: 'candidate',
+            selected: false,
+          },
+        ],
+      },
+      noopHandlers()
+    );
+
+    expect(container.textContent).not.toContain('undefined');
+    expect(container.textContent).toContain('not-a-date');
+    expect(container.querySelector('.day-tile-month')!.textContent).toBe('?');
+    expect(container.querySelector('.day-tile-day')!.textContent).toBe('?');
+  });
+
   it('renders the feed-ready state as ledger rows with both URLs', () => {
     const container = document.createElement('div');
     renderWorkspace(

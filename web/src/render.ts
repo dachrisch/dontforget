@@ -7,15 +7,36 @@ export interface WorkspaceHandlers {
   onApprove: () => void;
 }
 
+const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
+
 export function renderWorkspace(
   container: HTMLElement,
   state: WorkspaceState,
   handlers: WorkspaceHandlers
 ): void {
+  const isStateTransition = lastRenderedKind.get(container) !== state.kind;
+  const focusedId = document.activeElement instanceof HTMLElement
+    ? document.activeElement.closest<HTMLElement>('[data-id]')?.dataset.id
+    : undefined;
+
   container.innerHTML = '';
   const wrapper = render(state, handlers);
-  wrapper.classList.add('workspace-enter');
+  // Only animate in on an actual state change — re-rendering the same
+  // state (e.g. toggling one tile in `review`) must not replay the
+  // whole-panel enter animation on every interaction.
+  if (isStateTransition) {
+    wrapper.classList.add('workspace-enter');
+  }
+  lastRenderedKind.set(container, state.kind);
   container.appendChild(wrapper);
+
+  // A full re-render tears down and rebuilds every element, so the
+  // previously focused control (e.g. a review tile's checkbox) loses
+  // focus by default. Restore it on the matching element so keyboard
+  // users don't lose their place after each toggle.
+  if (focusedId) {
+    container.querySelector<HTMLElement>(`[data-id="${focusedId}"] input`)?.focus();
+  }
 }
 
 function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement {
@@ -96,23 +117,30 @@ function renderLoading(queryText: string): HTMLElement {
 }
 
 const MONTH_ABBREVS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
-function parseIsoDate(iso: string): { year: number; month: number; day: number } {
+// startDate/endDate come from LLM-extracted search results (see
+// src/search/opencodeClient.ts), not a validated schema — malformed
+// values must degrade to the raw string, never to "undefined".
+function parseIsoDate(iso: string): { year: number; month: number; day: number } | null {
+  if (!ISO_DATE_RE.test(iso)) return null;
   const [year, month, day] = iso.split('-').map(Number);
   return { year, month, day };
 }
 
 function monthAbbrev(iso: string): string {
-  return MONTH_ABBREVS[parseIsoDate(iso).month - 1];
+  const parsed = parseIsoDate(iso);
+  return parsed ? MONTH_ABBREVS[parsed.month - 1] : '?';
 }
 
 function dayNumber(iso: string): string {
-  return String(parseIsoDate(iso).day);
+  const parsed = parseIsoDate(iso);
+  return parsed ? String(parsed.day) : '?';
 }
 
 function formatIsoDate(iso: string): string {
-  const { year, month, day } = parseIsoDate(iso);
-  return `${MONTH_ABBREVS[month - 1]} ${day}, ${year}`;
+  const parsed = parseIsoDate(iso);
+  return parsed ? `${MONTH_ABBREVS[parsed.month - 1]} ${parsed.day}, ${parsed.year}` : iso;
 }
 
 function formatRange(startDate: string, endDate: string): string {
