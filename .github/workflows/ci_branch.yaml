@@ -29,3 +29,23 @@ jobs:
     secrets: inherit
     with:
       project: web
+
+  docker-image:
+    needs: [node-project, web-project]
+    uses: ./.github/workflows/part_docker_build.yaml
+    with:
+      image_name: dontforget
+
+  image-test:
+    needs: [docker-image]
+    uses: ./.github/workflows/part_docker_test.yaml
+    with:
+      artifact_name: ${{ needs.docker-image.outputs.artifact_name }}
+      image_name: dontforget
+      env_vars: >-
+        -e NODE_ENV=production
+        -e DATABASE_URL=mongodb://host.docker.internal:27017/dontforget-image-test
+        -e SEARXNG_BASE_URL=https://search.lehel.xyz
+        -e SEARXNG_TOKEN=ci-dummy
+        -e OPENCODE_BASE_URL=https://opencode.lehel.xyz
+        -e OPENCODE_API_KEY=ci-dummy
