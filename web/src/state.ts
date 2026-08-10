@@ -1,16 +1,43 @@
-import type { CandidateEvent } from './types';
+import type { CandidateEvent, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface SelectableCandidate extends CandidateEvent {
   selected: boolean;
+}
+
+export interface EditingDraft {
+  queryId: string;
+  text: string;
+  recurrenceInterval: RecurrenceInterval;
+}
+
+interface DashboardState {
+  kind: 'dashboard';
+  queries: QuerySummary[];
+  feed: FeedSummary | null;
+  editing: EditingDraft | null;
+}
+
+interface LoadingState {
+  kind: 'loading';
+  queryText: string;
+  fromDashboard?: boolean;
+}
+
+interface ReviewState {
+  kind: 'review';
+  queryId: string;
+  candidates: SelectableCandidate[];
+  fromDashboard?: boolean;
 }
 
 export type WorkspaceState =
   | { kind: 'signedOut' }
   | { kind: 'linkSent' }
   | { kind: 'empty'; queryText?: string }
-  | { kind: 'loading'; queryText: string }
-  | { kind: 'review'; queryId: string; candidates: SelectableCandidate[] }
-  | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
+  | LoadingState
+  | ReviewState
+  | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
+  | DashboardState;
 
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
@@ -18,7 +45,11 @@ export type WorkspaceEvent =
   | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[] }
   | { type: 'QUERY_FAILED' }
   | { type: 'TOGGLE_CANDIDATE'; id: string }
-  | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
+  | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
+  | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null }
+  | { type: 'START_EDIT'; queryId: string }
+  | { type: 'CANCEL_EDIT' }
+  | { type: 'QUERY_UPDATED'; query: QuerySummary };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
@@ -27,16 +58,24 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       return { kind: 'linkSent' };
 
     case 'SUBMIT_QUERY':
-      if (state.kind !== 'empty') return state;
-      return { kind: 'loading', queryText: event.text };
+      if (state.kind === 'empty') {
+        return { kind: 'loading', queryText: event.text };
+      }
+      if (state.kind === 'dashboard') {
+        return { kind: 'loading', queryText: event.text, fromDashboard: true };
+      }
+      return state;
 
-    case 'QUERY_RESOLVED':
+    case 'QUERY_RESOLVED': {
       if (state.kind !== 'loading') return state;
-      return {
+      const next: ReviewState = {
         kind: 'review',
         queryId: event.queryId,
         candidates: event.candidates.map(c => ({ ...c, selected: true })),
       };
+      if (state.fromDashboard) next.fromDashboard = true;
+      return next;
+    }
 
     case 'QUERY_FAILED':
       if (state.kind !== 'loading') return state;
@@ -60,6 +99,31 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         icsUrl: event.icsUrl,
         rssUrl: event.rssUrl,
         approved: event.approved,
+      };
+
+    case 'DASHBOARD_LOADED':
+      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing: null };
+
+    case 'START_EDIT': {
+      if (state.kind !== 'dashboard') return state;
+      const query = state.queries.find(q => q.id === event.queryId);
+      if (!query) return state;
+      return {
+        ...state,
+        editing: { queryId: query.id, text: query.text, recurrenceInterval: query.recurrenceInterval },
+      };
+    }
+
+    case 'CANCEL_EDIT':
+      if (state.kind !== 'dashboard') return state;
+      return { ...state, editing: null };
+
+    case 'QUERY_UPDATED':
+      if (state.kind !== 'dashboard') return state;
+      return {
+        ...state,
+        queries: state.queries.map(q => (q.id === event.query.id ? event.query : q)),
+        editing: null,
       };
 
     default:

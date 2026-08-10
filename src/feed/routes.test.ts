@@ -46,6 +46,27 @@ describe('feed routes', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('records when the calendar was last fetched', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'j@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
+    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db });
+
+    const before = await db.collection('feed_tokens').findOne({ token });
+    expect(before?.last_fetched_at).toBeUndefined();
+
+    await app.inject({ method: 'GET', url: `/f/${token}.ics` });
+
+    const after = await db.collection('feed_tokens').findOne({ token });
+    expect(after?.last_fetched_at).toBeInstanceOf(Date);
+  });
+
   it('lists approved events chronologically regardless of insertion order', async () => {
     const { insertedId } = await db.collection('users').insertOne({ email: 'i@example.com' });
     const userId = insertedId.toString();

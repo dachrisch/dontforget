@@ -18,10 +18,16 @@ export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): v
       return reply.code(404).send();
     }
 
-    const tokenRow = await deps.db.collection<{ user_id: string }>('feed_tokens').findOne({ token });
+    const tokenRow = await deps.db.collection<{ _id: unknown; user_id: string }>('feed_tokens').findOne({ token });
     if (!tokenRow) {
       return reply.code(404).send();
     }
+
+    // A calendar app just polled this subscription — record it so the
+    // dashboard can answer "when was the calendar last fetched?".
+    await deps.db
+      .collection('feed_tokens')
+      .updateOne({ _id: tokenRow._id }, { $set: { last_fetched_at: new Date() } });
 
     // all events for queries owned by this user
     const queries = await deps.db

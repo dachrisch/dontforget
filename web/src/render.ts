@@ -1,10 +1,15 @@
 import type { WorkspaceState } from './state';
+import { RECURRENCE_INTERVALS } from './types';
+import type { FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface WorkspaceHandlers {
   onRequestMagicLink: (email: string) => void;
-  onSubmitQuery: (text: string) => void;
+  onSubmitQuery: (text: string, recurrenceInterval: RecurrenceInterval) => void;
   onToggleCandidate: (id: string) => void;
   onApprove: () => void;
+  onStartEdit: (queryId: string) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -53,6 +58,8 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
       return renderReview(state.candidates, handlers);
     case 'feedReady':
       return renderFeedReady(state.icsUrl, state.rssUrl);
+    case 'dashboard':
+      return renderDashboard(state.queries, state.feed, state.editing, handlers);
   }
 }
 
@@ -95,7 +102,7 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
   wrapper.querySelector('form')!.addEventListener('submit', e => {
     e.preventDefault();
     const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
-    handlers.onSubmitQuery(text);
+    handlers.onSubmitQuery(text, 'monthly');
   });
   return wrapper;
 }
@@ -148,6 +155,20 @@ function formatRange(startDate: string, endDate: string): string {
   return `${formatIsoDate(startDate)}–${formatIsoDate(endDate)}`;
 }
 
+// lastRunAt / lastFetchedAt are full ISO timestamps from the backend, not
+// the YYYY-MM-DD dates above — degrade to the raw string on any parse issue.
+function formatTimestamp(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function renderReview(
   candidates: Array<{ id: string; label: string; startDate: string; endDate: string; sourceUrl: string; selected: boolean }>,
   handlers: WorkspaceHandlers
@@ -198,6 +219,151 @@ function renderFeedReady(icsUrl: string, rssUrl: string): HTMLElement {
     </div>
   `;
   return wrapper;
+}
+
+const INTERVAL_LABELS: Record<RecurrenceInterval, string> = {
+  weekly: 'Weekly',
+  monthly: 'Monthly',
+  quarterly: 'Quarterly',
+  yearly: 'Yearly',
+};
+
+function renderIntervalSelect(
+  name: string,
+  selected: RecurrenceInterval
+): string {
+  const options = RECURRENCE_INTERVALS.map(
+    interval => `<option value="${interval}" ${interval === selected ? 'selected' : ''}>${INTERVAL_LABELS[interval]}</option>`
+  ).join('');
+  return `<select class="ruled-select" name="${name}">${options}</select>`;
+}
+
+function renderDashboard(
+  queries: QuerySummary[],
+  feed: FeedSummary | null,
+  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval } | null,
+  handlers: WorkspaceHandlers
+): HTMLElement {
+  const wrapper = document.createElement('div');
+
+  const cards = queries
+    .map(query => {
+      const isEditing = editing?.queryId === query.id;
+      return isEditing ? renderEditCard(editing) : renderQueryCard(query);
+    })
+    .join('');
+
+  wrapper.innerHTML = `
+    <form class="ruled-form dashboard-add">
+      <label class="entry-label" for="dashboard-query-input">What do you want to track?</label>
+      <input class="ruled-input" id="dashboard-query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
+      <div class="interval-wrap">
+        <label class="interval-label" for="dashboard-interval">Re-runs</label>
+        ${renderIntervalSelect('recurrenceInterval', 'monthly')}
+      </div>
+      <button class="stamp-button" type="submit">Search</button>
+    </form>
+
+    ${queries.length > 0 ? `<section class="query-list" aria-label="Saved queries">${cards}</section>` : ''}
+
+    <section class="feed-summary" aria-label="Your calendar feed">
+      <h2 class="dashboard-section-title">Your calendar</h2>
+      ${
+        feed
+          ? `
+            <div class="ledger-row">
+              <span class="ledger-label">Calendar (ICS)</span>
+              <a class="ledger-value" href="${escapeHtml(feed.icsUrl)}">${escapeHtml(feed.icsUrl)}</a>
+            </div>
+            <div class="ledger-row">
+              <span class="ledger-label">RSS</span>
+              <a class="ledger-value" href="${escapeHtml(feed.rssUrl)}">${escapeHtml(feed.rssUrl)}</a>
+            </div>
+            <div class="ledger-row">
+              <span class="ledger-label">Last fetched</span>
+              <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : 'Never'}</span>
+            </div>`
+          : `<p class="subtext">No calendar yet — approve your first search results to mint your private feed link.</p>`
+      }
+    </section>
+  `;
+
+  wrapper.querySelector<HTMLFormElement>('.dashboard-add')!.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = wrapper.querySelector<HTMLInputElement>('.dashboard-add input[name=query]')!.value;
+    const interval = wrapper.querySelector<HTMLSelectElement>('.dashboard-add select[name=recurrenceInterval]')!.value;
+    handlers.onSubmitQuery(text, interval as RecurrenceInterval);
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=edit]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onStartEdit(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLFormElement>('.query-card form.edit-form').forEach(form => {
+    const card = form.closest<HTMLElement>('.query-card')!;
+    const queryId = card.dataset.id!;
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const text = form.querySelector<HTMLInputElement>('input[name=editText]')!.value;
+      if (!text.trim()) return;
+      const interval = form.querySelector<HTMLSelectElement>('select[name=editInterval]')!.value;
+      handlers.onSaveEdit(queryId, { text, recurrenceInterval: interval as RecurrenceInterval });
+    });
+    form.querySelector<HTMLButtonElement>('button[data-action=cancel]')!.addEventListener('click', () => {
+      handlers.onCancelEdit();
+    });
+  });
+
+  return wrapper;
+}
+
+function renderQueryCard(query: QuerySummary): string {
+  const eventSummary = [];
+  if (query.approvedCount > 0) eventSummary.push(`${query.approvedCount} approved`);
+  if (query.candidateCount > 0) eventSummary.push(`${query.candidateCount} pending approval`);
+  return `
+    <article class="query-card" data-id="${query.id}">
+      <div class="query-card-head">
+        <span class="query-card-text">${escapeHtml(query.text)}</span>
+        <button type="button" class="link-button" data-action="edit">Edit</button>
+      </div>
+      <div class="ledger-row">
+        <span class="ledger-label">Re-runs</span>
+        <span class="ledger-value">${INTERVAL_LABELS[query.recurrenceInterval]}</span>
+      </div>
+      <div class="ledger-row">
+        <span class="ledger-label">Last run</span>
+        <span class="ledger-value">${query.lastRunAt ? escapeHtml(formatTimestamp(query.lastRunAt)) : 'Never'}</span>
+      </div>
+      <div class="ledger-row">
+        <span class="ledger-label">Events</span>
+        <span class="ledger-value">${eventSummary.length > 0 ? escapeHtml(eventSummary.join(' · ')) : 'None yet'}</span>
+      </div>
+    </article>
+  `;
+}
+
+function renderEditCard(
+  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval }
+): string {
+  return `
+    <article class="query-card query-card-editing" data-id="${editing.queryId}">
+      <form class="edit-form ruled-form">
+        <label class="entry-label" for="edit-text">Query</label>
+        <input class="ruled-input" id="edit-text" name="editText" value="${escapeHtml(editing.text)}" required />
+        <div class="interval-wrap">
+          <label class="interval-label" for="edit-interval">Re-runs</label>
+          ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
+        </div>
+        <div class="edit-actions">
+          <button class="stamp-button" type="submit" data-action="save">Save</button>
+          <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">Cancel</button>
+        </div>
+      </form>
+    </article>
+  `;
 }
 
 function escapeHtml(value: string): string {
