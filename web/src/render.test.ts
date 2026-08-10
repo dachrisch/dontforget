@@ -8,8 +8,10 @@ function noopHandlers(): WorkspaceHandlers {
     onToggleCandidate: vi.fn(),
     onApprove: vi.fn(),
     onStartEdit: vi.fn(),
+    onToggleEditEvent: vi.fn(),
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
+    onDeleteQuery: vi.fn(),
   };
 }
 
@@ -266,7 +268,7 @@ describe('renderWorkspace', () => {
           { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
         ],
         feed: null,
-        editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly' },
+        editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
       },
       handlers
     );
@@ -283,5 +285,60 @@ describe('renderWorkspace', () => {
 
     container.querySelector<HTMLButtonElement>('.edit-form button[data-action=cancel]')!.click();
     expect(handlers.onCancelEdit).toHaveBeenCalled();
+  });
+
+  it('shows the events inside the edit card and toggles pending candidates', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 1, candidateCount: 1 },
+        ],
+        feed: null,
+        editing: {
+          queryId: 'q1',
+          text: 'Auer Dult Munich',
+          recurrenceInterval: 'quarterly',
+          events: [
+            { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', selected: false },
+            { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', selected: true },
+          ],
+        },
+      },
+      handlers
+    );
+
+    expect(container.textContent).toContain('approved');
+    const checkbox = container.querySelector<HTMLInputElement>('.edit-form .day-tile input[type=checkbox]')!;
+    expect(checkbox.checked).toBe(true);
+    checkbox.click();
+    expect(handlers.onToggleEditEvent).toHaveBeenCalledWith('e2');
+  });
+
+  it('deleting a query requires a confirmation click before calling the handler', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
+        ],
+        feed: null,
+        editing: null,
+      },
+      handlers
+    );
+
+    const deleteButton = container.querySelector<HTMLButtonElement>('.query-card button[data-action=delete]')!;
+    deleteButton.click();
+    expect(handlers.onDeleteQuery).not.toHaveBeenCalled();
+    expect(deleteButton.textContent).toContain('Confirm');
+    deleteButton.click();
+    expect(handlers.onDeleteQuery).toHaveBeenCalledWith('q1');
   });
 });

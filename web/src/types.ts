@@ -46,3 +46,12 @@ export interface ApproveResponse {
   icsUrl: string;
   rssUrl: string;
 }
+
+export interface EventDetail {
+  id: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  sourceUrl: string;
+  status: 'candidate' | 'approved';
+}

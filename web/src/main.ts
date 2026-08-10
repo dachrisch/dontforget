@@ -8,6 +8,8 @@ import {
   approveEvents,
   listQueries,
   updateQuery,
+  getQueryEvents,
+  deleteQuery,
 } from './api';
 import { renderMasthead } from './masthead';
 
@@ -103,15 +105,46 @@ function paint() {
     onStartEdit: queryId => {
       clearError();
       setState(reducer(state, { type: 'START_EDIT', queryId }));
+      // The dashboard card opens immediately; the events for it load async.
+      getQueryEvents(queryId)
+        .then(events => setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events })))
+        .catch(err => showError('loading events', err));
+    },
+    onToggleEditEvent: id => {
+      setState(reducer(state, { type: 'TOGGLE_EDIT_EVENT', id }));
     },
     onCancelEdit: () => {
       setState(reducer(state, { type: 'CANCEL_EDIT' }));
     },
     onSaveEdit: (queryId, patch) => {
       clearError();
+      // Snapshot the selected candidates at save time; the edit card stays
+      // interactive while the PATCH + approve round-trips, and we reload the
+      // dashboard once both have settled so counts and feed links refresh.
+      const selectedIds =
+        state.kind === 'dashboard' && state.editing?.queryId === queryId
+          ? state.editing.events.filter(e => e.status === 'candidate' && e.selected).map(e => e.id)
+          : [];
       updateQuery(queryId, patch)
-        .then(query => setState(reducer(state, { type: 'QUERY_UPDATED', query })))
+        .then(() => {
+          if (selectedIds.length > 0) return approveEvents(queryId, selectedIds);
+          return undefined;
+        })
+        .then(() => refreshDashboard())
         .catch(err => showError('saving changes', err));
+    },
+    onDeleteQuery: queryId => {
+      clearError();
+      deleteQuery(queryId)
+        .then(() => {
+          if (state.kind !== 'dashboard') return;
+          if (state.queries.length === 1) {
+            setState({ kind: 'empty' });
+          } else {
+            setState(reducer(state, { type: 'QUERY_DELETED', queryId }));
+          }
+        })
+        .catch(err => showError('deleting query', err));
     },
   });
 }
