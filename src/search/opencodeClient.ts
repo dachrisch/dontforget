@@ -1,4 +1,19 @@
+import { Agent } from 'undici';
 import type { SearchResult, ExtractedEvent } from '../types.js';
+
+// servyy-test's opencode instance is only reachable at an internal-only
+// `.lxd` hostname (Traefik's Let's Encrypt resolver can't issue a real cert
+// for a private domain, so it falls back to self-signed there). Production
+// (opencode.lehel.xyz) always has a real cert and must never skip
+// verification — this is opt-in per-deployment via an env var set only in
+// the servyy-test Ansible template, not a blanket NODE_TLS_REJECT_UNAUTHORIZED
+// toggle that would also weaken unrelated TLS connections (Mongo, SMTP...).
+const insecureDispatcher =
+  process.env.OPENCODE_ALLOW_INSECURE_TLS === 'true' ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
+
+// Node's ambient RequestInit type doesn't declare undici's `dispatcher`
+// extension, even though global fetch is undici under the hood.
+type FetchInit = RequestInit & { dispatcher?: Agent };
 
 // Contract confirmed live against opencode.lehel.xyz on 2026-08-09 — the
 // plan's original guess (single POST .../message returning parts[] inline)
@@ -38,7 +53,8 @@ async function createSession(baseUrl: string, apiKey: string): Promise<string> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: '{}',
-  });
+    dispatcher: insecureDispatcher,
+  } as FetchInit);
   if (!response.ok) {
     throw new Error(`opencode session create failed: ${response.status}`);
   }
@@ -51,7 +67,8 @@ async function sendPrompt(baseUrl: string, apiKey: string, sessionId: string, te
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({ prompt: { text } }),
-  });
+    dispatcher: insecureDispatcher,
+  } as FetchInit);
   if (!response.ok) {
     throw new Error(`opencode prompt failed: ${response.status}`);
   }
@@ -63,7 +80,8 @@ async function pollForReply(baseUrl: string, apiKey: string, sessionId: string):
   while (Date.now() < deadline) {
     const response = await fetch(`${baseUrl}/api/session/${sessionId}/message`, {
       headers: { 'X-Api-Key': apiKey },
-    });
+      dispatcher: insecureDispatcher,
+    } as FetchInit);
     if (!response.ok) {
       throw new Error(`opencode message poll failed: ${response.status}`);
     }
