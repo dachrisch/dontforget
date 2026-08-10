@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/dachrisch/dontforget/compare/v0.3.2...v0.3.3) (2026-08-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24 ([#16](https://github.com/dachrisch/dontforget/issues/16)) ([9f5a0d9](https://github.com/dachrisch/dontforget/commit/9f5a0d9e59ec3e3b6dc64781f2c99846455ba2f7))
+* **deps:** update dependency tsx to v4.23.12 ([#15](https://github.com/dachrisch/dontforget/issues/15)) ([e1e2503](https://github.com/dachrisch/dontforget/commit/e1e2503b85c315cd749ea7aba2d832b6227b895a))
+
 ## [0.3.2](https://github.com/dachrisch/dontforget/compare/v0.3.1...v0.3.2) (2026-08-10)
 
 
