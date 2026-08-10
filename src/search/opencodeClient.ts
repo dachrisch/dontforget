@@ -71,11 +71,18 @@ export async function extractDates(
   throw lastError;
 }
 
+// Left unspecified, opencode picks its own default model — confirmed live
+// 2026-08-10 to be "ling-3.0-tiny-free", which was persistently failing
+// with 503 "Endpoint is unavailable" (not the transient kind retries can
+// fix). Pin a specific free model that was confirmed working live at the
+// same time instead of relying on whatever opencode defaults to.
+const MODEL = { id: 'deepseek-v4-flash-free', providerID: 'opencode' };
+
 async function createSession(baseUrl: string, apiKey: string): Promise<string> {
   const response = await undiciFetch(`${baseUrl}/api/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-    body: '{}',
+    body: JSON.stringify({ model: MODEL }),
     dispatcher: insecureDispatcher,
   });
   if (!response.ok) {
