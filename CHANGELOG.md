@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/dachrisch/dontforget/compare/v0.3.4...v0.4.0) (2026-08-10)
+
+
+### Features
+
+* returning-user dashboard for query management ([09ae427](https://github.com/dachrisch/dontforget/commit/09ae427cf12d836390d7fd519f3e7db2b29e04e1))
+
+
+### Bug Fixes
+
+* align queriesRepo test with feed-token-on-approval behavior ([5353dba](https://github.com/dachrisch/dontforget/commit/5353dba95c3f0151e184de785d524e48a67f6bc7))
+
 ## [0.3.4](https://github.com/dachrisch/dontforget/compare/v0.3.3...v0.3.4) (2026-08-10)
 
 
