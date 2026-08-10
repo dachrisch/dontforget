@@ -1,8 +1,23 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { extractDates } from './opencodeClient';
+
+const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+
+// opencodeClient.ts imports fetch/Agent from 'undici' directly (not the
+// global fetch) — passing an Agent from the standalone `undici` package to
+// Node's global fetch throws, since Node's built-in fetch is backed by its
+// own differently-versioned internal copy of undici. So the mock must
+// replace undici's own `fetch` export, not global fetch. vi.mock calls are
+// hoisted above imports, so this takes effect before opencodeClient.ts
+// (imported below) resolves its own `import { fetch } from 'undici'`.
+vi.mock('undici', async importOriginal => {
+  const actual = await importOriginal<typeof import('undici')>();
+  return { ...actual, fetch: fetchMock };
+});
+
+import { extractDates } from './opencodeClient.js';
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  fetchMock.mockReset();
 });
 
 function sessionResponse(id: string) {
@@ -27,8 +42,7 @@ function assistantMessageResponse(text: string) {
 
 describe('extractDates', () => {
   it('creates a session, sends the prompt, polls for the reply, and parses it', async () => {
-    const fetchMock = vi
-      .fn()
+    fetchMock
       .mockResolvedValueOnce(sessionResponse('ses_123'))
       .mockResolvedValueOnce(promptAckResponse())
       .mockResolvedValueOnce(
@@ -36,7 +50,6 @@ describe('extractDates', () => {
           'Here you go:\n{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-05-11","sourceUrl":"https://auerdult.de"}]}'
         )
       );
-    vi.stubGlobal('fetch', fetchMock);
 
     const events = await extractDates(
       'https://opencode.lehel.xyz',
@@ -73,8 +86,7 @@ describe('extractDates', () => {
   });
 
   it('polls again while the reply is still pending, then parses it once complete', async () => {
-    const fetchMock = vi
-      .fn()
+    fetchMock
       .mockResolvedValueOnce(sessionResponse('ses_456'))
       .mockResolvedValueOnce(promptAckResponse())
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ type: 'user', text: 'the prompt' }] }) })
@@ -83,7 +95,6 @@ describe('extractDates', () => {
           '{"events":[{"label":"Jakobidult","startDate":"2026-07-25","endDate":"2026-08-03","sourceUrl":"https://muenchen.de"}]}\n\nNote: excluded {ongoing fairs} without a specific date.'
         )
       );
-    vi.stubGlobal('fetch', fetchMock);
     vi.useFakeTimers();
 
     const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'Auer Dult Munich', [
@@ -105,8 +116,7 @@ describe('extractDates', () => {
   });
 
   it('throws with the upstream message when generation finishes with an error', async () => {
-    const fetchMock = vi
-      .fn()
+    fetchMock
       .mockResolvedValueOnce(sessionResponse('ses_789'))
       .mockResolvedValueOnce(promptAckResponse())
       .mockResolvedValueOnce({
@@ -122,7 +132,6 @@ describe('extractDates', () => {
           ],
         }),
       });
-    vi.stubGlobal('fetch', fetchMock);
 
     await expect(
       extractDates('https://opencode.lehel.xyz', 'test-key', 'query', [])
