@@ -73,6 +73,12 @@ describe('reducer', () => {
     });
   });
 
+  it('moves from loading back to empty on QUERY_FAILED, preserving the query text for retry', () => {
+    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
+    const next = reducer(state, { type: 'QUERY_FAILED' });
+    expect(next).toEqual({ kind: 'empty', queryText: 'Auer Dult Munich' });
+  });
+
   it('ignores events that do not apply to the current state', () => {
     const state: WorkspaceState = { kind: 'empty' };
     expect(reducer(state, { type: 'TOGGLE_CANDIDATE', id: 'e1' })).toBe(state);

@@ -7,7 +7,7 @@ export interface SelectableCandidate extends CandidateEvent {
 export type WorkspaceState =
   | { kind: 'signedOut' }
   | { kind: 'linkSent' }
-  | { kind: 'empty' }
+  | { kind: 'empty'; queryText?: string }
   | { kind: 'loading'; queryText: string }
   | { kind: 'review'; queryId: string; candidates: SelectableCandidate[] }
   | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
@@ -16,6 +16,7 @@ export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
   | { type: 'SUBMIT_QUERY'; text: string }
   | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[] }
+  | { type: 'QUERY_FAILED' }
   | { type: 'TOGGLE_CANDIDATE'; id: string }
   | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] };
 
@@ -36,6 +37,10 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         queryId: event.queryId,
         candidates: event.candidates.map(c => ({ ...c, selected: true })),
       };
+
+    case 'QUERY_FAILED':
+      if (state.kind !== 'loading') return state;
+      return { kind: 'empty', queryText: state.queryText };
 
     case 'TOGGLE_CANDIDATE':
       if (state.kind !== 'review') return state;

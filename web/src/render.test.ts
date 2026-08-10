@@ -48,6 +48,14 @@ describe('renderWorkspace', () => {
     expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich');
   });
 
+  it('prefills the query input when returning to empty after a failed search', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, { kind: 'empty', queryText: 'Auer Dult Munich' }, noopHandlers());
+
+    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
+    expect(input.value).toBe('Auer Dult Munich');
+  });
+
   it('renders the loading state with a torn-ticket chip and ticking indicator', () => {
     const container = document.createElement('div');
     renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());

@@ -115,26 +115,58 @@ describe('extractDates', () => {
     ]);
   });
 
-  it('throws with the upstream message when generation finishes with an error', async () => {
-    fetchMock
-      .mockResolvedValueOnce(sessionResponse('ses_789'))
-      .mockResolvedValueOnce(promptAckResponse())
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          data: [
-            {
-              type: 'assistant',
-              finish: 'error',
-              content: [],
-              error: { message: 'Upstream request failed: Endpoint is unavailable.' },
-            },
-          ],
-        }),
-      });
+  function generationErrorResponse(message: string) {
+    return {
+      ok: true,
+      json: async () => ({
+        data: [{ type: 'assistant', finish: 'error', content: [], error: { message } }],
+      }),
+    };
+  }
 
-    await expect(
-      extractDates('https://opencode.lehel.xyz', 'test-key', 'query', [])
-    ).rejects.toThrow('Endpoint is unavailable');
+  it('retries a transient failure and succeeds on the next attempt', async () => {
+    fetchMock
+      // Attempt 1: session + prompt succeed, generation errors out.
+      .mockResolvedValueOnce(sessionResponse('ses_fail'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'))
+      // Attempt 2 (retry): a fresh session, succeeds fully.
+      .mockResolvedValueOnce(sessionResponse('ses_retry'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-04-11","sourceUrl":"https://auerdult.de"}]}'
+        )
+      );
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    await vi.runAllTimersAsync();
+    const events = await promise;
+
+    vi.useRealTimers();
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    expect(fetchMock).toHaveBeenNthCalledWith(4, 'https://opencode.lehel.xyz/api/session', expect.anything());
+    expect(events).toEqual([
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-04-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+  });
+
+  it('throws the last error after exhausting all retry attempts', async () => {
+    for (let i = 0; i < 3; i++) {
+      fetchMock
+        .mockResolvedValueOnce(sessionResponse(`ses_${i}`))
+        .mockResolvedValueOnce(promptAckResponse())
+        .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'));
+    }
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const assertion = expect(promise).rejects.toThrow('Endpoint is unavailable');
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    vi.useRealTimers();
+    expect(fetchMock).toHaveBeenCalledTimes(9);
   });
 });

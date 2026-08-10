@@ -40,16 +40,35 @@ interface OpencodeMessage {
   error?: { message: string };
 }
 
+// The upstream LLM provider behind opencode is occasionally flaky (503
+// "Endpoint is unavailable", or a poll timeout) — observed live during
+// testing, not something dontforget or opencode itself can prevent. Retry
+// the whole flow (a fresh session each time) a few times before giving up,
+// so a single transient blip doesn't force the user to resubmit manually.
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
+
 export async function extractDates(
   baseUrl: string,
   apiKey: string,
   query: string,
   results: SearchResult[]
 ): Promise<ExtractedEvent[]> {
-  const sessionId = await createSession(baseUrl, apiKey);
-  await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
-  const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-  return parseEvents(replyText);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const sessionId = await createSession(baseUrl, apiKey);
+      await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+      const replyText = await pollForReply(baseUrl, apiKey, sessionId);
+      return parseEvents(replyText);
+    } catch (err) {
+      lastError = err;
+      if (attempt < MAX_ATTEMPTS) {
+        await sleep(RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastError;
 }
 
 async function createSession(baseUrl: string, apiKey: string): Promise<string> {
