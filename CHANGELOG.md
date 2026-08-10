@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.4](https://github.com/dachrisch/dontforget/compare/v0.3.3...v0.3.4) (2026-08-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/nodemailer to v8 ([#21](https://github.com/dachrisch/dontforget/issues/21)) ([742a530](https://github.com/dachrisch/dontforget/commit/742a530aa05568bafbd20f451307f27386e63fc2))
+* **deps:** update dependency jsdom to v30 ([daedd25](https://github.com/dachrisch/dontforget/commit/daedd2533dd1ffed5a8f840a499d137e8a4efd05))
+* **deps:** update dependency jsdom to v30 ([f6e0f09](https://github.com/dachrisch/dontforget/commit/f6e0f09c6db98128d092816997e291f1230f2451))
+
 ## [0.3.3](https://github.com/dachrisch/dontforget/compare/v0.3.2...v0.3.3) (2026-08-10)
 
 
