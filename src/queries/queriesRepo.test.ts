@@ -54,7 +54,7 @@ describe('queries repo', () => {
   });
 
   describe('listQueriesForUser', () => {
-    it('returns the user\u2019s queries newest-first with event counts and feed null before approval', async () => {
+    it('returns the user\u2019s queries newest-first with event counts and feed links once approved', async () => {
       const older = await createQueryWithCandidates(db, userId, 'Older query', [
         { label: 'Approved event', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' },
       ]);
@@ -86,8 +86,12 @@ describe('queries repo', () => {
       expect(dashboard.queries[1].candidateCount).toBe(0);
       expect(dashboard.queries[0].recurrenceInterval).toBe('quarterly');
 
-      // No approval yet means no feed token, so no feed links to show.
-      expect(dashboard.feed).toBeNull();
+      // Approving an event creates the feed token, so links show up already.
+      expect(dashboard.feed).toEqual({
+        icsUrl: expect.stringMatching(/^http:\/\/localhost:3000\/f\/.+\.ics$/),
+        rssUrl: expect.stringMatching(/^http:\/\/localhost:3000\/f\/.+\.rss$/),
+        lastFetchedAt: null,
+      });
     });
 
     it('returns feed links and last fetched once a token exists', async () => {
@@ -115,6 +119,8 @@ describe('queries repo', () => {
       const dashboard = await listQueriesForUser(db, userId, 'http://localhost:3000');
       expect(dashboard.queries).toHaveLength(1);
       expect(dashboard.queries[0].text).toBe('Mine');
+      // No approval yet means no feed token, so no feed links to show.
+      expect(dashboard.feed).toBeNull();
     });
   });
 
