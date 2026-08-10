@@ -21,15 +21,20 @@ describe('runMigrations', () => {
     await db.dropDatabase();
 
     const firstRun = await runMigrations(db);
-    expect(firstRun).toEqual(['001_init.ts']);
+    expect(firstRun).toEqual(['001_init.ts', '002_queries_dashboard.ts']);
 
     const collections = await db.listCollections().toArray();
     expect(collections.map(c => c.name)).toEqual(
       expect.arrayContaining(['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens'])
     );
 
-    const indexes = await db.collection('feed_tokens').indexes();
-    expect(indexes.map(i => i.name)).toEqual(expect.arrayContaining(['user_id_1', 'token_1']));
+    const feedIndexes = await db.collection('feed_tokens').indexes();
+    expect(feedIndexes.map(i => i.name)).toEqual(expect.arrayContaining(['user_id_1', 'token_1']));
+
+    const queriesIndexes = await db.collection('queries').indexes();
+    expect(queriesIndexes.map(i => i.name)).toEqual(
+      expect.arrayContaining(['user_id_1_created_at_-1'])
+    );
 
     const secondRun = await runMigrations(db);
     expect(secondRun).toEqual([]);

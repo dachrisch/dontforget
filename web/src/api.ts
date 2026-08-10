@@ -1,4 +1,4 @@
-import type { CandidateEvent } from './types';
+import type { CandidateEvent, Dashboard, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -32,14 +32,33 @@ export async function checkSession(): Promise<boolean> {
   return response.ok;
 }
 
+export async function listQueries(): Promise<Dashboard> {
+  const response = await fetch('/api/queries', { credentials: 'include' });
+  return handle(response);
+}
+
 export async function submitQuery(
-  text: string
+  text: string,
+  recurrenceInterval?: RecurrenceInterval
 ): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
   const response = await fetch('/api/queries', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, recurrenceInterval }),
+  });
+  return handle(response);
+}
+
+export async function updateQuery(
+  queryId: string,
+  patch: { text?: string; recurrenceInterval?: RecurrenceInterval }
+): Promise<QuerySummary> {
+  const response = await fetch(`/api/queries/${queryId}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
   });
   return handle(response);
 }

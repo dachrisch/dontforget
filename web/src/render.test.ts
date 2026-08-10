@@ -7,6 +7,9 @@ function noopHandlers(): WorkspaceHandlers {
     onSubmitQuery: vi.fn(),
     onToggleCandidate: vi.fn(),
     onApprove: vi.fn(),
+    onStartEdit: vi.fn(),
+    onCancelEdit: vi.fn(),
+    onSaveEdit: vi.fn(),
   };
 }
 
@@ -45,7 +48,7 @@ describe('renderWorkspace', () => {
     input.value = 'Auer Dult Munich';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich');
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich', 'monthly');
   });
 
   it('prefills the query input when returning to empty after a failed search', () => {
@@ -195,5 +198,90 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
     expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
+  });
+
+  it('renders the dashboard with saved queries, schedules, counts and feed info', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: '2026-08-10T09:00:00Z', createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1 },
+        ],
+        feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: '2026-08-10T11:30:00Z' },
+        editing: null,
+      },
+      handlers
+    );
+
+    expect(container.textContent).toContain('Auer Dult Munich');
+    expect(container.textContent).toContain('Quarterly');
+    expect(container.textContent).toContain('2 approved');
+    expect(container.textContent).toContain('1 pending approval');
+    expect(container.textContent).toContain('https://x/f/t.ics');
+    expect(container.textContent).toContain('https://x/f/t.rss');
+
+    container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
+    expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
+  });
+
+  it('shows a hint instead of feed links until the user has approved something', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      noopHandlers()
+    );
+    expect(container.textContent).toMatch(/no calendar yet/i);
+  });
+
+  it('submits a new query from the dashboard with the chosen re-run schedule', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      handlers
+    );
+
+    const input = container.querySelector<HTMLInputElement>('.dashboard-add input[name=query]')!;
+    input.value = 'Oktoberfest Munich';
+    const select = container.querySelector<HTMLSelectElement>('.dashboard-add select[name=recurrenceInterval]')!;
+    select.value = 'yearly';
+    container.querySelector<HTMLFormElement>('.dashboard-add')!.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Oktoberfest Munich', 'yearly');
+  });
+
+  it('renders an editing card prefilled and saves the edited values', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
+        ],
+        feed: null,
+        editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly' },
+      },
+      handlers
+    );
+
+    const textInput = container.querySelector<HTMLInputElement>('.edit-form input[name=editText]')!;
+    expect(textInput.value).toBe('Auer Dult Munich');
+    const intervalSelect = container.querySelector<HTMLSelectElement>('.edit-form select[name=editInterval]')!;
+    expect(intervalSelect.value).toBe('quarterly');
+
+    textInput.value = 'Auer Dult cans';
+    intervalSelect.value = 'weekly';
+    container.querySelector<HTMLFormElement>('.edit-form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(handlers.onSaveEdit).toHaveBeenCalledWith('q1', { text: 'Auer Dult cans', recurrenceInterval: 'weekly' });
+
+    container.querySelector<HTMLButtonElement>('.edit-form button[data-action=cancel]')!.click();
+    expect(handlers.onCancelEdit).toHaveBeenCalled();
   });
 });

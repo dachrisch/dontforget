@@ -1,5 +1,6 @@
 import type { Db } from 'mongodb';
 import { migrate as migrate001 } from '../migrations/001_init.js';
+import { migrate as migrate002 } from '../migrations/002_queries_dashboard.js';
 
 interface Migration {
   name: string;
@@ -8,7 +9,10 @@ interface Migration {
 
 // Migrations live under src/ so tsc, tsx, and vitest all compile them identically.
 // Add new ones by importing them here and appending to this registry.
-const MIGRATIONS: Migration[] = [{ name: '001_init.ts', migrate: migrate001 }];
+const MIGRATIONS: Migration[] = [
+  { name: '001_init.ts', migrate: migrate001 },
+  { name: '002_queries_dashboard.ts', migrate: migrate002 },
+];
 
 export async function runMigrations(db: Db): Promise<string[]> {
   // No explicit createCollection here: Mongo creates a collection lazily on

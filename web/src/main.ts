@@ -1,7 +1,14 @@
 import './style.css';
 import { reducer, type WorkspaceState } from './state';
 import { renderWorkspace } from './render';
-import { requestMagicLink, checkSession, submitQuery, approveEvents } from './api';
+import {
+  requestMagicLink,
+  checkSession,
+  submitQuery,
+  approveEvents,
+  listQueries,
+  updateQuery,
+} from './api';
 import { renderMasthead } from './masthead';
 
 const root = document.getElementById('root')!;
@@ -29,6 +36,21 @@ function setState(next: WorkspaceState) {
   paint();
 }
 
+async function refreshDashboard(): Promise<void> {
+  try {
+    const data = await listQueries();
+    setState(
+      reducer(state, {
+        type: 'DASHBOARD_LOADED',
+        queries: data.queries,
+        feed: data.feed,
+      })
+    );
+  } catch (err) {
+    showError('loading your dashboard', err);
+  }
+}
+
 function paint() {
   renderWorkspace(root, state, {
     onRequestMagicLink: email => {
@@ -37,16 +59,22 @@ function paint() {
         .then(() => setState(reducer(state, { type: 'MAGIC_LINK_SENT' })))
         .catch(err => showError('requesting your sign-in link', err));
     },
-    onSubmitQuery: text => {
+    onSubmitQuery: (text, recurrenceInterval) => {
+      // Snapshot origin before the optimistic transition — after it the
+      // state is already `loading` and the dashboard data is gone.
+      const fromDashboard = state.kind === 'dashboard';
       clearError();
       setState(reducer(state, { type: 'SUBMIT_QUERY', text }));
-      submitQuery(text)
+      submitQuery(text, recurrenceInterval)
         .then(({ queryId, candidates }) => {
           setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates }));
         })
         .catch(err => {
           showError('searching', err);
-          setState(reducer(state, { type: 'QUERY_FAILED' }));
+          // A returning user's failed search should return them to their
+          // saved queries, not a blank workspace.
+          if (fromDashboard) refreshDashboard();
+          else setState(reducer(state, { type: 'QUERY_FAILED' }));
         });
     },
     onToggleCandidate: id => {
@@ -54,6 +82,7 @@ function paint() {
     },
     onApprove: () => {
       if (state.kind !== 'review') return;
+      const fromDashboard = state.fromDashboard === true;
       // Snapshot the current selection now — the user can keep toggling
       // checkboxes while this request is in flight, and the confirmation
       // screen must reflect what was actually sent (and persisted), not
@@ -63,16 +92,47 @@ function paint() {
       clearError();
       approveEvents(state.queryId, eventIds)
         .then(({ icsUrl, rssUrl }) => {
-          setState(reducer(state, { type: 'APPROVE_RESOLVED', icsUrl, rssUrl, approved }));
+          if (fromDashboard) {
+            refreshDashboard();
+          } else {
+            setState(reducer(state, { type: 'APPROVE_RESOLVED', icsUrl, rssUrl, approved }));
+          }
         })
         .catch(err => showError('approving events', err));
+    },
+    onStartEdit: queryId => {
+      clearError();
+      setState(reducer(state, { type: 'START_EDIT', queryId }));
+    },
+    onCancelEdit: () => {
+      setState(reducer(state, { type: 'CANCEL_EDIT' }));
+    },
+    onSaveEdit: (queryId, patch) => {
+      clearError();
+      updateQuery(queryId, patch)
+        .then(query => setState(reducer(state, { type: 'QUERY_UPDATED', query })))
+        .catch(err => showError('saving changes', err));
     },
   });
 }
 
 checkSession()
   .then(authenticated => {
-    setState(authenticated ? { kind: 'empty' } : { kind: 'signedOut' });
+    if (!authenticated) {
+      setState({ kind: 'signedOut' });
+      return;
+    }
+    return listQueries().then(data => {
+      // First-time users have no saved queries and get the focused
+      // single-input workspace; returning users get the full dashboard.
+      if (data.queries.length === 0) {
+        setState({ kind: 'empty' });
+      } else {
+        setState(
+          reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed })
+        );
+      }
+    });
   })
   .catch(err => {
     showError('loading dontforget', err);
