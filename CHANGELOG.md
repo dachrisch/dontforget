@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/dachrisch/dontforget/compare/v0.2.1...v0.3.0) (2026-08-10)
+
+
+### Features
+
+* add calendar favicon to frontend ([3a00147](https://github.com/dachrisch/dontforget/commit/3a00147d5a279347546623d6a7a37da17da0e056))
+
 ## [0.2.1](https://github.com/dachrisch/dontforget/compare/v0.2.0...v0.2.1) (2026-08-10)
 
 
