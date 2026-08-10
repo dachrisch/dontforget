@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/dachrisch/dontforget/compare/v0.3.1...v0.3.2) (2026-08-10)
+
+
+### Bug Fixes
+
+* deduplicate extracted events by label and date range ([9b83a3f](https://github.com/dachrisch/dontforget/commit/9b83a3f5c6aee6560f985c1fa27601f15131fbfb))
+
 ## [0.3.1](https://github.com/dachrisch/dontforget/compare/v0.3.0...v0.3.1) (2026-08-10)
 
 
