@@ -1,4 +1,4 @@
-import { Agent } from 'undici';
+import { Agent, fetch as undiciFetch } from 'undici';
 import type { SearchResult, ExtractedEvent } from '../types.js';
 
 // servyy-test's opencode instance is only reachable at an internal-only
@@ -8,12 +8,16 @@ import type { SearchResult, ExtractedEvent } from '../types.js';
 // verification — this is opt-in per-deployment via an env var set only in
 // the servyy-test Ansible template, not a blanket NODE_TLS_REJECT_UNAUTHORIZED
 // toggle that would also weaken unrelated TLS connections (Mongo, SMTP...).
+//
+// Uses undici's own `fetch`/`Agent`, not the global `fetch` — Node's
+// built-in fetch is backed by its own internal, differently-versioned copy
+// of undici, and passing an Agent from the standalone `undici` package as
+// `dispatcher` to the global fetch throws (`invalid onRequestStart method`,
+// an internal ABI mismatch between the two undici copies). Confirmed live
+// against opencode.servyy-test.lxd — global fetch + external Agent fails,
+// undici's own fetch + its own Agent works.
 const insecureDispatcher =
   process.env.OPENCODE_ALLOW_INSECURE_TLS === 'true' ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
-
-// Node's ambient RequestInit type doesn't declare undici's `dispatcher`
-// extension, even though global fetch is undici under the hood.
-type FetchInit = RequestInit & { dispatcher?: Agent };
 
 // Contract confirmed live against opencode.lehel.xyz on 2026-08-09 — the
 // plan's original guess (single POST .../message returning parts[] inline)
@@ -49,12 +53,12 @@ export async function extractDates(
 }
 
 async function createSession(baseUrl: string, apiKey: string): Promise<string> {
-  const response = await fetch(`${baseUrl}/api/session`, {
+  const response = await undiciFetch(`${baseUrl}/api/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: '{}',
     dispatcher: insecureDispatcher,
-  } as FetchInit);
+  });
   if (!response.ok) {
     throw new Error(`opencode session create failed: ${response.status}`);
   }
@@ -63,12 +67,12 @@ async function createSession(baseUrl: string, apiKey: string): Promise<string> {
 }
 
 async function sendPrompt(baseUrl: string, apiKey: string, sessionId: string, text: string): Promise<void> {
-  const response = await fetch(`${baseUrl}/api/session/${sessionId}/prompt`, {
+  const response = await undiciFetch(`${baseUrl}/api/session/${sessionId}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
     body: JSON.stringify({ prompt: { text } }),
     dispatcher: insecureDispatcher,
-  } as FetchInit);
+  });
   if (!response.ok) {
     throw new Error(`opencode prompt failed: ${response.status}`);
   }
@@ -78,10 +82,10 @@ async function pollForReply(baseUrl: string, apiKey: string, sessionId: string):
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
-    const response = await fetch(`${baseUrl}/api/session/${sessionId}/message`, {
+    const response = await undiciFetch(`${baseUrl}/api/session/${sessionId}/message`, {
       headers: { 'X-Api-Key': apiKey },
       dispatcher: insecureDispatcher,
-    } as FetchInit);
+    });
     if (!response.ok) {
       throw new Error(`opencode message poll failed: ${response.status}`);
     }
