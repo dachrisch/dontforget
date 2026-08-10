@@ -1,6 +1,6 @@
 {
   "name": "dontforget-server",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -23,7 +23,7 @@
     "undici": "^8.10.0"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0",
+    "@types/node": "^20.12.7",
     "@types/nodemailer": "^6.4.15",
     "tsx": "^4.7.2",
     "typescript": "^5.4.5",
