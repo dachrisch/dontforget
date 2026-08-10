@@ -63,6 +63,12 @@ describe('extractDates', () => {
       'https://opencode.lehel.xyz/api/session',
       expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
+    // opencode's own default model (picked when none is specified) is an
+    // unreliable free tier prone to persistent 503s — confirmed live
+    // 2026-08-10. Pin a specific, verified-working free model explicitly.
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      model: { id: 'deepseek-v4-flash-free', providerID: 'opencode' },
+    });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       'https://opencode.lehel.xyz/api/session/ses_123/prompt',
