@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/dachrisch/dontforget/compare/v0.3.0...v0.3.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* pin a working free model instead of opencode's failing default ([be19e09](https://github.com/dachrisch/dontforget/commit/be19e09f7b31b307391f23504f5ff2004ba142a8))
+
 ## [0.3.0](https://github.com/dachrisch/dontforget/compare/v0.2.1...v0.3.0) (2026-08-10)
 
 
