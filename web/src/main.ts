@@ -44,7 +44,10 @@ function paint() {
         .then(({ queryId, candidates }) => {
           setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates }));
         })
-        .catch(err => showError('searching', err));
+        .catch(err => {
+          showError('searching', err);
+          setState(reducer(state, { type: 'QUERY_FAILED' }));
+        });
     },
     onToggleCandidate: id => {
       setState(reducer(state, { type: 'TOGGLE_CANDIDATE', id }));

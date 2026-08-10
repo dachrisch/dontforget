@@ -46,7 +46,7 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'linkSent':
       return renderLinkSent();
     case 'empty':
-      return renderEmpty(handlers);
+      return renderEmpty(handlers, state.queryText);
     case 'loading':
       return renderLoading(state.queryText);
     case 'review':
@@ -83,12 +83,12 @@ function renderLinkSent(): HTMLElement {
   return wrapper;
 }
 
-function renderEmpty(handlers: WorkspaceHandlers): HTMLElement {
+function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <form class="ruled-form">
       <label class="entry-label" for="query-input">What do you want to track?</label>
-      <input class="ruled-input" id="query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
+      <input class="ruled-input" id="query-input" name="query" placeholder="e.g. Auer Dult Munich" value="${escapeHtml(queryText ?? '')}" required />
       <button class="stamp-button" type="submit">Search</button>
     </form>
   `;
