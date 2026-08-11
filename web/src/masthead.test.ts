@@ -26,11 +26,9 @@ describe('renderMasthead', () => {
     expect(sizer?.textContent).toBe('forget');
   });
 
-  it('includes the "you\'re covered." tagline', () => {
+  it('includes "you\'re covered." as the last word in the rotation', () => {
     const masthead = renderMasthead();
-    const tagline = masthead.querySelector('.wordmark-tagline');
-    expect(tagline?.textContent).toBe(" — you're covered.");
-    expect(tagline?.classList.contains('is-in')).toBe(false);
+    expect(masthead.querySelector('.wordmark-tagline')).toBeNull();
   });
 
   it('defaults to today when no date is passed', () => {

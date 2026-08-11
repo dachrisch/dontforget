@@ -4,7 +4,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
-const ROTATING_WORDS = ['forget', 'bother', 'hassle', 'regret'];
+const ROTATING_WORDS = ['forget', 'bother', 'hassle', 'regret', "you're covered."];
 
 export function formatDateline(date: Date): string {
   const day = DAY_NAMES[date.getDay()];
@@ -21,7 +21,6 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
       <span class="wordmark-slot" id="slot" aria-hidden="true">
         <span class="wordmark-sizer" id="sizer">${ROTATING_WORDS[0]}</span>
       </span>
-      <span class="wordmark-tagline" id="tagline"> — you're covered.</span>
     </h1>
     <div class="masthead-rule"></div>
     <p class="masthead-dateline">${formatDateline(today)}</p>
@@ -34,8 +33,7 @@ export function startWordmarkAnimation(): void {
   const title = masthead?.querySelector<HTMLElement>('#wordmark');
   const slot = masthead?.querySelector<HTMLElement>('#slot');
   const sizer = masthead?.querySelector<HTMLElement>('#sizer');
-  const tagline = masthead?.querySelector<HTMLElement>('#tagline');
-  if (!masthead || !title || !slot || !sizer || !tagline) return;
+  if (!masthead || !title || !slot || !sizer) return;
 
   const reduce =
     typeof window.matchMedia === 'function' &&
@@ -47,12 +45,12 @@ export function startWordmarkAnimation(): void {
     return new Promise(resolve => { setTimeout(resolve, effective); });
   }
 
-  function makeWord(text: string): { el: HTMLElement; strike: HTMLElement } {
+  function makeWord(text: string, isPayoff = false): { el: HTMLElement; strike: HTMLElement } {
     const el = document.createElement('span');
-    el.className = 'wordmark-word';
+    el.className = 'wordmark-word' + (isPayoff ? ' wordmark-payoff' : '');
     el.textContent = text;
     const strike = document.createElement('span');
-    strike.className = 'wordmark-strike';
+    strike.className = isPayoff ? 'wordmark-strike-payoff' : 'wordmark-strike';
     el.appendChild(strike);
     return { el, strike };
   }
@@ -62,9 +60,11 @@ export function startWordmarkAnimation(): void {
     running = true;
     slot.querySelectorAll('.wordmark-word').forEach(node => node.remove());
 
-    for (const word of ROTATING_WORDS) {
+    for (let i = 0; i < ROTATING_WORDS.length; i++) {
+      const word = ROTATING_WORDS[i];
       sizer.textContent = word;
-      const node = makeWord(word);
+      const isPayoff = i === ROTATING_WORDS.length - 1;
+      const node = makeWord(word, isPayoff);
       slot.appendChild(node.el);
 
       await sleep(30);
@@ -88,10 +88,6 @@ export function startWordmarkAnimation(): void {
     slot.appendChild(final);
     await sleep(30);
     final.classList.add('is-in');
-
-    tagline.classList.add('is-in');
-
-    title.classList.remove('animating');
 
     running = false;
   }
