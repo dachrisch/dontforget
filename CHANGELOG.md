@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/dachrisch/dontforget/compare/v0.5.1...v0.5.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency typescript to v7 ([#37](https://github.com/dachrisch/dontforget/issues/37)) ([4c0798d](https://github.com/dachrisch/dontforget/commit/4c0798d71d2389cd817b0bbf83c814c5d79fc056))
+
 ## [0.5.1](https://github.com/dachrisch/dontforget/compare/v0.5.0...v0.5.1) (2026-08-11)
 
 
