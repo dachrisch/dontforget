@@ -15,8 +15,15 @@ describe('renderMasthead', () => {
   it('renders the wordmark and the given date', () => {
     const masthead = renderMasthead(new Date(2026, 7, 9));
     expect(masthead.classList.contains('masthead')).toBe(true);
-    expect(masthead.textContent).toContain('dontforget');
     expect(masthead.textContent).toContain('Sunday, 9 August 2026');
+  });
+
+  it('starts the animated wordmark on "forget" with a stem and sizer', () => {
+    const masthead = renderMasthead();
+    const stem = masthead.querySelector('.wordmark-stem');
+    const sizer = masthead.querySelector('.wordmark-sizer');
+    expect(stem?.textContent).toBe("don't");
+    expect(sizer?.textContent).toBe('forget');
   });
 
   it('defaults to today when no date is passed', () => {
