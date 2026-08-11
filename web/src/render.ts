@@ -12,6 +12,7 @@ export interface WorkspaceHandlers {
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
   onDeleteQuery: (queryId: string) => void;
+  onRotateFeedToken: () => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -289,7 +290,9 @@ function renderDashboard(
             <div class="ledger-row">
               <span class="ledger-label">Last fetched</span>
               <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : 'Never'}</span>
-            </div>`
+            </div>
+            <button type="button" class="link-button link-button-danger" data-action="rotate-feed">Rotate feed URL</button>
+            <p class="subtext">Leaked or shared your calendar link by mistake? Rotating mints a new one and breaks the old link immediately.</p>`
           : `<p class="subtext">No calendar yet — approve your first search results to mint your private feed link.</p>`
       }
     </section>
@@ -316,6 +319,17 @@ function renderDashboard(
         return;
       }
       handlers.onDeleteQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.feed-summary button[data-action=rotate-feed]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.confirmed !== 'true') {
+        button.dataset.confirmed = 'true';
+        button.textContent = 'Confirm rotate?';
+        return;
+      }
+      handlers.onRotateFeedToken();
     });
   });
 

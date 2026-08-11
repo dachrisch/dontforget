@@ -56,7 +56,8 @@ export type WorkspaceEvent =
   | { type: 'EDIT_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
   | { type: 'TOGGLE_EDIT_EVENT'; id: string }
   | { type: 'CANCEL_EDIT' }
-  | { type: 'QUERY_DELETED'; queryId: string };
+  | { type: 'QUERY_DELETED'; queryId: string }
+  | { type: 'FEED_ROTATED'; icsUrl: string; rssUrl: string };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
@@ -157,6 +158,13 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         queries: state.queries.filter(q => q.id !== event.queryId),
         editing: state.editing?.queryId === event.queryId ? null : state.editing,
+      };
+
+    case 'FEED_ROTATED':
+      if (state.kind !== 'dashboard' || !state.feed) return state;
+      return {
+        ...state,
+        feed: { ...state.feed, icsUrl: event.icsUrl, rssUrl: event.rssUrl },
       };
 
     default:

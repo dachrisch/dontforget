@@ -81,6 +81,14 @@ export async function getQueryEvents(queryId: string): Promise<EventDetail[]> {
   return handle(response);
 }
 
+export async function rotateFeedToken(): Promise<{ icsUrl: string; rssUrl: string }> {
+  const response = await fetch('/api/feed/rotate', {
+    method: 'POST',
+    credentials: 'include',
+  });
+  return handle(response);
+}
+
 export async function deleteQuery(queryId: string): Promise<void> {
   const response = await fetch(`/api/queries/${queryId}`, {
     method: 'DELETE',

@@ -10,6 +10,7 @@ import {
   updateQuery,
   getQueryEvents,
   deleteQuery,
+  rotateFeedToken,
 } from './api';
 import { renderMasthead } from './masthead';
 
@@ -145,6 +146,14 @@ function paint() {
           }
         })
         .catch(err => showError('deleting query', err));
+    },
+    onRotateFeedToken: () => {
+      clearError();
+      rotateFeedToken()
+        .then(({ icsUrl, rssUrl }) => {
+          setState(reducer(state, { type: 'FEED_ROTATED', icsUrl, rssUrl }));
+        })
+        .catch(err => showError('rotating your feed URL', err));
     },
   });
 }

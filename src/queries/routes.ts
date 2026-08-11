@@ -8,6 +8,7 @@ import {
   updateQuery,
 } from './queriesRepo.js';
 import { approveEvents } from './approveEvents.js';
+import { rotateFeedToken } from '../feed/feedToken.js';
 import { DEFAULT_RECURRENCE_INTERVAL, isRecurrenceInterval, type ExtractedEvent } from '../types.js';
 
 export interface QueryRouteDeps {
@@ -98,6 +99,18 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       return reply.send(events);
+    }
+  );
+
+  app.post(
+    '/api/feed/rotate',
+    { preHandler: deps.requireAuth },
+    async request => {
+      const token = await rotateFeedToken(deps.db, request.userId!);
+      return {
+        icsUrl: `${deps.publicBaseUrl}/f/${token}.ics`,
+        rssUrl: `${deps.publicBaseUrl}/f/${token}.rss`,
+      };
     }
   );
 
