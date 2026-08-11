@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/dachrisch/dontforget/compare/v0.7.1...v0.7.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* bring back 'you're covered.' tagline after animation settles ([#56](https://github.com/dachrisch/dontforget/issues/56)) ([e614fc2](https://github.com/dachrisch/dontforget/commit/e614fc2743186883de3f43816e323502df763c4c))
+
 ## [0.7.1](https://github.com/dachrisch/dontforget/compare/v0.7.0...v0.7.1) (2026-08-11)
 
 
