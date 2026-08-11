@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.5](https://github.com/dachrisch/dontforget/compare/v0.5.4...v0.5.5) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v4 ([#41](https://github.com/dachrisch/dontforget/issues/41)) ([d84c46c](https://github.com/dachrisch/dontforget/commit/d84c46c8ddf4ca034b76e55ab56cb5bf35390abe))
+
+## [0.5.4](https://github.com/dachrisch/dontforget/compare/v0.5.3...v0.5.4) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vite to v8 ([#40](https://github.com/dachrisch/dontforget/issues/40)) ([60ba615](https://github.com/dachrisch/dontforget/commit/60ba61507b80a587498d034bdf61460272ed25a6))
+
 ## [0.5.3](https://github.com/dachrisch/dontforget/compare/v0.5.2...v0.5.3) (2026-08-11)
 
 
