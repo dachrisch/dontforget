@@ -83,10 +83,7 @@ export function startWordmarkAnimation(): void {
 
   async function cyclePayoff(text: string): Promise<void> {
     sizer.textContent = text;
-    if (stem) {
-      stem.style.transition = 'opacity 0.3s ease';
-      stem.style.opacity = '0';
-    }
+    stem?.classList.add('is-payoff-hidden');
     const el = makePayoff(text);
     slot.appendChild(el);
     await sleep(30);
@@ -96,10 +93,7 @@ export function startWordmarkAnimation(): void {
     el.classList.add('is-out');
     await sleep(reduce ? 120 : 320);
     el.remove();
-    if (stem) {
-      stem.style.transition = 'opacity 0.3s ease';
-      stem.style.opacity = '';
-    }
+    stem?.classList.remove('is-payoff-hidden');
   }
 
   async function run(): Promise<void> {
