@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.7](https://github.com/dachrisch/dontforget/compare/v0.5.6...v0.5.7) (2026-08-11)
+
+
+### Bug Fixes
+
+* set calendar name on generated ICS feed ([#45](https://github.com/dachrisch/dontforget/issues/45)) ([6b25e2a](https://github.com/dachrisch/dontforget/commit/6b25e2aa82e2d9561660fb199ee6deacd358d3c4))
+
 ## [0.5.6](https://github.com/dachrisch/dontforget/compare/v0.5.5...v0.5.6) (2026-08-11)
 
 
