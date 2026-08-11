@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.7.0](https://github.com/dachrisch/dontforget/compare/v0.6.1...v0.7.0) (2026-08-11)
+
+
+### Features
+
+* animated brand wordmark in masthead ([c2693f5](https://github.com/dachrisch/dontforget/commit/c2693f5fbb949202848cce0cc76badab28d397ed))
+* animated brand wordmark in masthead ([91a6675](https://github.com/dachrisch/dontforget/commit/91a6675bec011549ad2202f55f317eab725a7c5f))
+
 ## [0.6.1](https://github.com/dachrisch/dontforget/compare/v0.6.0...v0.6.1) (2026-08-11)
 
 
