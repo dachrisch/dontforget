@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/dachrisch/dontforget/compare/v0.5.0...v0.5.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24 ([a680212](https://github.com/dachrisch/dontforget/commit/a680212bc6ae49e258a656b6de9ce0062a48f788))
+* **deps:** update dependency feed to v6 ([0337a65](https://github.com/dachrisch/dontforget/commit/0337a65c1efecd96b7405e6bcbe6524fc96690f5))
+* **deps:** update dependency mongodb to v7 ([89b1e2e](https://github.com/dachrisch/dontforget/commit/89b1e2e00257d6b45f64b61176f6c1779e355c70))
+
 ## [0.5.0](https://github.com/dachrisch/dontforget/compare/v0.4.0...v0.5.0) (2026-08-11)
 
 
