@@ -163,37 +163,13 @@ h1, h2 {
   transform: scaleX(1) rotate(-1.6deg);
 }
 
-.wordmark-strike-payoff {
-  position: absolute;
-  left: -0.04em;
-  right: -0.04em;
-  top: 54%;
-  height: 0.09em;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--covered) 55%, transparent) 0%,
-    var(--covered) 12%,
-    var(--covered) 88%,
-    color-mix(in srgb, var(--covered) 55%, transparent) 100%
-  );
-  transform: scaleX(0) rotate(-1.6deg);
-  transform-origin: left center;
-  transition: transform 0.3s cubic-bezier(0.5, 0.05, 0.4, 1);
-}
-
-.wordmark-strike-payoff.is-drawn {
-  transform: scaleX(1) rotate(-1.6deg);
-}
-
 .wordmark-word.wordmark-payoff {
   color: var(--covered);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .wordmark-word,
-  .wordmark-strike,
-  .wordmark-strike-payoff {
+  .wordmark-strike {
     transition-duration: 0.001ms;
   }
 }
