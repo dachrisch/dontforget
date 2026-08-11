@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/dachrisch/dontforget/compare/v0.4.0...v0.5.0) (2026-08-11)
+
+
+### Features
+
+* delete queries and reselect pending events when editing ([7ac9990](https://github.com/dachrisch/dontforget/commit/7ac9990a4c8d569bd1cb02b2aa7893dfdc19da86))
+* delete queries and reselect pending events when editing ([abd2ef1](https://github.com/dachrisch/dontforget/commit/abd2ef1037f2eb329aa140072f2536f0ae759708))
+
 ## [0.4.0](https://github.com/dachrisch/dontforget/compare/v0.3.4...v0.4.0) (2026-08-10)
 
 
