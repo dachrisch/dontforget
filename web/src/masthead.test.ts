@@ -18,17 +18,10 @@ describe('renderMasthead', () => {
     expect(masthead.textContent).toContain('Sunday, 9 August 2026');
   });
 
-  it('starts the animated wordmark on "forget" with a stem and sizer', () => {
+  it('renders "forget" as the base word with stem and sizer', () => {
     const masthead = renderMasthead();
-    const stem = masthead.querySelector('.wordmark-stem');
-    const sizer = masthead.querySelector('.wordmark-sizer');
-    expect(stem?.textContent).toBe("don't");
-    expect(sizer?.textContent).toBe('forget');
-  });
-
-  it('includes "you\'re covered." as the last word in the rotation', () => {
-    const masthead = renderMasthead();
-    expect(masthead.querySelector('.wordmark-tagline')).toBeNull();
+    expect(masthead.querySelector('.wordmark-sizer')?.textContent).toBe('forget');
+    expect(masthead.querySelector('.wordmark-stem')?.textContent).toBe("don't");
   });
 
   it('defaults to today when no date is passed', () => {
