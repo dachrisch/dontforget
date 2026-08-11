@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/dachrisch/dontforget/compare/v0.7.2...v0.7.3) (2026-08-11)
+
+
+### Bug Fixes
+
+* 'you're covered.' is the last rotation word ([#58](https://github.com/dachrisch/dontforget/issues/58)) ([5017839](https://github.com/dachrisch/dontforget/commit/5017839ea872f6f0707c520ded514f07cc620e24))
+
 ## [0.7.2](https://github.com/dachrisch/dontforget/compare/v0.7.1...v0.7.2) (2026-08-11)
 
 
