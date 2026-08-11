@@ -2,7 +2,7 @@ import { createEvents, type EventAttributes } from 'ics';
 import type { CandidateEvent } from '../types.js';
 
 export function buildIcs(events: CandidateEvent[]): string {
-  const { error, value } = createEvents(events.map(toIcsEvent));
+  const { error, value } = createEvents(events.map(toIcsEvent), { calName: 'dontforget' });
   if (error || !value) {
     throw new Error(`failed to build ICS: ${error?.message ?? 'unknown error'}`);
   }
