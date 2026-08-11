@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
-    "@fastify/static": "^7.0.0",
-    "fastify": "^4.28.0",
+    "@fastify/static": "^10.0.0",
+    "fastify": "^5.0.0",
     "feed": "^6.0.0",
     "ics": "^3.7.2",
     "mongodb": "^7.0.0",
