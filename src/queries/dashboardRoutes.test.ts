@@ -242,4 +242,33 @@ describe('query dashboard routes', () => {
     });
     expect(response.statusCode).toBe(403);
   });
+
+  it('POST /api/feed/rotate requires auth', async () => {
+    const { app } = await authenticatedUser(db);
+    const response = await app.inject({ method: 'POST', url: '/api/feed/rotate' });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it('POST /api/feed/rotate mints a new URL and retires the old one', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' },
+    ]);
+    const { icsUrl: originalIcsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://localhost:3000'))!;
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/feed/rotate',
+      headers: authHeaders(sessionId),
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.icsUrl).toMatch(/^http:\/\/localhost:3000\/f\/.+\.ics$/);
+    expect(body.icsUrl).not.toBe(originalIcsUrl);
+
+    const oldToken = originalIcsUrl.split('/f/')[1]!.replace('.ics', '');
+    const staleLookup = await app.inject({ method: 'GET', url: `/f/${oldToken}.ics` });
+    expect(staleLookup.statusCode).toBe(404);
+  });
 });

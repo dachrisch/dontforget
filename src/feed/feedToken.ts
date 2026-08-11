@@ -18,3 +18,11 @@ export async function getOrCreateFeedToken(db: Db, userId: string): Promise<stri
   }
   return token;
 }
+
+export async function rotateFeedToken(db: Db, userId: string): Promise<string> {
+  const token = randomBytes(24).toString('hex');
+  const result = await db
+    .collection<{ user_id: string; token: string }>('feed_tokens')
+    .findOneAndUpdate({ user_id: userId }, { $set: { token } }, { returnDocument: 'after', upsert: true });
+  return result!.token;
+}

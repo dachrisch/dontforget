@@ -12,6 +12,7 @@ function noopHandlers(): WorkspaceHandlers {
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
+    onRotateFeedToken: vi.fn(),
   };
 }
 
