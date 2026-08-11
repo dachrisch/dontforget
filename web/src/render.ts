@@ -291,7 +291,7 @@ function renderDashboard(
               <span class="ledger-label">Last fetched</span>
               <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : 'Never'}</span>
             </div>
-            <button type="button" class="link-button link-button-danger" data-action="rotate-feed">Rotate feed URL</button>
+            <button type="button" class="stamp-button stamp-button-quiet" data-action="rotate-feed">Rotate feed URL</button>
             <p class="subtext">Leaked or shared your calendar link by mistake? Rotating mints a new one and breaks the old link immediately.</p>`
           : `<p class="subtext">No calendar yet — approve your first search results to mint your private feed link.</p>`
       }
