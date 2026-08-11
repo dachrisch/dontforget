@@ -2,6 +2,8 @@ import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import type { Db } from 'mongodb';
 import {
   createQueryWithCandidates,
+  deleteQuery,
+  getQueryEvents,
   listQueriesForUser,
   updateQuery,
 } from './queriesRepo.js';
@@ -84,6 +86,30 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       return reply.send(result);
+    }
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/api/queries/:id/events',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const events = await getQueryEvents(deps.db, request.userId!, request.params.id);
+      if (!events) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      return reply.send(events);
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/queries/:id',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const deleted = await deleteQuery(deps.db, request.userId!, request.params.id);
+      if (!deleted) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      return reply.code(204).send();
     }
   );
 }

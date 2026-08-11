@@ -1,6 +1,6 @@
-import type { WorkspaceState } from './state';
+import type { WorkspaceState, SelectableEditEvent } from './state';
 import { RECURRENCE_INTERVALS } from './types';
-import type { FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface WorkspaceHandlers {
   onRequestMagicLink: (email: string) => void;
@@ -8,8 +8,10 @@ export interface WorkspaceHandlers {
   onToggleCandidate: (id: string) => void;
   onApprove: () => void;
   onStartEdit: (queryId: string) => void;
+  onToggleEditEvent: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
+  onDeleteQuery: (queryId: string) => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -241,7 +243,12 @@ function renderIntervalSelect(
 function renderDashboard(
   queries: QuerySummary[],
   feed: FeedSummary | null,
-  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval } | null,
+  editing: {
+    queryId: string;
+    text: string;
+    recurrenceInterval: RecurrenceInterval;
+    events: SelectableEditEvent[];
+  } | null,
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
@@ -301,6 +308,28 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=delete]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.confirmed !== 'true') {
+        button.dataset.confirmed = 'true';
+        button.textContent = 'Confirm delete?';
+        return;
+      }
+      handlers.onDeleteQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLInputElement>('.query-card-editing .day-tile input[type=checkbox]').forEach(checkbox => {
+    checkbox.addEventListener('click', () => {
+      const id = checkbox.closest<HTMLElement>('.day-tile')!.dataset.id!;
+      handlers.onToggleEditEvent(id);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLAnchorElement>('.query-card-editing .day-tile-source').forEach(a => {
+    a.addEventListener('click', e => e.stopPropagation());
+  });
+
   wrapper.querySelectorAll<HTMLFormElement>('.query-card form.edit-form').forEach(form => {
     const card = form.closest<HTMLElement>('.query-card')!;
     const queryId = card.dataset.id!;
@@ -327,7 +356,10 @@ function renderQueryCard(query: QuerySummary): string {
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
         <span class="query-card-text">${escapeHtml(query.text)}</span>
-        <button type="button" class="link-button" data-action="edit">Edit</button>
+        <div class="query-card-actions">
+          <button type="button" class="link-button" data-action="edit">Edit</button>
+          <button type="button" class="link-button link-button-danger" data-action="delete">Delete</button>
+        </div>
       </div>
       <div class="ledger-row">
         <span class="ledger-label">Re-runs</span>
@@ -346,8 +378,27 @@ function renderQueryCard(query: QuerySummary): string {
 }
 
 function renderEditCard(
-  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval }
+  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval; events: SelectableEditEvent[] }
 ): string {
+  const approved = editing.events.filter(e => e.status === 'approved');
+  const pending = editing.events.filter(e => e.status === 'candidate');
+  const selectedCount = pending.filter(e => e.selected).length;
+
+  const eventTiles = [
+    ...pending.map(e => renderSelectableTile(e)),
+    ...approved.map(e => renderApprovedTile(e)),
+  ].join('');
+
+  const eventsSection = editing.events.length > 0
+    ? `
+      <div class="edit-events">
+        <label class="entry-label">Events</label>
+        <div class="tile-grid edit-tile-grid">${eventTiles}</div>
+        <p class="subtext">Saving approves the selected pending dates. ${pending.length > 0 ? `${approved.length} approved · ${pending.length} pending approval.` : ''}</p>
+      </div>`
+    : `
+      <p class="subtext">No events extracted yet for this query yet.</p>`;
+
   return `
     <article class="query-card query-card-editing" data-id="${editing.queryId}">
       <form class="edit-form ruled-form">
@@ -357,13 +408,34 @@ function renderEditCard(
           <label class="interval-label" for="edit-interval">Re-runs</label>
           ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
         </div>
+        ${eventsSection}
         <div class="edit-actions">
-          <button class="stamp-button" type="submit" data-action="save">Save</button>
+          <button class="stamp-button" type="submit" data-action="save">Save and approve (${selectedCount})</button>
           <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">Cancel</button>
         </div>
       </form>
     </article>
   `;
+}
+
+function renderSelectableTile(event: SelectableEditEvent): string {
+  return `
+    <label class="day-tile ${event.selected ? 'day-tile-selected' : ''}" data-id="${event.id}">
+      <input type="checkbox" ${event.selected ? 'checked' : ''} />
+      <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
+      <span class="day-tile-day">${dayNumber(event.startDate)}</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)}</span>
+      <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">source</a>
+    </label>`;
+}
+
+function renderApprovedTile(event: EventDetail): string {
+  return `
+    <span class="day-tile day-tile-approved" data-id="${event.id}">
+      <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
+      <span class="day-tile-day">${dayNumber(event.startDate)}</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)} · approved</span>
+    </span>`;
 }
 
 function escapeHtml(value: string): string {

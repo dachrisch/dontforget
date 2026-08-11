@@ -8,6 +8,15 @@ import {
   type RecurrenceInterval,
 } from '../types.js';
 
+interface EventRow {
+  _id: ObjectId;
+  label: string;
+  start_date: string;
+  end_date: string;
+  source_url: string;
+  status: 'candidate' | 'approved';
+}
+
 interface QueryRow {
   _id: ObjectId;
   user_id: string;
@@ -183,6 +192,54 @@ async function eventCountsByQuery(
     counts.set(key, entry);
   }
   return counts;
+}
+
+export async function getQueryEvents(
+  db: Db,
+  userId: string,
+  queryId: string
+): Promise<CandidateEvent[] | null> {
+  const queryObjectId = toObjectId(queryId);
+  if (!queryObjectId) {
+    return null;
+  }
+
+  const query = await db.collection<QueryRow>('queries').findOne({
+    _id: queryObjectId,
+    user_id: userId,
+  });
+  if (!query) {
+    return null;
+  }
+
+  const rows = await db
+    .collection<EventRow>('events')
+    .find({ query_id: queryObjectId })
+    .sort({ start_date: 1 })
+    .toArray();
+
+  return rows.map(row => ({
+    id: row._id.toString(),
+    label: row.label,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    sourceUrl: row.source_url,
+    status: row.status,
+  }));
+}
+
+export async function deleteQuery(db: Db, userId: string, queryId: string): Promise<boolean> {
+  const queryObjectId = toObjectId(queryId);
+  if (!queryObjectId) {
+    return false;
+  }
+
+  const result = await db.collection('queries').deleteOne({ _id: queryObjectId, user_id: userId });
+  if (result.deletedCount === 0) {
+    return false;
+  }
+  await db.collection('events').deleteMany({ query_id: queryObjectId });
+  return true;
 }
 
 function toObjectId(id: string): ObjectId | null {

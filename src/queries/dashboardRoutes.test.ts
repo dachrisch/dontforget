@@ -176,4 +176,70 @@ describe('query dashboard routes', () => {
     });
     expect(response.statusCode).toBe(400);
   });
+
+  it('GET /api/queries/:id/events lists approved and pending events for the owner', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1' },
+      { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2' },
+    ]);
+    await approveEvents(db, userId, queryId, [candidates[0].id], 'http://localhost:3000');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/queries/${queryId}/events`,
+      headers: authHeaders(sessionId),
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([
+      { id: candidates[0].id, label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved' },
+      { id: candidates[1].id, label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate' },
+    ]);
+  });
+
+  it('GET /api/queries/:id/events returns 403 for a query the user does not own', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const { userId: otherUserId } = await authenticatedUser(db, 'other@example.com');
+    const { queryId } = await createQueryWithCandidates(db, otherUserId, 'Not yours', []);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/api/queries/${queryId}/events`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(403);
+  });
+
+  it('DELETE /api/queries/:id removes the query and its events', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' },
+    ]);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/queries/${queryId}`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(204);
+
+    const queryLeft = await db.collection('queries').countDocuments({ _id: new ObjectId(queryId) });
+    const eventsLeft = await db.collection('events').countDocuments({ query_id: new ObjectId(queryId) });
+    expect(queryLeft).toBe(0);
+    expect(eventsLeft).toBe(0);
+  });
+
+  it('DELETE /api/queries/:id returns 403 for a query the user does not own', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const { userId: otherUserId } = await authenticatedUser(db, 'other@example.com');
+    const { queryId } = await createQueryWithCandidates(db, otherUserId, 'Not yours', []);
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/queries/${queryId}`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(403);
+  });
 });

@@ -1,6 +1,10 @@
-import type { CandidateEvent, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { CandidateEvent, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface SelectableCandidate extends CandidateEvent {
+  selected: boolean;
+}
+
+export interface SelectableEditEvent extends EventDetail {
   selected: boolean;
 }
 
@@ -8,6 +12,7 @@ export interface EditingDraft {
   queryId: string;
   text: string;
   recurrenceInterval: RecurrenceInterval;
+  events: SelectableEditEvent[];
 }
 
 interface DashboardState {
@@ -48,8 +53,10 @@ export type WorkspaceEvent =
   | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
   | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null }
   | { type: 'START_EDIT'; queryId: string }
+  | { type: 'EDIT_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
+  | { type: 'TOGGLE_EDIT_EVENT'; id: string }
   | { type: 'CANCEL_EDIT' }
-  | { type: 'QUERY_UPDATED'; query: QuerySummary };
+  | { type: 'QUERY_DELETED'; queryId: string };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
@@ -110,7 +117,33 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       if (!query) return state;
       return {
         ...state,
-        editing: { queryId: query.id, text: query.text, recurrenceInterval: query.recurrenceInterval },
+        editing: { queryId: query.id, text: query.text, recurrenceInterval: query.recurrenceInterval, events: [] },
+      };
+    }
+
+    case 'EDIT_EVENTS_LOADED': {
+      if (state.kind !== 'dashboard' || state.editing?.queryId !== event.queryId) return state;
+      return {
+        ...state,
+        editing: {
+          ...state.editing,
+          // Pending candidates start pre-selected, mirroring the first-search
+          // review flow; approved events are not re-selectable.
+          events: event.events.map(e => ({ ...e, selected: e.status === 'candidate' })),
+        },
+      };
+    }
+
+    case 'TOGGLE_EDIT_EVENT': {
+      if (state.kind !== 'dashboard' || !state.editing) return state;
+      return {
+        ...state,
+        editing: {
+          ...state.editing,
+          events: state.editing.events.map(e =>
+            e.status === 'candidate' && e.id === event.id ? { ...e, selected: !e.selected } : e
+          ),
+        },
       };
     }
 
@@ -118,12 +151,12 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       if (state.kind !== 'dashboard') return state;
       return { ...state, editing: null };
 
-    case 'QUERY_UPDATED':
+    case 'QUERY_DELETED':
       if (state.kind !== 'dashboard') return state;
       return {
         ...state,
-        queries: state.queries.map(q => (q.id === event.query.id ? event.query : q)),
-        editing: null,
+        queries: state.queries.filter(q => q.id !== event.queryId),
+        editing: state.editing?.queryId === event.queryId ? null : state.editing,
       };
 
     default:
