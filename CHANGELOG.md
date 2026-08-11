@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/dachrisch/dontforget/compare/v0.7.0...v0.7.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* wordmark runs once, settles on 'dontforget' ([0e3c651](https://github.com/dachrisch/dontforget/commit/0e3c651281495ab5c0cd04fa6841540df82f1f5a))
+
 ## [0.7.0](https://github.com/dachrisch/dontforget/compare/v0.6.1...v0.7.0) (2026-08-11)
 
 
