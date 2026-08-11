@@ -29,7 +29,7 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
 }
 
 // Animated brand wordmark: "don't forget → don't bother → don't hassle →
-// don't regret", each struck through, resolving to "you're covered."
+// don't regret", each struck through, settling back on "dontforget".
 export function startWordmarkAnimation(): void {
   const masthead = document.querySelector<HTMLElement>('.masthead');
   const title = masthead?.querySelector<HTMLElement>('#wordmark');
@@ -41,21 +41,10 @@ export function startWordmarkAnimation(): void {
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let running = false;
-  let paused = false;
 
   function sleep(ms: number): Promise<void> {
     const effective = reduce ? Math.min(ms, 260) : ms;
-    return new Promise(resolve => {
-      const timer = setTimeout(step, effective);
-      function step(): void {
-        if (paused) {
-          clearTimeout(timer);
-          setTimeout(step, 120);
-          return;
-        }
-        resolve();
-      }
-    });
+    return new Promise(resolve => { setTimeout(resolve, effective); });
   }
 
   function makeWord(text: string): { el: HTMLElement; strike: HTMLElement } {
@@ -71,9 +60,7 @@ export function startWordmarkAnimation(): void {
   async function run(): Promise<void> {
     if (running) return;
     running = true;
-    title.classList.remove('resolved');
-
-    slot.querySelectorAll('.wordmark-word, .wordmark-covered').forEach(node => node.remove());
+    slot.querySelectorAll('.wordmark-word').forEach(node => node.remove());
 
     for (const word of ROTATING_WORDS) {
       sizer.textContent = word;
@@ -94,39 +81,16 @@ export function startWordmarkAnimation(): void {
       node.el.remove();
     }
 
-    const covered = document.createElement('span');
-    covered.className = 'wordmark-covered';
-    covered.textContent = "you're covered.";
-    sizer.textContent = "you're covered.";
-    slot.appendChild(covered);
-    title.classList.add('resolved');
-    await sleep(30);
-    covered.classList.add('is-in');
-
-    await sleep(reduce ? 1400 : 2600);
-
-    covered.classList.remove('is-in');
-    await sleep(400);
-    covered.remove();
-    title.classList.remove('resolved');
     sizer.textContent = ROTATING_WORDS[0];
+    const final = document.createElement('span');
+    final.className = 'wordmark-word wordmark-settled';
+    final.textContent = ROTATING_WORDS[0];
+    slot.appendChild(final);
+    await sleep(30);
+    final.classList.add('is-in');
 
     running = false;
-    loop();
   }
-
-  let loopTimer = 0;
-  function loop(): void {
-    clearTimeout(loopTimer);
-    loopTimer = setTimeout(run, 500);
-  }
-
-  masthead.addEventListener('mouseenter', () => {
-    paused = true;
-  });
-  masthead.addEventListener('mouseleave', () => {
-    paused = false;
-  });
 
   run();
 }
