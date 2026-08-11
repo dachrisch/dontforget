@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.5](https://github.com/dachrisch/dontforget/compare/v0.7.4...v0.7.5) (2026-08-11)
+
+
+### Bug Fixes
+
+* hide 'don'\''t' stem during 'you'\''re covered.' payoff ([#62](https://github.com/dachrisch/dontforget/issues/62)) ([6602c5d](https://github.com/dachrisch/dontforget/commit/6602c5d7b9edf764fe4472424b9a405613a8bd60))
+
 ## [0.7.4](https://github.com/dachrisch/dontforget/compare/v0.7.3...v0.7.4) (2026-08-11)
 
 
