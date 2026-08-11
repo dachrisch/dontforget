@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/dachrisch/dontforget/compare/v0.5.7...v0.6.0) (2026-08-11)
+
+
+### Features
+
+* allow rotating the calendar feed URL ([#47](https://github.com/dachrisch/dontforget/issues/47)) ([ec69a60](https://github.com/dachrisch/dontforget/commit/ec69a600a77ced2dbb758f64f6fd040b0e05f41c))
+
 ## [0.5.7](https://github.com/dachrisch/dontforget/compare/v0.5.6...v0.5.7) (2026-08-11)
 
 
