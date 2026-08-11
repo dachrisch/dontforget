@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/dachrisch/dontforget/compare/v0.7.3...v0.7.4) (2026-08-11)
+
+
+### Bug Fixes
+
+* drop 'forget' from rotation, 'you\'re covered.' no strike, 5s hold ([#60](https://github.com/dachrisch/dontforget/issues/60)) ([38a99b3](https://github.com/dachrisch/dontforget/commit/38a99b328db09d0eb763a80aed2ef111522ddf59))
+
 ## [0.7.3](https://github.com/dachrisch/dontforget/compare/v0.7.2...v0.7.3) (2026-08-11)
 
 
