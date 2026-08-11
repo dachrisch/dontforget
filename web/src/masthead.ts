@@ -32,9 +32,11 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
 
 export function startWordmarkAnimation(): void {
   const masthead = document.querySelector<HTMLElement>('.masthead');
+  const title = masthead?.querySelector<HTMLElement>('#wordmark');
   const slot = masthead?.querySelector<HTMLElement>('#slot');
   const sizer = masthead?.querySelector<HTMLElement>('#sizer');
-  if (!masthead || !slot || !sizer) return;
+  const stem = title?.querySelector<HTMLElement>('.wordmark-stem');
+  if (!masthead || !title || !slot || !sizer) return;
 
   const reduce =
     typeof window.matchMedia === 'function' &&
@@ -81,6 +83,10 @@ export function startWordmarkAnimation(): void {
 
   async function cyclePayoff(text: string): Promise<void> {
     sizer.textContent = text;
+    if (stem) {
+      stem.style.transition = 'opacity 0.3s ease';
+      stem.style.opacity = '0';
+    }
     const el = makePayoff(text);
     slot.appendChild(el);
     await sleep(30);
@@ -90,6 +96,10 @@ export function startWordmarkAnimation(): void {
     el.classList.add('is-out');
     await sleep(reduce ? 120 : 320);
     el.remove();
+    if (stem) {
+      stem.style.transition = 'opacity 0.3s ease';
+      stem.style.opacity = '';
+    }
   }
 
   async function run(): Promise<void> {
