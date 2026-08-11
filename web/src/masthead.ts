@@ -4,6 +4,8 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+const ROTATING_WORDS = ['forget', 'bother', 'hassle', 'regret'];
+
 export function formatDateline(date: Date): string {
   const day = DAY_NAMES[date.getDay()];
   const month = MONTH_NAMES[date.getMonth()];
@@ -14,9 +16,117 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
   const masthead = document.createElement('header');
   masthead.className = 'masthead';
   masthead.innerHTML = `
-    <h1 class="masthead-title">dontforget</h1>
+    <h1 class="masthead-title" id="wordmark">
+      <span class="wordmark-stem">don't</span>
+      <span class="wordmark-slot" id="slot" aria-hidden="true">
+        <span class="wordmark-sizer" id="sizer">${ROTATING_WORDS[0]}</span>
+      </span>
+    </h1>
     <div class="masthead-rule"></div>
     <p class="masthead-dateline">${formatDateline(today)}</p>
   `;
   return masthead;
+}
+
+// Animated brand wordmark: "don't forget → don't bother → don't hassle →
+// don't regret", each struck through, resolving to "you're covered."
+export function startWordmarkAnimation(): void {
+  const masthead = document.querySelector<HTMLElement>('.masthead');
+  const title = masthead?.querySelector<HTMLElement>('#wordmark');
+  const slot = masthead?.querySelector<HTMLElement>('#slot');
+  const sizer = masthead?.querySelector<HTMLElement>('#sizer');
+  if (!masthead || !title || !slot || !sizer) return;
+
+  const reduce =
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let running = false;
+  let paused = false;
+
+  function sleep(ms: number): Promise<void> {
+    const effective = reduce ? Math.min(ms, 260) : ms;
+    return new Promise(resolve => {
+      const timer = setTimeout(step, effective);
+      function step(): void {
+        if (paused) {
+          clearTimeout(timer);
+          setTimeout(step, 120);
+          return;
+        }
+        resolve();
+      }
+    });
+  }
+
+  function makeWord(text: string): { el: HTMLElement; strike: HTMLElement } {
+    const el = document.createElement('span');
+    el.className = 'wordmark-word';
+    el.textContent = text;
+    const strike = document.createElement('span');
+    strike.className = 'wordmark-strike';
+    el.appendChild(strike);
+    return { el, strike };
+  }
+
+  async function run(): Promise<void> {
+    if (running) return;
+    running = true;
+    title.classList.remove('resolved');
+
+    slot.querySelectorAll('.wordmark-word, .wordmark-covered').forEach(node => node.remove());
+
+    for (const word of ROTATING_WORDS) {
+      sizer.textContent = word;
+      const node = makeWord(word);
+      slot.appendChild(node.el);
+
+      await sleep(30);
+      node.el.classList.add('is-in');
+      await sleep(reduce ? 260 : 520);
+
+      node.strike.classList.add('is-drawn');
+      await sleep(reduce ? 200 : 520);
+
+      await sleep(reduce ? 160 : 360);
+      node.el.classList.remove('is-in');
+      node.el.classList.add('is-out');
+      await sleep(reduce ? 120 : 320);
+      node.el.remove();
+    }
+
+    const covered = document.createElement('span');
+    covered.className = 'wordmark-covered';
+    covered.textContent = "you're covered.";
+    sizer.textContent = "you're covered.";
+    slot.appendChild(covered);
+    title.classList.add('resolved');
+    await sleep(30);
+    covered.classList.add('is-in');
+
+    await sleep(reduce ? 1400 : 2600);
+
+    covered.classList.remove('is-in');
+    await sleep(400);
+    covered.remove();
+    title.classList.remove('resolved');
+    sizer.textContent = ROTATING_WORDS[0];
+
+    running = false;
+    loop();
+  }
+
+  let loopTimer = 0;
+  function loop(): void {
+    clearTimeout(loopTimer);
+    loopTimer = setTimeout(run, 500);
+  }
+
+  masthead.addEventListener('mouseenter', () => {
+    paused = true;
+  });
+  masthead.addEventListener('mouseleave', () => {
+    paused = false;
+  });
+
+  run();
 }

@@ -5,6 +5,8 @@
   --ink-muted: #6b6255;
   --rule: #d8cfb8;
   --accent: #a4302a;
+  --strike: #a4302a;
+  --covered: #1e6b46;
 
   --font-display: 'Playfair Display', Georgia, serif;
   --font-body: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -20,6 +22,7 @@
     --ink-muted: #a89e88;
     --rule: #3a352a;
     --accent: #d9714f;
+    --covered: #3ddc97;
   }
 }
 
@@ -98,6 +101,99 @@ h1, h2 {
 .masthead-title {
   font-size: 2rem;
   letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.22em;
+  margin-bottom: 0.5rem;
+}
+
+.wordmark-stem {
+  display: inline-block;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.wordmark-slot {
+  position: relative;
+  display: inline-block;
+}
+
+.wordmark-sizer {
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.wordmark-word {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(0.14em);
+  transition: opacity 0.34s ease, transform 0.34s ease;
+}
+
+.wordmark-word.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.wordmark-word.is-out {
+  opacity: 0;
+  transform: translateY(-0.16em);
+}
+
+.wordmark-strike {
+  position: absolute;
+  left: -0.04em;
+  right: -0.04em;
+  top: 54%;
+  height: 0.09em;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--strike) 55%, transparent) 0%,
+    var(--strike) 12%,
+    var(--strike) 88%,
+    color-mix(in srgb, var(--strike) 55%, transparent) 100%
+  );
+  transform: scaleX(0) rotate(-1.6deg);
+  transform-origin: left center;
+  transition: transform 0.3s cubic-bezier(0.5, 0.05, 0.4, 1);
+}
+
+.wordmark-strike.is-drawn {
+  transform: scaleX(1) rotate(-1.6deg);
+}
+
+.wordmark-covered {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+  color: var(--covered);
+  opacity: 0;
+  transform: translateY(0.16em);
+  transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.wordmark-covered.is-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* swap "don't " out for the payoff */
+.masthead-title.resolved .wordmark-stem {
+  opacity: 0;
+  transform: translateY(-0.14em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordmark-word,
+  .wordmark-strike,
+  .wordmark-covered,
+  .wordmark-stem {
+    transition-duration: 0.001ms;
+  }
 }
 
 .masthead-rule {

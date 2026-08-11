@@ -12,10 +12,11 @@ import {
   deleteQuery,
   rotateFeedToken,
 } from './api';
-import { renderMasthead } from './masthead';
+import { renderMasthead, startWordmarkAnimation } from './masthead';
 
 const root = document.getElementById('root')!;
 root.before(renderMasthead());
+startWordmarkAnimation();
 
 const errorBanner = document.createElement('p');
 errorBanner.className = 'error-banner';
