@@ -6,6 +6,8 @@ import {
   approveEvents,
   listQueries,
   updateQuery,
+  getQueryEvents,
+  deleteQuery,
   ApiError,
 } from './api';
 
@@ -85,5 +87,30 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
 
     await expect(approveEvents('q1', ['e1'])).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('getQueryEvents fetches the events for a query', async () => {
+    const body = [{ id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' }];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await getQueryEvents('q1')).toEqual(body);
+  });
+
+  it('deleteQuery sends a DELETE and resolves on 2xx', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteQuery('q1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/queries/q1', {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  });
+
+  it('deleteQuery throws ApiError on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
+
+    await expect(deleteQuery('q1')).rejects.toBeInstanceOf(ApiError);
   });
 });

@@ -1,4 +1,4 @@
-import type { CandidateEvent, Dashboard, QuerySummary, RecurrenceInterval } from './types';
+import type { CandidateEvent, Dashboard, EventDetail, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -74,4 +74,19 @@ export async function approveEvents(
     body: JSON.stringify({ eventIds }),
   });
   return handle(response);
+}
+
+export async function getQueryEvents(queryId: string): Promise<EventDetail[]> {
+  const response = await fetch(`/api/queries/${queryId}/events`, { credentials: 'include' });
+  return handle(response);
+}
+
+export async function deleteQuery(queryId: string): Promise<void> {
+  const response = await fetch(`/api/queries/${queryId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
 }

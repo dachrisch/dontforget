@@ -1,6 +1,6 @@
 {
   "name": "dontforget-server",
-  "version": "0.4.0",
+  "version": "0.5.3",
   "private": true,
   "type": "module",
   "engines": {
@@ -16,17 +16,17 @@
     "@fastify/cookie": "^9.3.0",
     "@fastify/static": "^10.0.0",
     "fastify": "^4.28.0",
-    "feed": "^4.2.2",
+    "feed": "^6.0.0",
     "ics": "^3.7.2",
-    "mongodb": "^6.7.0",
-    "nodemailer": "^6.9.13",
+    "mongodb": "^7.0.0",
+    "nodemailer": "^9.0.0",
     "undici": "^8.10.0"
   },
   "devDependencies": {
-    "@types/node": "^20.12.7",
+    "@types/node": "^24.0.0",
     "@types/nodemailer": "^8.0.0",
     "tsx": "^4.7.2",
-    "typescript": "^5.4.5",
+    "typescript": "^7.0.0",
     "vitest": "^1.6.0"
   }
 }
