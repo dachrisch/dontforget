@@ -21,6 +21,7 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
       <span class="wordmark-slot" id="slot" aria-hidden="true">
         <span class="wordmark-sizer" id="sizer">${ROTATING_WORDS[0]}</span>
       </span>
+      <span class="wordmark-tagline" id="tagline"> — you're covered.</span>
     </h1>
     <div class="masthead-rule"></div>
     <p class="masthead-dateline">${formatDateline(today)}</p>
@@ -28,14 +29,13 @@ export function renderMasthead(today: Date = new Date()): HTMLElement {
   return masthead;
 }
 
-// Animated brand wordmark: "don't forget → don't bother → don't hassle →
-// don't regret", each struck through, settling back on "dontforget".
 export function startWordmarkAnimation(): void {
   const masthead = document.querySelector<HTMLElement>('.masthead');
   const title = masthead?.querySelector<HTMLElement>('#wordmark');
   const slot = masthead?.querySelector<HTMLElement>('#slot');
   const sizer = masthead?.querySelector<HTMLElement>('#sizer');
-  if (!masthead || !title || !slot || !sizer) return;
+  const tagline = masthead?.querySelector<HTMLElement>('#tagline');
+  if (!masthead || !title || !slot || !sizer || !tagline) return;
 
   const reduce =
     typeof window.matchMedia === 'function' &&
@@ -83,11 +83,15 @@ export function startWordmarkAnimation(): void {
 
     sizer.textContent = ROTATING_WORDS[0];
     const final = document.createElement('span');
-    final.className = 'wordmark-word wordmark-settled';
+    final.className = 'wordmark-word';
     final.textContent = ROTATING_WORDS[0];
     slot.appendChild(final);
     await sleep(30);
     final.classList.add('is-in');
+
+    tagline.classList.add('is-in');
+
+    title.classList.remove('animating');
 
     running = false;
   }
