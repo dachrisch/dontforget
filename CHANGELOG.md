@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/dachrisch/dontforget/compare/v0.7.5...v0.7.6) (2026-08-11)
+
+
+### Bug Fixes
+
+* take stem out of flex flow so 'you're covered.' payoff centers correctly ([#64](https://github.com/dachrisch/dontforget/issues/64)) ([6ccaf0e](https://github.com/dachrisch/dontforget/commit/6ccaf0e4c8bba308f2c4b0be65f8383b6d2a3348))
+
 ## [0.7.5](https://github.com/dachrisch/dontforget/compare/v0.7.4...v0.7.5) (2026-08-11)
 
 
