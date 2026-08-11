@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/dachrisch/dontforget/compare/v0.6.0...v0.6.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* style rotate feed URL as a button, not a text link ([#50](https://github.com/dachrisch/dontforget/issues/50)) ([ffd63a7](https://github.com/dachrisch/dontforget/commit/ffd63a74a7972457e7f389083264d37f31251325))
+
 ## [0.6.0](https://github.com/dachrisch/dontforget/compare/v0.5.7...v0.6.0) (2026-08-11)
 
 
