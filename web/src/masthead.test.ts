@@ -26,6 +26,13 @@ describe('renderMasthead', () => {
     expect(sizer?.textContent).toBe('forget');
   });
 
+  it('includes the "you\'re covered." tagline', () => {
+    const masthead = renderMasthead();
+    const tagline = masthead.querySelector('.wordmark-tagline');
+    expect(tagline?.textContent).toBe(" — you're covered.");
+    expect(tagline?.classList.contains('is-in')).toBe(false);
+  });
+
   it('defaults to today when no date is passed', () => {
     const masthead = renderMasthead();
     expect(masthead.querySelector('.masthead-dateline')!.textContent).toMatch(/\d{4}$/);
