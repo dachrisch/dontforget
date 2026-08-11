@@ -5,9 +5,7 @@ name: 🏗️🧪🍂 Build & Test branches
 on:
   push:
     branches:
-      - "*"
-    tags-ignore:
-      - "*"
+      - master
   pull_request:
     branches:
       - "*"
@@ -16,6 +14,10 @@ permissions:
   contents: write
   checks: write
   security-events: write
+
+concurrency:
+  group: build-test-branch-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   node-project:
