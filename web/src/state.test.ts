@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { reducer, type WorkspaceState } from './state';
-import type { QuerySummary } from './types';
+import type { EventDetail, QuerySummary } from './types';
 
 describe('reducer', () => {
   it('moves from signedOut to linkSent on MAGIC_LINK_SENT', () => {
@@ -99,8 +99,60 @@ describe('reducer', () => {
     const next = reducer(state, { type: 'START_EDIT', queryId: 'q1' });
     expect(next).toMatchObject({
       kind: 'dashboard',
-      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly' },
+      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
     });
+  });
+
+  it('loads events into the open edit card, pre-selecting pending candidates', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 1, candidateCount: 1 }],
+      feed: null,
+      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
+    };
+    const events: EventDetail[] = [
+      { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' },
+      { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u', status: 'candidate' },
+    ];
+    const next = reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q1', events });
+    expect(next).toMatchObject({
+      kind: 'dashboard',
+      editing: {
+        events: [
+          { id: 'e1', status: 'approved', selected: false },
+          { id: 'e2', status: 'candidate', selected: true },
+        ],
+      },
+    });
+  });
+
+  it('ignores loaded events when they do not match the query being edited', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [],
+      feed: null,
+      editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
+    };
+    expect(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q2', events: [] })).toBe(state);
+  });
+
+  it('toggles a pending candidate inside the edit card and leaves approved events alone', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [],
+      feed: null,
+      editing: {
+        queryId: 'q1',
+        text: 'A',
+        recurrenceInterval: 'monthly',
+        events: [
+          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
+          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', selected: false },
+        ],
+      },
+    };
+    const next = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
+    expect(next).toMatchObject({ editing: { events: [{ id: 'e1', selected: false }, { id: 'e2', selected: false }] } });
   });
 
   it('cancels editing', () => {
@@ -108,22 +160,33 @@ describe('reducer', () => {
       kind: 'dashboard',
       queries: [],
       feed: null,
-      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly' },
+      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
     };
     const next = reducer(state, { type: 'CANCEL_EDIT' });
     expect(next).toEqual({ kind: 'dashboard', queries: [], feed: null, editing: null });
   });
 
-  it('applies a saved update to the list and exits editing', () => {
-    const query: QuerySummary = { id: 'q1', text: 'Auer Dult Munich dates', recurrenceInterval: 'yearly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 0, candidateCount: 0 };
+  it('removes a deleted query from the dashboard', () => {
+    const query: QuerySummary = { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 0, candidateCount: 0 };
     const state: WorkspaceState = {
       kind: 'dashboard',
-      queries: [{ ...query, text: 'Auer Dult Munich', recurrenceInterval: 'monthly' }],
+      queries: [query, { ...query, id: 'q2' }],
       feed: null,
       editing: null,
     };
-    const next = reducer(state, { type: 'QUERY_UPDATED', query });
-    expect(next).toMatchObject({ kind: 'dashboard', queries: [query], editing: null });
+    const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
+    expect(next).toMatchObject({ kind: 'dashboard', queries: [{ id: 'q2' }] });
+  });
+
+  it('clears an open edit when the query being deleted is the one being edited', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [],
+      feed: null,
+      editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
+    };
+    const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
+    expect(next).toMatchObject({ kind: 'dashboard', editing: null });
   });
 
   it('moves from the dashboard to loading on SUBMIT_QUERY, remembering the return path', () => {

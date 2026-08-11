@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.5.3](https://github.com/dachrisch/dontforget/compare/v0.5.2...v0.5.3) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v9 ([88b4aeb](https://github.com/dachrisch/dontforget/commit/88b4aebece3be1b8b0f8398ec9bd3bd90058db37))
+
+## [0.5.2](https://github.com/dachrisch/dontforget/compare/v0.5.1...v0.5.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency typescript to v7 ([#37](https://github.com/dachrisch/dontforget/issues/37)) ([4c0798d](https://github.com/dachrisch/dontforget/commit/4c0798d71d2389cd817b0bbf83c814c5d79fc056))
+
+## [0.5.1](https://github.com/dachrisch/dontforget/compare/v0.5.0...v0.5.1) (2026-08-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24 ([a680212](https://github.com/dachrisch/dontforget/commit/a680212bc6ae49e258a656b6de9ce0062a48f788))
+* **deps:** update dependency feed to v6 ([0337a65](https://github.com/dachrisch/dontforget/commit/0337a65c1efecd96b7405e6bcbe6524fc96690f5))
+* **deps:** update dependency mongodb to v7 ([89b1e2e](https://github.com/dachrisch/dontforget/commit/89b1e2e00257d6b45f64b61176f6c1779e355c70))
+
+## [0.5.0](https://github.com/dachrisch/dontforget/compare/v0.4.0...v0.5.0) (2026-08-11)
+
+
+### Features
+
+* delete queries and reselect pending events when editing ([7ac9990](https://github.com/dachrisch/dontforget/commit/7ac9990a4c8d569bd1cb02b2aa7893dfdc19da86))
+* delete queries and reselect pending events when editing ([abd2ef1](https://github.com/dachrisch/dontforget/commit/abd2ef1037f2eb329aa140072f2536f0ae759708))
+
 ## [0.4.0](https://github.com/dachrisch/dontforget/compare/v0.3.4...v0.4.0) (2026-08-10)
 
 
