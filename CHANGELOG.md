@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.7](https://github.com/dachrisch/dontforget/compare/v0.7.6...v0.7.7) (2026-08-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastify to v5.12.0 ([#66](https://github.com/dachrisch/dontforget/issues/66)) ([1388826](https://github.com/dachrisch/dontforget/commit/138882686569d6bc6c5c5ba2aeb7c8242ad96dcc))
+
 ## [0.7.6](https://github.com/dachrisch/dontforget/compare/v0.7.5...v0.7.6) (2026-08-11)
 
 
