@@ -1,6 +1,7 @@
 import type { Db } from 'mongodb';
 import { migrate as migrate001 } from '../migrations/001_init.js';
 import { migrate as migrate002 } from '../migrations/002_queries_dashboard.js';
+import { migrate as migrate003 } from '../migrations/003_events_dedup_index.js';
 
 interface Migration {
   name: string;
@@ -12,6 +13,7 @@ interface Migration {
 const MIGRATIONS: Migration[] = [
   { name: '001_init.ts', migrate: migrate001 },
   { name: '002_queries_dashboard.ts', migrate: migrate002 },
+  { name: '003_events_dedup_index.ts', migrate: migrate003 },
 ];
 
 export async function runMigrations(db: Db): Promise<string[]> {

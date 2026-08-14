@@ -21,7 +21,7 @@ describe('runMigrations', () => {
     await db.dropDatabase();
 
     const firstRun = await runMigrations(db);
-    expect(firstRun).toEqual(['001_init.ts', '002_queries_dashboard.ts']);
+    expect(firstRun).toEqual(['001_init.ts', '002_queries_dashboard.ts', '003_events_dedup_index.ts']);
 
     const collections = await db.listCollections().toArray();
     expect(collections.map(c => c.name)).toEqual(
@@ -34,6 +34,11 @@ describe('runMigrations', () => {
     const queriesIndexes = await db.collection('queries').indexes();
     expect(queriesIndexes.map(i => i.name)).toEqual(
       expect.arrayContaining(['user_id_1_created_at_-1'])
+    );
+
+    const eventsIndexes = await db.collection('events').indexes();
+    expect(eventsIndexes.map(i => i.name)).toEqual(
+      expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_label_1_start_date_1_end_date_1'])
     );
 
     const secondRun = await runMigrations(db);
