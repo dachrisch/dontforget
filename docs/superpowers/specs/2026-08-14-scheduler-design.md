@@ -74,9 +74,17 @@ behavior.
 
 `recurrence_interval` is one of `weekly | monthly | quarterly | yearly`.
 A query is due when `now - last_run_at >= intervalToMs(recurrence_interval)`,
-computed via calendar-aware `Date` arithmetic (`setDate`/`setMonth`/
-`setFullYear` offsets from `last_run_at`, not fixed millisecond
-multiples) so month-length variation doesn't drift the schedule. Every
+computed via calendar-aware `Date` arithmetic (`setUTCDate`/`setUTCMonth`/
+`setUTCFullYear` offsets from `last_run_at`, not fixed millisecond
+multiples) so month-length variation doesn't drift the schedule. The UTC
+variants specifically — not `setDate`/`setMonth`/`setFullYear` — because
+`last_run_at` is a MongoDB BSON Date (a UTC instant with no embedded
+timezone); local-time methods would make a recurrence's computed next-run
+instant depend on the scheduler process's configured `TZ`, and would drift
+by an hour whenever a recurrence interval spans a DST transition (verified
+during implementation: a quarterly Jan→Apr jump crosses the CET→CEST
+boundary and is off by exactly one hour under local-time arithmetic on a
+DST-observing host). Every
 query has a `last_run_at` already (set to the creation timestamp on the
 synchronous first run — see `queriesRepo.ts`), so there's no "never run"
 case to special-case.
