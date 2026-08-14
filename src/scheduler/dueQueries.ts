@@ -21,7 +21,14 @@ export async function findDueQueries(db: Db, now: Date): Promise<DueQuery[]> {
   const rows = await db.collection<QueryRow>('queries').find().toArray();
 
   return rows
-    .filter(row => row.last_run_at != null)
+    .filter(row => {
+      if (row.last_run_at != null) return true;
+      // Every query gets last_run_at stamped at creation (queriesRepo.ts),
+      // so this shouldn't happen — but if it ever does, log it instead of
+      // silently dropping the query into a permanently-dead state.
+      console.warn(`Query ${row._id.toString()} has no last_run_at, skipping`);
+      return false;
+    })
     .filter(row => isDue(row.last_run_at as Date, row.recurrence_interval ?? DEFAULT_RECURRENCE_INTERVAL, now))
     .map(row => ({
       _id: row._id,

@@ -38,7 +38,7 @@ describe('runMigrations', () => {
 
     const eventsIndexes = await db.collection('events').indexes();
     expect(eventsIndexes.map(i => i.name)).toEqual(
-      expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_label_1_start_date_1_end_date_1'])
+      expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_status_1_label_1_start_date_1_end_date_1'])
     );
 
     const secondRun = await runMigrations(db);

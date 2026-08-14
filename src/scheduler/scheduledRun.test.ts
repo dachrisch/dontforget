@@ -57,7 +57,7 @@ describe('runScheduledQuery', () => {
 
     expect(emailSender.sent).toHaveLength(1);
     expect(emailSender.sent[0].to).toBe(userEmail);
-    expect(emailSender.sent[0].subject).toMatch(/added to your feed/);
+    expect(emailSender.sent[0].subject).toMatch(/added to your feed.*Auer Dult Munich/);
 
     const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
     expect(row?.last_run_at).toBeInstanceOf(Date);
@@ -82,7 +82,7 @@ describe('runScheduledQuery', () => {
     expect(events[0].status).toBe('candidate');
 
     expect(emailSender.sent).toHaveLength(1);
-    expect(emailSender.sent[0].subject).toMatch(/go review/);
+    expect(emailSender.sent[0].subject).toMatch(/Oktoberfest.*go review/);
   });
 
   it('does not re-insert an event that already exists, and sends no email when nothing is new', async () => {

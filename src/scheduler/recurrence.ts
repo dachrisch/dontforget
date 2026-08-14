@@ -9,6 +9,11 @@ const INTERVAL_STEP: Record<RecurrenceInterval, { amount: number; unit: Interval
   yearly: { amount: 1, unit: 'year' },
 };
 
+// last_run_at is a MongoDB BSON Date (a UTC instant, no embedded timezone),
+// so we use the setUTC* variants, not local-time setDate/setMonth/setFullYear:
+// local-time methods would make results depend on the server's TZ and drift
+// an hour whenever an interval spans a DST transition (reproduced empirically
+// during implementation — see docs/superpowers/specs/2026-08-14-scheduler-design.md).
 export function nextRunAt(lastRunAt: Date, interval: RecurrenceInterval): Date {
   const next = new Date(lastRunAt);
   const { amount, unit } = INTERVAL_STEP[interval];

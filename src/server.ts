@@ -50,7 +50,12 @@ async function main() {
     runQuery,
   });
 
-  startScheduler(db, { runQuery, emailSender, publicBaseUrl });
+  // Default enabled — only skip starting the scheduler when explicitly
+  // disabled. Prevents every `tsx watch` restart in local dev from firing
+  // real searxng/opencode calls if the dev DB has any due query.
+  if (process.env.SCHEDULER_ENABLED !== 'false') {
+    startScheduler(db, { runQuery, emailSender, publicBaseUrl });
+  }
 
   if (isProduction) {
     app.register(fastifyStatic, {

@@ -34,7 +34,7 @@ whatever the user approves as a calendar feed they subscribe to once.
 flowchart TB
     You["Chat UI<br/>(you, in the browser)"]
     Backend["Backend API<br/>owns every call out"]
-    Scheduler["Scheduler<br/>cron, weekly/monthly"]
+    Scheduler["Scheduler<br/>interval loop, weekly/monthly"]
     DB[("Database<br/>users · queries · events")]
     Orchestrator["Search Orchestrator<br/>(backend module)"]
     Searxng["searxng<br/>search.lehel.xyz"]
@@ -71,7 +71,7 @@ touching the chat UI or the feed format.
 | searxng | Web search. Already deployed at `search.lehel.xyz`. | Existing infra service, no changes needed. |
 | opencode session | Reads search results, extracts event dates as structured JSON. Nothing else. | Called through the `X-Api-Key` ForwardAuth gate — session-scoped, no filesystem/shell access. |
 | Database | Users, saved queries (with recurrence interval), events (candidate → approved), feed tokens. | Postgres, matching the rest of the infra's service conventions. |
-| Scheduler | Wakes each saved query on its own interval, re-runs the search orchestrator. | A cron-triggered job inside the backend container — no separate service needed at this scale. |
+| Scheduler | Wakes each saved query on its own interval, re-runs the search orchestrator. | A daily interval-triggered job inside the backend container — no separate service needed at this scale. |
 | Feed Generator | Renders each user's approved events as ICS and RSS. | Feed URLs carry an unguessable per-user token — no login prompt from calendar clients. |
 
 ## 4. The open fork: who does the searching
@@ -208,8 +208,6 @@ stateDiagram-v2
 Not blocking the high-level architecture or the first-time happy path, but
 need answers before the detailed implementation spec:
 
-- How the user is notified a re-run found something new (email vs. check
-  the UI)
 - Magic-link delivery: which transactional email provider, link expiry
   window
 - Empty/error states for the workspace (zero results, extraction failure,
