@@ -76,4 +76,27 @@ describe('startScheduler', () => {
     consoleError.mockRestore();
     stop();
   });
+
+  it('processes due queries sequentially, not concurrently', async () => {
+    const order: string[] = [];
+    const due: DueQuery[] = [
+      { _id: new ObjectId(), user_id: 'u1', query_text: 'A', recurrence_interval: 'weekly' },
+      { _id: new ObjectId(), user_id: 'u2', query_text: 'B', recurrence_interval: 'weekly' },
+    ];
+    const findDueQueries = vi.fn().mockResolvedValue(due);
+    const runScheduledQuery = vi.fn(async (_db: Db, query: DueQuery) => {
+      order.push(`start:${query.user_id}`);
+      if (query.user_id === 'u1') {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      order.push(`end:${query.user_id}`);
+    });
+    const collaborators: SchedulerCollaborators = { findDueQueries, runScheduledQuery };
+
+    const { stop } = startScheduler(db, deps, 1000, collaborators);
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(order).toEqual(['start:u1', 'end:u1', 'start:u2', 'end:u2']);
+    stop();
+  });
 });
