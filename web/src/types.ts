@@ -16,6 +16,8 @@ export const RECURRENCE_INTERVALS: RecurrenceInterval[] = [
   'yearly',
 ];
 
+export const DEFAULT_RECURRENCE_INTERVAL: RecurrenceInterval = 'weekly';
+
 export interface QuerySummary {
   id: string;
   text: string;

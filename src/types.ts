@@ -25,7 +25,7 @@ export const RECURRENCE_INTERVALS: RecurrenceInterval[] = [
   'yearly',
 ];
 
-export const DEFAULT_RECURRENCE_INTERVAL: RecurrenceInterval = 'monthly';
+export const DEFAULT_RECURRENCE_INTERVAL: RecurrenceInterval = 'weekly';
 
 export function isRecurrenceInterval(value: unknown): value is RecurrenceInterval {
   return typeof value === 'string' && (RECURRENCE_INTERVALS as string[]).includes(value);

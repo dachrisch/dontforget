@@ -5,6 +5,7 @@ import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/E
 import { searxngSearch } from './search/searxngClient.js';
 import { extractDates } from './search/opencodeClient.js';
 import { createSearchOrchestrator } from './search/searchOrchestrator.js';
+import { startScheduler } from './scheduler/scheduler.js';
 import nodemailer from 'nodemailer';
 import fastifyStatic from '@fastify/static';
 import { join, dirname } from 'node:path';
@@ -34,11 +35,12 @@ async function main() {
   });
 
   const isProduction = process.env.NODE_ENV === 'production';
+  const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
   const app = buildApp({
     db,
     emailSender,
-    publicBaseUrl: process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000',
+    publicBaseUrl,
     // In production the backend serves the built frontend itself (below),
     // so the magic-link callback redirect stays same-origin ('/'). In dev
     // the frontend is a separate Vite server — redirect there instead, or
@@ -47,6 +49,13 @@ async function main() {
     frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
   });
+
+  // Default enabled — only skip starting the scheduler when explicitly
+  // disabled. Prevents every `tsx watch` restart in local dev from firing
+  // real searxng/opencode calls if the dev DB has any due query.
+  if (process.env.SCHEDULER_ENABLED !== 'false') {
+    startScheduler(db, { runQuery, emailSender, publicBaseUrl });
+  }
 
   if (isProduction) {
     app.register(fastifyStatic, {
