@@ -21,7 +21,13 @@ export function startScheduler(
   collaborators: SchedulerCollaborators = defaultCollaborators
 ): { stop: () => void } {
   async function tick(): Promise<void> {
-    const due = await collaborators.findDueQueries(db, new Date());
+    let due: DueQuery[];
+    try {
+      due = await collaborators.findDueQueries(db, new Date());
+    } catch (err) {
+      console.error('Scheduler tick failed to find due queries:', err);
+      return;
+    }
     for (const query of due) {
       try {
         await collaborators.runScheduledQuery(db, query, deps);

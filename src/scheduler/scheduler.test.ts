@@ -77,6 +77,27 @@ describe('startScheduler', () => {
     stop();
   });
 
+  it('catches a findDueQueries rejection, logs it, and keeps the scheduler alive', async () => {
+    const findDueQueries = vi.fn().mockRejectedValue(new Error('db down'));
+    const runScheduledQuery = vi.fn();
+    const collaborators: SchedulerCollaborators = { findDueQueries, runScheduledQuery };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { stop } = startScheduler(db, deps, 1000, collaborators);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(consoleError).toHaveBeenCalled();
+    expect(runScheduledQuery).not.toHaveBeenCalled();
+
+    // The scheduler must still be alive: a subsequent interval tick runs findDueQueries again,
+    // and stop() must work normally afterward without throwing.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(findDueQueries).toHaveBeenCalledTimes(2);
+
+    expect(() => stop()).not.toThrow();
+    consoleError.mockRestore();
+  });
+
   it('processes due queries sequentially, not concurrently', async () => {
     const order: string[] = [];
     const due: DueQuery[] = [
