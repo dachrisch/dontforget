@@ -75,7 +75,7 @@ describe('query dashboard routes', () => {
     expect(body.queries[0]).toMatchObject({
       id: queryId,
       text: 'Auer Dult Munich',
-      recurrenceInterval: 'monthly',
+      recurrenceInterval: 'weekly',
       approvedCount: 1,
       candidateCount: 0,
     });
