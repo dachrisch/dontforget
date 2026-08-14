@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/dachrisch/dontforget/compare/v0.7.7...v0.8.0) (2026-08-14)
+
+
+### Features
+
+* recurring-query scheduler ([#68](https://github.com/dachrisch/dontforget/issues/68)) ([5ea875f](https://github.com/dachrisch/dontforget/commit/5ea875f5b9a02b64925f28aa3ba075bbd7d71508))
+
 ## [0.7.7](https://github.com/dachrisch/dontforget/compare/v0.7.6...v0.7.7) (2026-08-13)
 
 
