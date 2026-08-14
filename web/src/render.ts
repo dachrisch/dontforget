@@ -105,7 +105,7 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
   wrapper.querySelector('form')!.addEventListener('submit', e => {
     e.preventDefault();
     const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
-    handlers.onSubmitQuery(text, 'monthly');
+    handlers.onSubmitQuery(text, 'weekly');
   });
   return wrapper;
 }
@@ -267,7 +267,7 @@ function renderDashboard(
       <input class="ruled-input" id="dashboard-query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
       <div class="interval-wrap">
         <label class="interval-label" for="dashboard-interval">Re-runs</label>
-        ${renderIntervalSelect('recurrenceInterval', 'monthly')}
+        ${renderIntervalSelect('recurrenceInterval', 'weekly')}
       </div>
       <button class="stamp-button" type="submit">Search</button>
     </form>

@@ -38,11 +38,11 @@ describe('queries repo', () => {
       expect(stored).toBe(2);
     });
 
-    it('defaults to monthly and stamps the first run as the last run', async () => {
+    it('defaults to weekly and stamps the first run as the last run', async () => {
       const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
 
       const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
-      expect(row?.recurrence_interval).toBe('monthly');
+      expect(row?.recurrence_interval).toBe('weekly');
       expect(row?.last_run_at).toBeInstanceOf(Date);
     });
 

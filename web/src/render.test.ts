@@ -51,7 +51,7 @@ describe('renderWorkspace', () => {
     input.value = 'Auer Dult Munich';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich', 'monthly');
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich', 'weekly');
   });
 
   it('prefills the query input when returning to empty after a failed search', () => {
