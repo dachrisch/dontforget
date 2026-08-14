@@ -135,6 +135,10 @@ describe('runScheduledQuery', () => {
 
   it('still writes events and updates last_run_at when the email fails to send', async () => {
     const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+    // Backdate so a real update is distinguishable from the value
+    // createQueryWithCandidates already stamped at creation.
+    const staleLastRunAt = new Date('2020-01-01T00:00:00Z');
+    await db.collection('queries').updateOne({ _id: new ObjectId(queryId) }, { $set: { last_run_at: staleLastRunAt } });
 
     const deps: ScheduledRunDeps = {
       runQuery: vi.fn().mockResolvedValue([
@@ -149,6 +153,6 @@ describe('runScheduledQuery', () => {
     const events = await db.collection('events').find({ query_id: new ObjectId(queryId) }).toArray();
     expect(events).toHaveLength(1);
     const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
-    expect(row?.last_run_at).toBeInstanceOf(Date);
+    expect(row?.last_run_at).not.toEqual(staleLastRunAt);
   });
 });
