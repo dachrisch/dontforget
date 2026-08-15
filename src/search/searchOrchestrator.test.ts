@@ -16,14 +16,14 @@ describe('createSearchOrchestrator', () => {
     expect(events).toEqual([{ label: 'L', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' }]);
   });
 
-  it('deduplicates events with the same label and dates from different search results', async () => {
+  it('deduplicates events with the same daterange from different search results, even with different labels', async () => {
     const searxngSearch = vi.fn().mockResolvedValue([
       { title: 't1', url: 'u1', content: 'c1' },
       { title: 't2', url: 'u2', content: 'c2' },
     ]);
     const extractDates = vi.fn().mockResolvedValue([
       { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://a.example' },
-      { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://b.example' },
+      { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://b.example' },
       { label: 'Maidult (Auer Dult)', startDate: '2026-04-25', endDate: '2026-05-03', sourceUrl: 'https://a.example' },
     ]);
 
