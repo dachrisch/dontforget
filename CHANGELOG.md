@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.2](https://github.com/dachrisch/dontforget/compare/v0.8.1...v0.8.2) (2026-08-15)
+
+
+### Bug Fixes
+
+* clean payoff transition without lingering previous word ([ac84cfb](https://github.com/dachrisch/dontforget/commit/ac84cfbb835a2d99242e503759889421cfc652ad))
+
 ## [0.8.1](https://github.com/dachrisch/dontforget/compare/v0.8.0...v0.8.1) (2026-08-15)
 
 
