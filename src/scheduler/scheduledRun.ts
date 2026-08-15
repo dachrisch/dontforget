@@ -23,7 +23,7 @@ export async function runScheduledQuery(db: Db, query: DueQuery, deps: Scheduled
   // round-trip after the orchestrator returns.
   const existingEvents = await db
     .collection<ExistingEventRow>('events')
-    .find({ query_id: query._id }, { projection: { _id: 0, label: 1, start_date: 1, end_date: 1, status: 1 } })
+    .find({ query_id: query._id }, { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } })
     .toArray();
 
   const extracted = await deps.runQuery(query.query_text);

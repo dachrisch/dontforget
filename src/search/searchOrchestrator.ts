@@ -19,13 +19,14 @@ export function createSearchOrchestrator(
 }
 
 // extractDates() runs per search result, so the same real-world event
-// mentioned on multiple pages (a common case — the same festival listed on
-// several sites) comes back once per mention. Keep the first occurrence of
-// each distinct (label, startDate, endDate) combination.
+// mentioned on multiple pages — often under slightly different labels
+// ("Frühjahrsdult" vs "Frühjahrsdult (Auer Dult)") — comes back once per
+// mention. The daterange is the stable signal, so keep the first occurrence
+// of each distinct (startDate, endDate) combination.
 function dedupeEvents(events: ExtractedEvent[]): ExtractedEvent[] {
   const seen = new Set<string>();
   return events.filter(event => {
-    const key = `${event.label}|${event.startDate}|${event.endDate}`;
+    const key = `${event.startDate}|${event.endDate}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
