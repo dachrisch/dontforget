@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/dachrisch/dontforget/compare/v0.8.0...v0.8.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* dedupe events by daterange, ignoring label differences ([#70](https://github.com/dachrisch/dontforget/issues/70)) ([cd8efe8](https://github.com/dachrisch/dontforget/commit/cd8efe87ac79369cb8ca8e4f1762fda1e6f861b7))
+
 ## [0.8.0](https://github.com/dachrisch/dontforget/compare/v0.7.7...v0.8.0) (2026-08-14)
 
 
