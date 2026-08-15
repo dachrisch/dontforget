@@ -109,7 +109,11 @@ h1, h2 {
 
 .wordmark-stem {
   display: inline-block;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.18s ease;
+}
+
+.wordmark-stem.is-fading {
+  opacity: 0;
 }
 
 .wordmark-stem.is-payoff-hidden {
@@ -147,6 +151,10 @@ h1, h2 {
   transform: translateY(-0.16em);
 }
 
+.wordmark-word.is-exit-fast {
+  transition-duration: 0.18s;
+}
+
 .wordmark-strike {
   position: absolute;
   left: -0.04em;
@@ -176,6 +184,7 @@ h1, h2 {
 
 @media (prefers-reduced-motion: reduce) {
   .wordmark-word,
+  .wordmark-word.is-exit-fast,
   .wordmark-strike,
   .wordmark-stem {
     transition-duration: 0.001ms;

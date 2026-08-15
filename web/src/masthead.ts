@@ -65,7 +65,7 @@ export function startWordmarkAnimation(): void {
     return el;
   }
 
-  async function cycleStruck(word: string): Promise<void> {
+  async function showStruckWord(word: string): Promise<{ el: HTMLElement }> {
     sizer.textContent = word;
     const node = makeStruckWord(word);
     slot.appendChild(node.el);
@@ -75,25 +75,36 @@ export function startWordmarkAnimation(): void {
     node.strike.classList.add('is-drawn');
     await sleep(reduce ? 200 : 520);
     await sleep(reduce ? 160 : 360);
-    node.el.classList.remove('is-in');
+    return node;
+  }
+
+  async function cycleStruck(word: string): Promise<void> {
+    const node = await showStruckWord(word);
     node.el.classList.add('is-out');
-    await sleep(reduce ? 120 : 320);
+    await sleep(reduce ? 120 : 340);
     node.el.remove();
   }
 
-  async function cyclePayoff(text: string): Promise<void> {
-    sizer.textContent = text;
+  async function cyclePayoff(lastWord: string, text: string): Promise<void> {
+    const node = await showStruckWord(lastWord);
+    node.el.classList.add('is-out', 'is-exit-fast');
+    stem?.classList.add('is-fading');
+    await sleep(reduce ? 80 : 180);
+
+    node.el.remove();
     stem?.classList.add('is-payoff-hidden');
+    sizer.textContent = text;
     const el = makePayoff(text);
     slot.appendChild(el);
     await sleep(30);
     el.classList.add('is-in');
     await sleep(reduce ? 260 : 5000);
+
     el.classList.remove('is-in');
     el.classList.add('is-out');
-    await sleep(reduce ? 120 : 320);
+    await sleep(reduce ? 120 : 340);
     el.remove();
-    stem?.classList.remove('is-payoff-hidden');
+    stem?.classList.remove('is-payoff-hidden', 'is-fading');
   }
 
   async function run(): Promise<void> {
@@ -101,10 +112,10 @@ export function startWordmarkAnimation(): void {
     running = true;
     slot.querySelectorAll('.wordmark-word').forEach(node => node.remove());
 
-    for (const word of STRUCK_WORDS) {
-      await cycleStruck(word);
+    for (let i = 0; i < STRUCK_WORDS.length - 1; i++) {
+      await cycleStruck(STRUCK_WORDS[i]);
     }
-    await cyclePayoff(PAYOFF_WORD);
+    await cyclePayoff(STRUCK_WORDS[STRUCK_WORDS.length - 1], PAYOFF_WORD);
 
     sizer.textContent = BASE_WORD;
     const final = document.createElement('span');
