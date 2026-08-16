@@ -35,6 +35,15 @@ describe('style.css', () => {
     expect(css).toContain('.workspace-enter');
   });
 
+  it('hides the error banner when [hidden], overriding its own display: flex', () => {
+    // .error-banner sets `display: flex` for its message/dismiss-button
+    // layout. Author styles beat the UA [hidden] stylesheet regardless of
+    // selector specificity, so without this override the banner stays
+    // visible (empty, with just the dismiss ×) even when JS sets
+    // `errorBanner.hidden = true`.
+    expect(css).toMatch(/\.error-banner\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
+  });
+
   it('ships the actual Latin-subset font file, not a stripped/wrong subset', () => {
     const fontPath = resolve(__dirname, '../public/fonts/playfair-display-700.woff2');
     const { size } = statSync(fontPath);
