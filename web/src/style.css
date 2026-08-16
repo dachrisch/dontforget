@@ -69,6 +69,13 @@ body {
   gap: 0.75rem;
 }
 
+/* The `display: flex` above wins the cascade over the UA [hidden] rule
+   (author styles beat UA styles regardless of specificity), so the banner
+   must hide itself explicitly here or it stays visible while empty. */
+.error-banner[hidden] {
+  display: none;
+}
+
 .error-dismiss {
   background: none;
   border: none;
