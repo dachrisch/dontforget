@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/dachrisch/dontforget/compare/v0.9.0...v0.9.1) (2026-08-16)
+
+
+### Bug Fixes
+
+* hide error banner when [hidden] despite display: flex ([#75](https://github.com/dachrisch/dontforget/issues/75)) ([bb262f0](https://github.com/dachrisch/dontforget/commit/bb262f0bdffb18c6a03dbf8b327463cc5bc678aa))
+
 ## [0.9.0](https://github.com/dachrisch/dontforget/compare/v0.8.2...v0.9.0) (2026-08-16)
 
 
