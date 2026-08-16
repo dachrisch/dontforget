@@ -17,7 +17,7 @@ async function authenticatedUser(db: Db, email = 'u@example.com') {
     emailSender: new CapturingEmailSender(),
     publicBaseUrl: 'http://localhost:3000',
     frontendUrl: 'http://localhost:5173',
-    runQuery: vi.fn().mockResolvedValue([]),
+    runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
   });
   return { app, userId, sessionId };
 }
@@ -140,9 +140,10 @@ describe('query dashboard routes', () => {
 
   it('POST /api/queries stores an explicit recurrence interval', async () => {
     const { app, sessionId, userId } = await authenticatedUser(db);
-    const runQuery = vi.fn().mockResolvedValue([
-      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' },
-    ]);
+    const runQuery = vi.fn().mockResolvedValue({
+      events: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
+      cadence: null,
+    });
     const intervalApp = buildApp({
       db,
       emailSender: new CapturingEmailSender(),
@@ -164,6 +165,62 @@ describe('query dashboard routes', () => {
     const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
     expect(row?.user_id).toBe(userId);
     expect(row?.recurrence_interval).toBe('quarterly');
+  });
+
+  it('POST /api/queries uses the AI cadence and returns it as suggestedInterval', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const runQuery = vi.fn().mockResolvedValue({
+      events: [{ label: 'Auer Dult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
+      cadence: 'yearly',
+    });
+    const intervalApp = buildApp({
+      db,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery,
+    });
+
+    const response = await intervalApp.inject({
+      method: 'POST',
+      url: '/api/queries',
+      headers: authHeaders(sessionId),
+      payload: { text: 'Auer Dult Munich' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.suggestedInterval).toBe('yearly');
+    const row = await db.collection('queries').findOne({ _id: new ObjectId(body.queryId) });
+    expect(row?.recurrence_interval).toBe('yearly');
+  });
+
+  it('POST /api/queries prefers the explicit interval over the AI cadence', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const runQuery = vi.fn().mockResolvedValue({
+      events: [{ label: 'Auer Dult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
+      cadence: 'yearly',
+    });
+    const intervalApp = buildApp({
+      db,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery,
+    });
+
+    const response = await intervalApp.inject({
+      method: 'POST',
+      url: '/api/queries',
+      headers: authHeaders(sessionId),
+      payload: { text: 'Auer Dult Munich', recurrenceInterval: 'monthly' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.suggestedInterval).toBe('yearly');
+    const row = await db.collection('queries').findOne({ _id: new ObjectId(body.queryId) });
+    expect(row?.recurrence_interval).toBe('monthly');
   });
 
   it('POST rejects an invalid recurrence interval', async () => {
