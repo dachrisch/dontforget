@@ -11,6 +11,14 @@ export interface ExtractedEvent {
   sourceUrl: string;
 }
 
+export interface ExtractionResult {
+  events: ExtractedEvent[];
+  // The cadence the model judged this kind of event recurs on, e.g. a
+  // yearly festival. Null when the results give no signal, or when the
+  // model's answer isn't one of the supported intervals.
+  cadence: RecurrenceInterval | null;
+}
+
 export interface CandidateEvent extends ExtractedEvent {
   id: string;
   status: 'candidate' | 'approved';

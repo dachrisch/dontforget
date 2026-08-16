@@ -9,7 +9,7 @@ describe('GET /health', () => {
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
-      runQuery: async () => [],
+      runQuery: async () => ({ events: [], cadence: null }),
     });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);

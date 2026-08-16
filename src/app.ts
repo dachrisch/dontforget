@@ -7,14 +7,14 @@ import { SessionService, createRequireAuth } from './auth/session.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerQueryRoutes } from './queries/routes.js';
 import { registerFeedRoutes } from './feed/routes.js';
-import type { ExtractedEvent } from './types.js';
+import type { ExtractionResult } from './types.js';
 
 export interface AppDeps {
   db: Db;
   emailSender: EmailSender;
   publicBaseUrl: string;
   frontendUrl: string;
-  runQuery: (query: string) => Promise<ExtractedEvent[]>;
+  runQuery: (query: string) => Promise<ExtractionResult>;
 }
 
 export function buildApp(deps: AppDeps): FastifyInstance {

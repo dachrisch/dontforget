@@ -40,7 +40,7 @@ export async function listQueries(): Promise<Dashboard> {
 export async function submitQuery(
   text: string,
   recurrenceInterval?: RecurrenceInterval
-): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
+): Promise<{ queryId: string; candidates: CandidateEvent[]; suggestedInterval: RecurrenceInterval | null }> {
   const response = await fetch('/api/queries', {
     method: 'POST',
     credentials: 'include',
@@ -65,15 +65,28 @@ export async function updateQuery(
 
 export async function approveEvents(
   queryId: string,
-  eventIds: string[]
+  eventIds: string[],
+  recurrenceInterval?: RecurrenceInterval
 ): Promise<{ icsUrl: string; rssUrl: string }> {
+  const body: { eventIds: string[]; recurrenceInterval?: RecurrenceInterval } = { eventIds };
+  if (recurrenceInterval) body.recurrenceInterval = recurrenceInterval;
   const response = await fetch(`/api/queries/${queryId}/approve`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ eventIds }),
+    body: JSON.stringify(body),
   });
   return handle(response);
+}
+
+export async function signOut(): Promise<void> {
+  const response = await fetch('/api/auth/signout', {
+    method: 'POST',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
 }
 
 export async function getQueryEvents(queryId: string): Promise<EventDetail[]> {

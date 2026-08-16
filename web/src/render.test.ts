@@ -6,23 +6,29 @@ function noopHandlers(): WorkspaceHandlers {
     onRequestMagicLink: vi.fn(),
     onSubmitQuery: vi.fn(),
     onToggleCandidate: vi.fn(),
+    onSetReviewInterval: vi.fn(),
     onApprove: vi.fn(),
+    onCancelSearch: vi.fn(),
     onStartEdit: vi.fn(),
     onToggleEditEvent: vi.fn(),
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
+    onGoToDashboard: vi.fn(),
+    onStartOver: vi.fn(),
+    onSignOut: vi.fn(),
   };
 }
 
 describe('renderWorkspace', () => {
-  it('renders the sign-in state and wires the magic-link handler', () => {
+  it('renders the sign-in state with a product pitch and wires the magic-link handler', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(container, { kind: 'signedOut' }, handlers);
 
     expect(container.textContent).toContain('Sign in');
+    expect(container.textContent).toMatch(/recurring events/i);
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
     expect(container.querySelector('.stamp-button')).not.toBeNull();
     const input = container.querySelector<HTMLInputElement>('input[type=email]')!;
@@ -51,7 +57,9 @@ describe('renderWorkspace', () => {
     input.value = 'Auer Dult Munich';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich', 'weekly');
+    // The cadence is chosen on the review screen after the search returns,
+    // so the empty state submits without one.
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich');
   });
 
   it('prefills the query input when returning to empty after a failed search', () => {
@@ -62,13 +70,17 @@ describe('renderWorkspace', () => {
     expect(input.value).toBe('Auer Dult Munich');
   });
 
-  it('renders the loading state with a torn-ticket chip and ticking indicator', () => {
+  it('renders the loading state with a torn-ticket chip, ticking indicator, and cancel action', () => {
     const container = document.createElement('div');
-    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());
+    const handlers = noopHandlers();
+    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, handlers);
     expect(container.textContent).toContain('Auer Dult Munich');
     expect(container.textContent).toMatch(/searching/i);
     expect(container.querySelector('.chip-torn')).not.toBeNull();
     expect(container.querySelectorAll('.tick')).toHaveLength(3);
+
+    container.querySelector<HTMLButtonElement>('button[data-action=cancel-search]')!.click();
+    expect(handlers.onCancelSearch).toHaveBeenCalled();
   });
 
   it('renders candidates as calendar-day tiles and toggles selection on click', () => {
@@ -90,6 +102,8 @@ describe('renderWorkspace', () => {
             selected: true,
           },
         ],
+        selectedInterval: 'yearly',
+        suggestedInterval: 'yearly',
       },
       handlers
     );
@@ -104,6 +118,31 @@ describe('renderWorkspace', () => {
 
     container.querySelector<HTMLButtonElement>('button[data-action=approve]')!.click();
     expect(handlers.onApprove).toHaveBeenCalled();
+  });
+
+  it('shows the cadence selector pre-filled with the AI suggestion and explains approval', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'review',
+        queryId: 'q1',
+        candidates: [],
+        selectedInterval: 'yearly',
+        suggestedInterval: 'yearly',
+      },
+      handlers
+    );
+
+    const select = container.querySelector<HTMLSelectElement>('select[name=reviewInterval]')!;
+    expect(select.value).toBe('yearly');
+    expect(container.textContent).toMatch(/AI suggested Every year/i);
+    expect(container.textContent).toMatch(/private calendar feed/i);
+
+    select.value = 'quarterly';
+    select.dispatchEvent(new Event('change'));
+    expect(handlers.onSetReviewInterval).toHaveBeenCalledWith('quarterly');
   });
 
   it('shows a date range and an unselected style when start and end differ', () => {
@@ -124,6 +163,8 @@ describe('renderWorkspace', () => {
             selected: false,
           },
         ],
+        selectedInterval: 'weekly',
+        suggestedInterval: null,
       },
       noopHandlers()
     );
@@ -143,12 +184,16 @@ describe('renderWorkspace', () => {
       status: 'candidate' as const,
       selected: true,
     };
-    renderWorkspace(container, { kind: 'review', queryId: 'q1', candidates: [candidate] }, noopHandlers());
+    renderWorkspace(
+      container,
+      { kind: 'review', queryId: 'q1', candidates: [candidate], selectedInterval: 'yearly', suggestedInterval: 'yearly' },
+      noopHandlers()
+    );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
 
     renderWorkspace(
       container,
-      { kind: 'review', queryId: 'q1', candidates: [{ ...candidate, selected: false }] },
+      { kind: 'review', queryId: 'q1', candidates: [{ ...candidate, selected: false }], selectedInterval: 'yearly', suggestedInterval: 'yearly' },
       noopHandlers()
     );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(false);
@@ -175,6 +220,8 @@ describe('renderWorkspace', () => {
             selected: false,
           },
         ],
+        selectedInterval: 'weekly',
+        suggestedInterval: null,
       },
       noopHandlers()
     );
@@ -185,8 +232,9 @@ describe('renderWorkspace', () => {
     expect(container.querySelector('.day-tile-day')!.textContent).toBe('?');
   });
 
-  it('renders the feed-ready state as ledger rows with both URLs', () => {
+  it('renders the feed-ready state with both URLs, copy buttons, and exits', () => {
     const container = document.createElement('div');
+    const handlers = noopHandlers();
     renderWorkspace(
       container,
       {
@@ -195,12 +243,32 @@ describe('renderWorkspace', () => {
         rssUrl: 'https://x/f/t.rss',
         approved: [],
       },
-      noopHandlers()
+      handlers
     );
 
+    expect(container.textContent).toContain('Your feed is ready');
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
     expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
+    expect(container.querySelectorAll('.copy-button')).toHaveLength(2);
+
+    container.querySelector<HTMLButtonElement>('button[data-action=dashboard]')!.click();
+    expect(handlers.onGoToDashboard).toHaveBeenCalled();
+    container.querySelector<HTMLButtonElement>('button[data-action=search-another]')!.click();
+    expect(handlers.onStartOver).toHaveBeenCalled();
+  });
+
+  it('shows "Copied" feedback when a copy button is clicked', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      { kind: 'feedReady', icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', approved: [] },
+      noopHandlers()
+    );
+
+    const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
+    copyButton.click();
+    expect(copyButton.textContent).toBe('Copied');
   });
 
   it('renders the dashboard with saved queries, schedules, counts and feed info', () => {
@@ -220,11 +288,12 @@ describe('renderWorkspace', () => {
     );
 
     expect(container.textContent).toContain('Auer Dult Munich');
-    expect(container.textContent).toContain('Quarterly');
+    expect(container.textContent).toContain('Every quarter');
     expect(container.textContent).toContain('2 approved');
     expect(container.textContent).toContain('1 pending approval');
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
+    expect(container.querySelectorAll('.feed-summary .copy-button')).toHaveLength(2);
 
     container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
     expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
@@ -240,7 +309,7 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toMatch(/no calendar yet/i);
   });
 
-  it('submits a new query from the dashboard with the chosen re-run schedule', () => {
+  it('submits a new query from the dashboard; cadence is chosen later on review', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
@@ -251,11 +320,23 @@ describe('renderWorkspace', () => {
 
     const input = container.querySelector<HTMLInputElement>('.dashboard-add input[name=query]')!;
     input.value = 'Oktoberfest Munich';
-    const select = container.querySelector<HTMLSelectElement>('.dashboard-add select[name=recurrenceInterval]')!;
-    select.value = 'yearly';
     container.querySelector<HTMLFormElement>('.dashboard-add')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Oktoberfest Munich', 'yearly');
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Oktoberfest Munich');
+    expect(container.querySelector('.dashboard-add select')).toBeNull();
+  });
+
+  it('signs out from the dashboard', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      handlers
+    );
+
+    container.querySelector<HTMLButtonElement>('button[data-action=sign-out]')!.click();
+    expect(handlers.onSignOut).toHaveBeenCalled();
   });
 
   it('renders an editing card prefilled and saves the edited values', () => {

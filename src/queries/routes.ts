@@ -9,11 +9,15 @@ import {
 } from './queriesRepo.js';
 import { approveEvents } from './approveEvents.js';
 import { rotateFeedToken } from '../feed/feedToken.js';
-import { DEFAULT_RECURRENCE_INTERVAL, isRecurrenceInterval, type ExtractedEvent } from '../types.js';
+import {
+  DEFAULT_RECURRENCE_INTERVAL,
+  isRecurrenceInterval,
+  type ExtractionResult,
+} from '../types.js';
 
 export interface QueryRouteDeps {
   db: Db;
-  runQuery: (query: string) => Promise<ExtractedEvent[]>;
+  runQuery: (query: string) => Promise<ExtractionResult>;
   requireAuth: preHandlerHookHandler;
   publicBaseUrl: string;
 }
@@ -31,15 +35,19 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (interval !== undefined && !isRecurrenceInterval(interval)) {
         return reply.code(400).send({ error: 'invalid recurrenceInterval' });
       }
-      const events = await deps.runQuery(text);
+      const { events, cadence } = await deps.runQuery(text);
+      // The user picks the cadence on the review screen after the query
+      // returns — until then, prefer the AI's suggestion, then the client's
+      // explicit choice, then the default.
+      const storedInterval = interval ?? cadence ?? DEFAULT_RECURRENCE_INTERVAL;
       const { queryId, candidates } = await createQueryWithCandidates(
         deps.db,
         request.userId!,
         text,
         events,
-        interval ?? DEFAULT_RECURRENCE_INTERVAL
+        storedInterval
       );
-      return reply.send({ queryId, candidates });
+      return reply.send({ queryId, candidates, suggestedInterval: cadence });
     }
   );
 
@@ -72,16 +80,21 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { eventIds: string[] } }>(
+  app.post<{ Params: { id: string }; Body: { eventIds: string[]; recurrenceInterval?: string } }>(
     '/api/queries/:id/approve',
     { preHandler: deps.requireAuth },
     async (request, reply) => {
+      const interval = request.body?.recurrenceInterval;
+      if (interval !== undefined && !isRecurrenceInterval(interval)) {
+        return reply.code(400).send({ error: 'invalid recurrenceInterval' });
+      }
       const result = await approveEvents(
         deps.db,
         request.userId!,
         request.params.id,
         request.body?.eventIds ?? [],
-        deps.publicBaseUrl
+        deps.publicBaseUrl,
+        interval
       );
       if (!result) {
         return reply.code(403).send({ error: 'not your query' });

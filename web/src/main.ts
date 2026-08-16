@@ -11,6 +11,7 @@ import {
   getQueryEvents,
   deleteQuery,
   rotateFeedToken,
+  signOut,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
 
@@ -18,14 +19,23 @@ const root = document.getElementById('root')!;
 root.before(renderMasthead());
 startWordmarkAnimation();
 
-const errorBanner = document.createElement('p');
+const errorBanner = document.createElement('div');
 errorBanner.className = 'error-banner';
 errorBanner.hidden = true;
+const errorMessage = document.createElement('span');
+const errorDismiss = document.createElement('button');
+errorDismiss.type = 'button';
+errorDismiss.className = 'error-dismiss';
+errorDismiss.setAttribute('aria-label', 'Dismiss error');
+errorDismiss.textContent = '×';
+errorDismiss.addEventListener('click', clearError);
+errorBanner.appendChild(errorMessage);
+errorBanner.appendChild(errorDismiss);
 root.before(errorBanner);
 
 function showError(context: string, err: unknown): void {
   console.error(`[dontforget] ${context} failed:`, err);
-  errorBanner.textContent = `Something went wrong while ${context}. Please try again.`;
+  errorMessage.textContent = `Something went wrong while ${context}. Please try again.`;
   errorBanner.hidden = false;
 }
 
@@ -70,8 +80,8 @@ function paint() {
       clearError();
       setState(reducer(state, { type: 'SUBMIT_QUERY', text }));
       submitQuery(text, recurrenceInterval)
-        .then(({ queryId, candidates }) => {
-          setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates }));
+        .then(({ queryId, candidates, suggestedInterval }) => {
+          setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates, suggestedInterval }));
         })
         .catch(err => {
           showError('searching', err);
@@ -84,6 +94,9 @@ function paint() {
     onToggleCandidate: id => {
       setState(reducer(state, { type: 'TOGGLE_CANDIDATE', id }));
     },
+    onSetReviewInterval: interval => {
+      setState(reducer(state, { type: 'SET_REVIEW_INTERVAL', interval }));
+    },
     onApprove: () => {
       if (state.kind !== 'review') return;
       const fromDashboard = state.fromDashboard === true;
@@ -94,7 +107,7 @@ function paint() {
       const approved = state.candidates.filter(c => c.selected);
       const eventIds = approved.map(c => c.id);
       clearError();
-      approveEvents(state.queryId, eventIds)
+      approveEvents(state.queryId, eventIds, state.selectedInterval)
         .then(({ icsUrl, rssUrl }) => {
           if (fromDashboard) {
             refreshDashboard();
@@ -103,6 +116,14 @@ function paint() {
           }
         })
         .catch(err => showError('approving events', err));
+    },
+    onCancelSearch: () => {
+      clearError();
+      if (state.kind === 'loading' && state.fromDashboard) {
+        refreshDashboard();
+      } else if (state.kind === 'loading') {
+        setState({ kind: 'empty', queryText: state.queryText });
+      }
     },
     onStartEdit: queryId => {
       clearError();
@@ -155,6 +176,20 @@ function paint() {
           setState(reducer(state, { type: 'FEED_ROTATED', icsUrl, rssUrl }));
         })
         .catch(err => showError('rotating your feed URL', err));
+    },
+    onGoToDashboard: () => {
+      clearError();
+      refreshDashboard();
+    },
+    onStartOver: () => {
+      clearError();
+      setState({ kind: 'empty' });
+    },
+    onSignOut: () => {
+      clearError();
+      signOut()
+        .then(() => setState({ kind: 'signedOut' }))
+        .catch(err => showError('signing out', err));
     },
   });
 }

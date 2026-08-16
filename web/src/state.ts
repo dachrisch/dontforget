@@ -1,4 +1,5 @@
 import type { CandidateEvent, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import { DEFAULT_RECURRENCE_INTERVAL } from './types';
 
 export interface SelectableCandidate extends CandidateEvent {
   selected: boolean;
@@ -32,6 +33,10 @@ interface ReviewState {
   kind: 'review';
   queryId: string;
   candidates: SelectableCandidate[];
+  // The cadence the user picks before approving — pre-filled with the AI's
+  // suggestion (or the default when extraction gave no signal).
+  selectedInterval: RecurrenceInterval;
+  suggestedInterval: RecurrenceInterval | null;
   fromDashboard?: boolean;
 }
 
@@ -47,9 +52,10 @@ export type WorkspaceState =
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
   | { type: 'SUBMIT_QUERY'; text: string }
-  | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[] }
+  | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[]; suggestedInterval: RecurrenceInterval | null }
   | { type: 'QUERY_FAILED' }
   | { type: 'TOGGLE_CANDIDATE'; id: string }
+  | { type: 'SET_REVIEW_INTERVAL'; interval: RecurrenceInterval }
   | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
   | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null }
   | { type: 'START_EDIT'; queryId: string }
@@ -80,6 +86,8 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         kind: 'review',
         queryId: event.queryId,
         candidates: event.candidates.map(c => ({ ...c, selected: true })),
+        selectedInterval: event.suggestedInterval ?? DEFAULT_RECURRENCE_INTERVAL,
+        suggestedInterval: event.suggestedInterval,
       };
       if (state.fromDashboard) next.fromDashboard = true;
       return next;
@@ -95,6 +103,10 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         candidates: state.candidates.map(c => (c.id === event.id ? { ...c, selected: !c.selected } : c)),
       };
+
+    case 'SET_REVIEW_INTERVAL':
+      if (state.kind !== 'review') return state;
+      return { ...state, selectedInterval: event.interval };
 
     case 'APPROVE_RESOLVED':
       if (state.kind !== 'review') return state;

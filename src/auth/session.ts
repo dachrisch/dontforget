@@ -37,6 +37,10 @@ export class SessionService {
       .findOne({ _id: sessionId, expires_at: { $gt: new Date() } });
     return result ? result.user_id : null;
   }
+
+  async deleteSession(sessionId: string): Promise<void> {
+    await this.db.collection<SessionRow>('sessions').deleteOne({ _id: sessionId });
+  }
 }
 
 export function createRequireAuth(sessionService: SessionService): preHandlerHookHandler {
