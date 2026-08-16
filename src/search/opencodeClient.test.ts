@@ -47,11 +47,11 @@ describe('extractDates', () => {
       .mockResolvedValueOnce(promptAckResponse())
       .mockResolvedValueOnce(
         assistantMessageResponse(
-          'Here you go:\n{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-05-11","sourceUrl":"https://auerdult.de"}]}'
+          'Here you go:\n{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-05-11","sourceUrl":"https://auerdult.de"}],"cadence":"yearly"}'
         )
       );
 
-    const events = await extractDates(
+    const result = await extractDates(
       'https://opencode.lehel.xyz',
       'test-key',
       'Auer Dult Munich',
@@ -76,19 +76,23 @@ describe('extractDates', () => {
     );
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(typeof promptBody.prompt.text).toBe('string');
+    expect(promptBody.prompt.text).toMatch(/cadence/);
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       'https://opencode.lehel.xyz/api/session/ses_123/message',
       expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
-    expect(events).toEqual([
-      {
-        label: 'Frühjahrsdult',
-        startDate: '2026-04-11',
-        endDate: '2026-05-11',
-        sourceUrl: 'https://auerdult.de',
-      },
-    ]);
+    expect(result).toEqual({
+      events: [
+        {
+          label: 'Frühjahrsdult',
+          startDate: '2026-04-11',
+          endDate: '2026-05-11',
+          sourceUrl: 'https://auerdult.de',
+        },
+      ],
+      cadence: 'yearly',
+    });
   });
 
   it('polls again while the reply is still pending, then parses it once complete', async () => {
@@ -98,7 +102,7 @@ describe('extractDates', () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ data: [{ type: 'user', text: 'the prompt' }] }) })
       .mockResolvedValueOnce(
         assistantMessageResponse(
-          '{"events":[{"label":"Jakobidult","startDate":"2026-07-25","endDate":"2026-08-03","sourceUrl":"https://muenchen.de"}]}\n\nNote: excluded {ongoing fairs} without a specific date.'
+          '{"events":[{"label":"Jakobidult","startDate":"2026-07-25","endDate":"2026-08-03","sourceUrl":"https://muenchen.de"}],"cadence":null}\n\nNote: excluded {ongoing fairs} without a specific date.'
         )
       );
     vi.useFakeTimers();
@@ -107,18 +111,21 @@ describe('extractDates', () => {
       { title: 'Jakobidult', url: 'https://muenchen.de', content: 'Summer dates' },
     ]);
     await vi.advanceTimersByTimeAsync(1000);
-    const events = await promise;
+    const result = await promise;
 
     vi.useRealTimers();
     expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(events).toEqual([
-      {
-        label: 'Jakobidult',
-        startDate: '2026-07-25',
-        endDate: '2026-08-03',
-        sourceUrl: 'https://muenchen.de',
-      },
-    ]);
+    expect(result).toEqual({
+      events: [
+        {
+          label: 'Jakobidult',
+          startDate: '2026-07-25',
+          endDate: '2026-08-03',
+          sourceUrl: 'https://muenchen.de',
+        },
+      ],
+      cadence: null,
+    });
   });
 
   function generationErrorResponse(message: string) {
@@ -141,21 +148,41 @@ describe('extractDates', () => {
       .mockResolvedValueOnce(promptAckResponse())
       .mockResolvedValueOnce(
         assistantMessageResponse(
-          '{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-04-11","sourceUrl":"https://auerdult.de"}]}'
+          '{"events":[{"label":"Frühjahrsdult","startDate":"2026-04-11","endDate":"2026-04-11","sourceUrl":"https://auerdult.de"}],"cadence":"yearly"}'
         )
       );
     vi.useFakeTimers();
 
     const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
     await vi.runAllTimersAsync();
-    const events = await promise;
+    const result = await promise;
 
     vi.useRealTimers();
     expect(fetchMock).toHaveBeenCalledTimes(6);
     expect(fetchMock).toHaveBeenNthCalledWith(4, 'https://opencode.lehel.xyz/api/session', expect.anything());
-    expect(events).toEqual([
-      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-04-11', sourceUrl: 'https://auerdult.de' },
-    ]);
+    expect(result).toEqual({
+      events: [
+        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-04-11', sourceUrl: 'https://auerdult.de' },
+      ],
+      cadence: 'yearly',
+    });
+  });
+
+  it('drops an invalid or missing cadence to null instead of failing', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_cad'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"events":[{"label":"Mystery Fest","startDate":"2026-01-01","endDate":"2026-01-01","sourceUrl":"https://a.example"}],"cadence":"fortnightly"}'
+        )
+      );
+
+    const result = await extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    expect(result).toEqual({
+      events: [{ label: 'Mystery Fest', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'https://a.example' }],
+      cadence: null,
+    });
   });
 
   it('throws the last error after exhausting all retry attempts', async () => {

@@ -1,12 +1,14 @@
 import { ObjectId, type Db } from 'mongodb';
 import { getOrCreateFeedToken } from '../feed/feedToken.js';
+import type { RecurrenceInterval } from '../types.js';
 
 export async function approveEvents(
   db: Db,
   userId: string,
   queryId: string,
   eventIds: string[],
-  publicBaseUrl: string
+  publicBaseUrl: string,
+  recurrenceInterval?: RecurrenceInterval
 ): Promise<{ icsUrl: string; rssUrl: string } | null> {
   const queryObjectId = toObjectId(queryId);
   if (!queryObjectId) {
@@ -19,6 +21,12 @@ export async function approveEvents(
   });
   if (!ownership) {
     return null;
+  }
+
+  if (recurrenceInterval) {
+    await db
+      .collection('queries')
+      .updateOne({ _id: queryObjectId }, { $set: { recurrence_interval: recurrenceInterval } });
   }
 
   const eventObjectIds = eventIds.map(toObjectId).filter((id): id is ObjectId => id !== null);

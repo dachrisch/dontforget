@@ -15,11 +15,12 @@ describe('reducer', () => {
     expect(next).toEqual({ kind: 'loading', queryText: 'Auer Dult Munich' });
   });
 
-  it('moves from loading to review with all candidates pre-selected', () => {
+  it('moves from loading to review with all candidates pre-selected and the AI-suggested cadence', () => {
     const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
     const next = reducer(state, {
       type: 'QUERY_RESOLVED',
       queryId: 'q1',
+      suggestedInterval: 'yearly',
       candidates: [
         { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate' },
       ],
@@ -30,7 +31,32 @@ describe('reducer', () => {
       candidates: [
         { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate', selected: true },
       ],
+      selectedInterval: 'yearly',
+      suggestedInterval: 'yearly',
     });
+  });
+
+  it('falls back to the default cadence when the AI gives no suggestion', () => {
+    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
+    const next = reducer(state, {
+      type: 'QUERY_RESOLVED',
+      queryId: 'q1',
+      suggestedInterval: null,
+      candidates: [],
+    });
+    expect(next).toMatchObject({ kind: 'review', selectedInterval: 'weekly', suggestedInterval: null });
+  });
+
+  it('updates the review cadence the user picks before approving', () => {
+    const state: WorkspaceState = {
+      kind: 'review',
+      queryId: 'q1',
+      candidates: [],
+      selectedInterval: 'yearly',
+      suggestedInterval: 'yearly',
+    };
+    const next = reducer(state, { type: 'SET_REVIEW_INTERVAL', interval: 'monthly' });
+    expect(next).toMatchObject({ kind: 'review', selectedInterval: 'monthly' });
   });
 
   it('toggles one candidate without touching the others', () => {
@@ -41,6 +67,8 @@ describe('reducer', () => {
         { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
         { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: true },
       ],
+      selectedInterval: 'yearly',
+      suggestedInterval: 'yearly',
     };
     const next = reducer(state, { type: 'TOGGLE_CANDIDATE', id: 'e2' });
     expect(next).toEqual({
@@ -59,6 +87,8 @@ describe('reducer', () => {
         // the event's own `approved` snapshot must win, not this state.
         { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: true },
       ],
+      selectedInterval: 'yearly',
+      suggestedInterval: 'yearly',
     };
     const next = reducer(state, {
       type: 'APPROVE_RESOLVED',
@@ -200,6 +230,7 @@ describe('reducer', () => {
     const next = reducer(state, {
       type: 'QUERY_RESOLVED',
       queryId: 'q1',
+      suggestedInterval: 'yearly',
       candidates: [{ id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' }],
     });
     expect(next).toMatchObject({ kind: 'review', fromDashboard: true });
@@ -210,9 +241,16 @@ describe('reducer', () => {
     const next = reducer(state, {
       type: 'QUERY_RESOLVED',
       queryId: 'q1',
+      suggestedInterval: null,
       candidates: [],
     });
-    expect(next).toEqual({ kind: 'review', queryId: 'q1', candidates: [] });
+    expect(next).toEqual({
+      kind: 'review',
+      queryId: 'q1',
+      candidates: [],
+      selectedInterval: 'weekly',
+      suggestedInterval: null,
+    });
   });
 
   it('ignores events that do not apply to the current state', () => {

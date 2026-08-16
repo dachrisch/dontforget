@@ -1,18 +1,23 @@
 import type { WorkspaceState, SelectableEditEvent } from './state';
-import { DEFAULT_RECURRENCE_INTERVAL, RECURRENCE_INTERVALS } from './types';
+import { RECURRENCE_INTERVALS } from './types';
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface WorkspaceHandlers {
   onRequestMagicLink: (email: string) => void;
-  onSubmitQuery: (text: string, recurrenceInterval: RecurrenceInterval) => void;
+  onSubmitQuery: (text: string, recurrenceInterval?: RecurrenceInterval) => void;
   onToggleCandidate: (id: string) => void;
+  onSetReviewInterval: (interval: RecurrenceInterval) => void;
   onApprove: () => void;
+  onCancelSearch: () => void;
   onStartEdit: (queryId: string) => void;
   onToggleEditEvent: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
   onDeleteQuery: (queryId: string) => void;
   onRotateFeedToken: () => void;
+  onGoToDashboard: () => void;
+  onStartOver: () => void;
+  onSignOut: () => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -43,7 +48,9 @@ export function renderWorkspace(
   // focus by default. Restore it on the matching element so keyboard
   // users don't lose their place after each toggle.
   if (focusedId) {
-    container.querySelector<HTMLElement>(`[data-id="${focusedId}"] input`)?.focus();
+    const target = container.querySelector<HTMLElement>(`[data-id="${focusedId}"] input`) ??
+      container.querySelector<HTMLElement>(`[data-id="${focusedId}"] select`);
+    target?.focus();
   }
 }
 
@@ -56,20 +63,23 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'empty':
       return renderEmpty(handlers, state.queryText);
     case 'loading':
-      return renderLoading(state.queryText);
+      return renderLoading(state.queryText, handlers);
     case 'review':
-      return renderReview(state.candidates, handlers);
+      return renderReview(state, handlers);
     case 'feedReady':
-      return renderFeedReady(state.icsUrl, state.rssUrl);
+      return renderFeedReady(state.icsUrl, state.rssUrl, handlers);
     case 'dashboard':
       return renderDashboard(state.queries, state.feed, state.editing, handlers);
   }
 }
 
+const PRODUCT_PITCH = 'Recurring events never land on a fixed date — festivals, markets, tours. dontforget keeps a standing search and puts each new date on your calendar automatically.';
+
 function renderSignedOut(handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <h1>Sign in</h1>
+    <p class="subtext">${PRODUCT_PITCH}</p>
     <p class="subtext">No password — we'll email you a link.</p>
     <form class="ruled-form">
       <input class="ruled-input" type="email" name="email" placeholder="you@example.com" required />
@@ -101,16 +111,17 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
       <input class="ruled-input" id="query-input" name="query" placeholder="e.g. Auer Dult Munich" value="${escapeHtml(queryText ?? '')}" required />
       <button class="stamp-button" type="submit">Search</button>
     </form>
+    <p class="subtext how-it-works">Search once, approve the dates you want, then subscribe to your private calendar feed — we re-run the search on a schedule and add new dates automatically.</p>
   `;
   wrapper.querySelector('form')!.addEventListener('submit', e => {
     e.preventDefault();
     const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
-    handlers.onSubmitQuery(text, DEFAULT_RECURRENCE_INTERVAL);
+    handlers.onSubmitQuery(text);
   });
   return wrapper;
 }
 
-function renderLoading(queryText: string): HTMLElement {
+function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <span class="chip-torn">${escapeHtml(queryText)}</span>
@@ -122,7 +133,11 @@ function renderLoading(queryText: string): HTMLElement {
         <span class="tick"></span>
       </span>
     </p>
+    <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel-search">Cancel</button>
   `;
+  wrapper.querySelector('button[data-action=cancel-search]')!.addEventListener('click', () => {
+    handlers.onCancelSearch();
+  });
   return wrapper;
 }
 
@@ -173,11 +188,11 @@ function formatTimestamp(iso: string): string {
 }
 
 function renderReview(
-  candidates: Array<{ id: string; label: string; startDate: string; endDate: string; sourceUrl: string; selected: boolean }>,
+  state: { candidates: Array<{ id: string; label: string; startDate: string; endDate: string; sourceUrl: string; selected: boolean }>; selectedInterval: RecurrenceInterval; suggestedInterval: RecurrenceInterval | null },
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
-  const tiles = candidates
+  const tiles = state.candidates
     .map(
       c => `
       <label class="day-tile ${c.selected ? 'day-tile-selected' : ''}" data-id="${c.id}">
@@ -191,7 +206,13 @@ function renderReview(
     .join('');
   wrapper.innerHTML = `
     <div class="tile-grid">${tiles}</div>
-    <button class="stamp-button" type="button" data-action="approve">Approve selected (${candidates.filter(c => c.selected).length})</button>
+    <div class="interval-wrap review-interval">
+      <label class="interval-label" for="review-interval">Check again</label>
+      ${renderIntervalSelect('reviewInterval', state.selectedInterval)}
+      ${state.suggestedInterval ? `<span class="interval-hint">AI suggested ${INTERVAL_LABELS[state.suggestedInterval]}</span>` : ''}
+    </div>
+    <p class="subtext">Approve the dates you want — they land on your private calendar feed. We re-run this search on the cadence above and add new dates automatically.</p>
+    <button class="stamp-button" type="button" data-action="approve">Approve selected (${state.candidates.filter(c => c.selected).length})</button>
   `;
   wrapper.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(checkbox => {
     checkbox.addEventListener('click', () => {
@@ -202,33 +223,76 @@ function renderReview(
   wrapper.querySelectorAll<HTMLAnchorElement>('.day-tile-source').forEach(a => {
     a.addEventListener('click', e => e.stopPropagation());
   });
+  wrapper.querySelector<HTMLSelectElement>('select[name=reviewInterval]')!.addEventListener('change', e => {
+    const interval = (e.target as HTMLSelectElement).value as RecurrenceInterval;
+    handlers.onSetReviewInterval(interval);
+  });
   wrapper.querySelector('button[data-action=approve]')!.addEventListener('click', () => {
     handlers.onApprove();
   });
   return wrapper;
 }
 
-function renderFeedReady(icsUrl: string, rssUrl: string): HTMLElement {
+function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <p class="subtext">Future runs add new dates automatically — nothing to approve next time.</p>
-    <div class="ledger-row">
-      <span class="ledger-label">Calendar (ICS)</span>
-      <a class="ledger-value" href="${escapeHtml(icsUrl)}">${escapeHtml(icsUrl)}</a>
-    </div>
-    <div class="ledger-row">
-      <span class="ledger-label">RSS</span>
-      <a class="ledger-value" href="${escapeHtml(rssUrl)}">${escapeHtml(rssUrl)}</a>
+    <h2 class="dashboard-section-title">Your feed is ready</h2>
+    <p class="subtext">Add these to your calendar app to subscribe. Future runs add new dates automatically — nothing to approve next time.</p>
+    ${renderFeedRow('Calendar (ICS)', icsUrl)}
+    ${renderFeedRow('RSS', rssUrl)}
+    <div class="edit-actions">
+      <button class="stamp-button" type="button" data-action="dashboard">Go to dashboard</button>
+      <button class="stamp-button stamp-button-quiet" type="button" data-action="search-another">Search another topic</button>
     </div>
   `;
+  wireCopyButtons(wrapper);
+  wrapper.querySelector('button[data-action=dashboard]')!.addEventListener('click', () => {
+    handlers.onGoToDashboard();
+  });
+  wrapper.querySelector('button[data-action=search-another]')!.addEventListener('click', () => {
+    handlers.onStartOver();
+  });
   return wrapper;
 }
 
+// One calendar feed row: label, the copyable URL, and a copy button.
+function renderFeedRow(label: string, url: string): string {
+  return `
+    <div class="ledger-row">
+      <span class="ledger-label">${label}</span>
+      <span class="ledger-value-cell">
+        <a class="ledger-value" href="${escapeHtml(url)}">${escapeHtml(url)}</a>
+        <button type="button" class="copy-button" data-copy="${escapeHtml(url)}">Copy</button>
+      </span>
+    </div>
+  `;
+}
+
+function wireCopyButtons(root: HTMLElement): void {
+  root.querySelectorAll<HTMLButtonElement>('.copy-button').forEach(button => {
+    button.addEventListener('click', async () => {
+      const url = button.dataset.copy;
+      if (!url) return;
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(url);
+        }
+        button.textContent = 'Copied';
+        setTimeout(() => {
+          button.textContent = 'Copy';
+        }, 1500);
+      } catch {
+        // Clipboard unavailable — leave the URL selectable/copyable by hand.
+      }
+    });
+  });
+}
+
 const INTERVAL_LABELS: Record<RecurrenceInterval, string> = {
-  weekly: 'Weekly',
-  monthly: 'Monthly',
-  quarterly: 'Quarterly',
-  yearly: 'Yearly',
+  weekly: 'Every week',
+  monthly: 'Every month',
+  quarterly: 'Every quarter',
+  yearly: 'Every year',
 };
 
 function renderIntervalSelect(
@@ -238,7 +302,7 @@ function renderIntervalSelect(
   const options = RECURRENCE_INTERVALS.map(
     interval => `<option value="${interval}" ${interval === selected ? 'selected' : ''}>${INTERVAL_LABELS[interval]}</option>`
   ).join('');
-  return `<select class="ruled-select" name="${name}">${options}</select>`;
+  return `<select class="ruled-select" name="${name}" data-id="${name}">${options}</select>`;
 }
 
 function renderDashboard(
@@ -265,10 +329,6 @@ function renderDashboard(
     <form class="ruled-form dashboard-add">
       <label class="entry-label" for="dashboard-query-input">What do you want to track?</label>
       <input class="ruled-input" id="dashboard-query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
-      <div class="interval-wrap">
-        <label class="interval-label" for="dashboard-interval">Re-runs</label>
-        ${renderIntervalSelect('recurrenceInterval', DEFAULT_RECURRENCE_INTERVAL)}
-      </div>
       <button class="stamp-button" type="submit">Search</button>
     </form>
 
@@ -279,16 +339,10 @@ function renderDashboard(
       ${
         feed
           ? `
+            ${renderFeedRow('Calendar (ICS)', feed.icsUrl)}
+            ${renderFeedRow('RSS', feed.rssUrl)}
             <div class="ledger-row">
-              <span class="ledger-label">Calendar (ICS)</span>
-              <a class="ledger-value" href="${escapeHtml(feed.icsUrl)}">${escapeHtml(feed.icsUrl)}</a>
-            </div>
-            <div class="ledger-row">
-              <span class="ledger-label">RSS</span>
-              <a class="ledger-value" href="${escapeHtml(feed.rssUrl)}">${escapeHtml(feed.rssUrl)}</a>
-            </div>
-            <div class="ledger-row">
-              <span class="ledger-label">Last fetched</span>
+              <span class="ledger-label">Last synced</span>
               <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : 'Never'}</span>
             </div>
             <button type="button" class="stamp-button stamp-button-quiet" data-action="rotate-feed">Rotate feed URL</button>
@@ -296,14 +350,17 @@ function renderDashboard(
           : `<p class="subtext">No calendar yet — approve your first search results to mint your private feed link.</p>`
       }
     </section>
+    <div class="dashboard-footer">
+      <button type="button" class="link-button" data-action="sign-out">Sign out</button>
+    </div>
   `;
 
   wrapper.querySelector<HTMLFormElement>('.dashboard-add')!.addEventListener('submit', e => {
     e.preventDefault();
     const text = wrapper.querySelector<HTMLInputElement>('.dashboard-add input[name=query]')!.value;
-    const interval = wrapper.querySelector<HTMLSelectElement>('.dashboard-add select[name=recurrenceInterval]')!.value;
-    handlers.onSubmitQuery(text, interval as RecurrenceInterval);
+    handlers.onSubmitQuery(text);
   });
+  wireCopyButtons(wrapper);
 
   wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=edit]').forEach(button => {
     button.addEventListener('click', () => {
@@ -331,6 +388,10 @@ function renderDashboard(
       }
       handlers.onRotateFeedToken();
     });
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=sign-out]')?.addEventListener('click', () => {
+    handlers.onSignOut();
   });
 
   wrapper.querySelectorAll<HTMLInputElement>('.query-card-editing .day-tile input[type=checkbox]').forEach(checkbox => {
@@ -419,7 +480,7 @@ function renderEditCard(
         <label class="entry-label" for="edit-text">Query</label>
         <input class="ruled-input" id="edit-text" name="editText" value="${escapeHtml(editing.text)}" required />
         <div class="interval-wrap">
-          <label class="interval-label" for="edit-interval">Re-runs</label>
+          <label class="interval-label" for="edit-interval">Check again</label>
           ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
         </div>
         ${eventsSection}
@@ -448,7 +509,7 @@ function renderApprovedTile(event: EventDetail): string {
     <span class="day-tile day-tile-approved" data-id="${event.id}">
       <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
       <span class="day-tile-day">${dayNumber(event.startDate)}</span>
-      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)} · approved</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)} · ✓ approved</span>
     </span>`;
 }
 

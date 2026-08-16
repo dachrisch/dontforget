@@ -2,18 +2,24 @@ import { describe, it, expect, vi } from 'vitest';
 import { createSearchOrchestrator } from './searchOrchestrator';
 
 describe('createSearchOrchestrator', () => {
-  it('searches then extracts, in order', async () => {
+  it('searches then extracts, in order, passing through the AI cadence', async () => {
     const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
     const extractDates = vi
       .fn()
-      .mockResolvedValue([{ label: 'L', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' }]);
+      .mockResolvedValue({
+        events: [{ label: 'L', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' }],
+        cadence: 'yearly',
+      });
 
     const runQuery = createSearchOrchestrator({ searxngSearch, extractDates });
-    const events = await runQuery('Auer Dult Munich');
+    const result = await runQuery('Auer Dult Munich');
 
     expect(searxngSearch).toHaveBeenCalledWith('Auer Dult Munich');
     expect(extractDates).toHaveBeenCalledWith('Auer Dult Munich', [{ title: 't', url: 'u', content: 'c' }]);
-    expect(events).toEqual([{ label: 'L', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' }]);
+    expect(result).toEqual({
+      events: [{ label: 'L', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' }],
+      cadence: 'yearly',
+    });
   });
 
   it('deduplicates events with the same daterange from different search results, even with different labels', async () => {
@@ -21,19 +27,25 @@ describe('createSearchOrchestrator', () => {
       { title: 't1', url: 'u1', content: 'c1' },
       { title: 't2', url: 'u2', content: 'c2' },
     ]);
-    const extractDates = vi.fn().mockResolvedValue([
-      { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://a.example' },
-      { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://b.example' },
-      { label: 'Maidult (Auer Dult)', startDate: '2026-04-25', endDate: '2026-05-03', sourceUrl: 'https://a.example' },
-    ]);
+    const extractDates = vi.fn().mockResolvedValue({
+      events: [
+        { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://a.example' },
+        { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://b.example' },
+        { label: 'Maidult (Auer Dult)', startDate: '2026-04-25', endDate: '2026-05-03', sourceUrl: 'https://a.example' },
+      ],
+      cadence: 'yearly',
+    });
 
     const runQuery = createSearchOrchestrator({ searxngSearch, extractDates });
-    const events = await runQuery('Auer Dult Munich');
+    const result = await runQuery('Auer Dult Munich');
 
-    expect(events).toEqual([
-      { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://a.example' },
-      { label: 'Maidult (Auer Dult)', startDate: '2026-04-25', endDate: '2026-05-03', sourceUrl: 'https://a.example' },
-    ]);
+    expect(result).toEqual({
+      events: [
+        { label: 'Jakobidult (Auer Dult)', startDate: '2026-07-25', endDate: '2026-08-02', sourceUrl: 'https://a.example' },
+        { label: 'Maidult (Auer Dult)', startDate: '2026-04-25', endDate: '2026-05-03', sourceUrl: 'https://a.example' },
+      ],
+      cadence: 'yearly',
+    });
   });
 
   it('skips extraction when search returns nothing', async () => {
@@ -41,9 +53,9 @@ describe('createSearchOrchestrator', () => {
     const extractDates = vi.fn();
 
     const runQuery = createSearchOrchestrator({ searxngSearch, extractDates });
-    const events = await runQuery('nothing found query');
+    const result = await runQuery('nothing found query');
 
     expect(extractDates).not.toHaveBeenCalled();
-    expect(events).toEqual([]);
+    expect(result).toEqual({ events: [], cadence: null });
   });
 });

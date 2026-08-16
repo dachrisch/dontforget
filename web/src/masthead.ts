@@ -38,6 +38,11 @@ export function startWordmarkAnimation(): void {
   const stem = title?.querySelector<HTMLElement>('.wordmark-stem');
   if (!masthead || !title || !slot || !sizer) return;
 
+  // The closures below outlive the narrow-after-guard scope, so alias the
+  // confirmed-non-null elements into plain HTMLElement consts.
+  const slotEl: HTMLElement = slot;
+  const sizerEl: HTMLElement = sizer;
+
   const reduce =
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -66,9 +71,9 @@ export function startWordmarkAnimation(): void {
   }
 
   async function showStruckWord(word: string): Promise<{ el: HTMLElement }> {
-    sizer.textContent = word;
+    sizerEl.textContent = word;
     const node = makeStruckWord(word);
-    slot.appendChild(node.el);
+    slotEl.appendChild(node.el);
     await sleep(30);
     node.el.classList.add('is-in');
     await sleep(reduce ? 260 : 520);
@@ -93,9 +98,9 @@ export function startWordmarkAnimation(): void {
 
     node.el.remove();
     stem?.classList.add('is-payoff-hidden');
-    sizer.textContent = text;
+    sizerEl.textContent = text;
     const el = makePayoff(text);
-    slot.appendChild(el);
+    slotEl.appendChild(el);
     await sleep(30);
     el.classList.add('is-in');
     await sleep(reduce ? 260 : 5000);
@@ -110,18 +115,18 @@ export function startWordmarkAnimation(): void {
   async function run(): Promise<void> {
     if (running) return;
     running = true;
-    slot.querySelectorAll('.wordmark-word').forEach(node => node.remove());
+    slotEl.querySelectorAll('.wordmark-word').forEach(node => node.remove());
 
     for (let i = 0; i < STRUCK_WORDS.length - 1; i++) {
       await cycleStruck(STRUCK_WORDS[i]);
     }
     await cyclePayoff(STRUCK_WORDS[STRUCK_WORDS.length - 1], PAYOFF_WORD);
 
-    sizer.textContent = BASE_WORD;
+    sizerEl.textContent = BASE_WORD;
     const final = document.createElement('span');
     final.className = 'wordmark-word';
     final.textContent = BASE_WORD;
-    slot.appendChild(final);
+    slotEl.appendChild(final);
     await sleep(30);
     final.classList.add('is-in');
 

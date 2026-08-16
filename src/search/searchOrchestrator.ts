@@ -1,20 +1,20 @@
-import type { SearchResult, ExtractedEvent } from '../types.js';
+import type { ExtractedEvent, ExtractionResult, SearchResult } from '../types.js';
 
 export interface SearchOrchestratorDeps {
   searxngSearch: (query: string) => Promise<SearchResult[]>;
-  extractDates: (query: string, results: SearchResult[]) => Promise<ExtractedEvent[]>;
+  extractDates: (query: string, results: SearchResult[]) => Promise<ExtractionResult>;
 }
 
 export function createSearchOrchestrator(
   deps: SearchOrchestratorDeps
-): (query: string) => Promise<ExtractedEvent[]> {
-  return async function runQuery(query: string): Promise<ExtractedEvent[]> {
+): (query: string) => Promise<ExtractionResult> {
+  return async function runQuery(query: string): Promise<ExtractionResult> {
     const results = await deps.searxngSearch(query);
     if (results.length === 0) {
-      return [];
+      return { events: [], cadence: null };
     }
-    const events = await deps.extractDates(query, results);
-    return dedupeEvents(events);
+    const extracted = await deps.extractDates(query, results);
+    return { events: dedupeEvents(extracted.events), cadence: extracted.cadence };
   };
 }
 

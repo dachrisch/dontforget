@@ -42,6 +42,7 @@ export interface Dashboard {
 export interface CreateQueryResponse {
   queryId: string;
   candidates: CandidateEvent[];
+  suggestedInterval: RecurrenceInterval | null;
 }
 
 export interface ApproveResponse {

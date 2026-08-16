@@ -31,7 +31,15 @@ export class MagicLinkService {
     });
 
     const link = `${this.baseUrl}/api/auth/callback?token=${token}`;
-    await this.emailSender.send(email, 'Your dontforget sign-in link', `Sign in: ${link}`);
+    // Fire-and-forget: SMTP can be slow, and the sign-in response must not
+    // wait for the mail to actually go out. The link row is already
+    // persisted above, so a late/lost email only wastes a token, never
+    // blocks the user.
+    void this.emailSender
+      .send(email, 'Your dontforget sign-in link', `Sign in: ${link}`)
+      .catch(err => {
+        console.error(`[dontforget] failed to send sign-in link to ${email}:`, err);
+      });
   }
 
   private async findOrCreateUserId(email: string): Promise<string> {

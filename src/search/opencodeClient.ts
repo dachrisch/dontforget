@@ -1,5 +1,5 @@
 import { Agent, fetch as undiciFetch } from 'undici';
-import type { SearchResult, ExtractedEvent } from '../types.js';
+import { isRecurrenceInterval, type ExtractionResult, type SearchResult } from '../types.js';
 
 // servyy-test's opencode instance is only reachable at an internal-only
 // `.lxd` hostname (Traefik's Let's Encrypt resolver can't issue a real cert
@@ -53,14 +53,14 @@ export async function extractDates(
   apiKey: string,
   query: string,
   results: SearchResult[]
-): Promise<ExtractedEvent[]> {
+): Promise<ExtractionResult> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       const sessionId = await createSession(baseUrl, apiKey);
       await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
       const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-      return parseEvents(replyText);
+      return parseExtraction(replyText);
     } catch (err) {
       lastError = err;
       if (attempt < MAX_ATTEMPTS) {
@@ -145,17 +145,21 @@ function buildPrompt(query: string, results: SearchResult[]): string {
     .join('\n\n');
   return [
     `Extract every concrete date mentioned for "${query}" from these search results.`,
-    `Respond with only JSON, no prose: {"events":[{"label":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","sourceUrl":string}]}`,
-    `If a result gives a single day, set startDate and endDate to the same date. If nothing is found, respond {"events":[]}.`,
+    `Respond with only JSON, no prose: {"events":[{"label":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","sourceUrl":string}],"cadence":"weekly"|"monthly"|"quarterly"|"yearly"|null}`,
+    `If a result gives a single day, set startDate and endDate to the same date.`,
+    `Also judge how often "${query}" recurs as a whole: set cadence to "weekly", "monthly", "quarterly", or "yearly". If it does not recur on a predictable cadence, set "cadence":null.`,
+    `If nothing is found, respond {"events":[],"cadence":null}.`,
     '',
     resultsBlock,
   ].join('\n');
 }
 
-function parseEvents(replyText: string): ExtractedEvent[] {
+function parseExtraction(replyText: string): ExtractionResult {
   const jsonText = extractFirstJsonObject(replyText);
-  const parsed = JSON.parse(jsonText) as { events: ExtractedEvent[] };
-  return parsed.events;
+  const parsed = JSON.parse(jsonText) as { events?: ExtractionResult['events']; cadence?: unknown };
+  const events = Array.isArray(parsed.events) ? parsed.events : [];
+  const cadence = isRecurrenceInterval(parsed.cadence) ? parsed.cadence : null;
+  return { events, cadence };
 }
 
 // A plain /\{[\s\S]*\}/ match greedily spans from the first '{' to the very

@@ -1,11 +1,11 @@
 import { ObjectId, type Db } from 'mongodb';
 import type { EmailSender } from '../email/EmailSender.js';
-import type { ExtractedEvent } from '../types.js';
+import type { ExtractionResult } from '../types.js';
 import type { DueQuery } from './dueQueries.js';
 import { filterNewEvents, type ExistingEventKey } from './dedupeEvents.js';
 
 export interface ScheduledRunDeps {
-  runQuery: (query: string) => Promise<ExtractedEvent[]>;
+  runQuery: (query: string) => Promise<ExtractionResult>;
   emailSender: EmailSender;
   publicBaseUrl: string;
 }
@@ -26,7 +26,7 @@ export async function runScheduledQuery(db: Db, query: DueQuery, deps: Scheduled
     .find({ query_id: query._id }, { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } })
     .toArray();
 
-  const extracted = await deps.runQuery(query.query_text);
+  const extracted = (await deps.runQuery(query.query_text)).events;
   const newEvents = filterNewEvents(extracted, existingEvents);
 
   if (newEvents.length > 0) {

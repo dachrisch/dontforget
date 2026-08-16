@@ -40,10 +40,13 @@ describe('runScheduledQuery', () => {
 
     const emailSender = new CapturingEmailSender();
     const deps: ScheduledRunDeps = {
-      runQuery: vi.fn().mockResolvedValue([
-        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
-        { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://a.example' },
-      ]),
+      runQuery: vi.fn().mockResolvedValue({
+        events: [
+          { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+          { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://a.example' },
+        ],
+        cadence: null,
+      }),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
     };
@@ -68,9 +71,12 @@ describe('runScheduledQuery', () => {
 
     const emailSender = new CapturingEmailSender();
     const deps: ScheduledRunDeps = {
-      runQuery: vi.fn().mockResolvedValue([
-        { label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'https://a.example' },
-      ]),
+      runQuery: vi.fn().mockResolvedValue({
+        events: [
+          { label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'https://a.example' },
+        ],
+        cadence: null,
+      }),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
     };
@@ -96,9 +102,12 @@ describe('runScheduledQuery', () => {
 
     const emailSender = new CapturingEmailSender();
     const deps: ScheduledRunDeps = {
-      runQuery: vi.fn().mockResolvedValue([
-        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a-different-page.example' },
-      ]),
+      runQuery: vi.fn().mockResolvedValue({
+        events: [
+          { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a-different-page.example' },
+        ],
+        cadence: null,
+      }),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
     };
@@ -141,9 +150,12 @@ describe('runScheduledQuery', () => {
     await db.collection('queries').updateOne({ _id: new ObjectId(queryId) }, { $set: { last_run_at: staleLastRunAt } });
 
     const deps: ScheduledRunDeps = {
-      runQuery: vi.fn().mockResolvedValue([
-        { label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'https://a.example' },
-      ]),
+      runQuery: vi.fn().mockResolvedValue({
+        events: [
+          { label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'https://a.example' },
+        ],
+        cadence: null,
+      }),
       emailSender: { send: vi.fn().mockRejectedValue(new Error('smtp down')) },
       publicBaseUrl: 'http://localhost:3000',
     };

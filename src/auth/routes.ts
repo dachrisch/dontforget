@@ -38,4 +38,13 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
 
   const requireAuth = createRequireAuth(deps.sessionService);
   app.get('/api/me', { preHandler: requireAuth }, async () => ({ authenticated: true }));
+
+  app.post('/api/auth/signout', async (request, reply) => {
+    const sessionId = request.cookies?.[SESSION_COOKIE];
+    if (sessionId) {
+      await deps.sessionService.deleteSession(sessionId);
+    }
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return reply.code(204).send();
+  });
 }
