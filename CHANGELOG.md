@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0](https://github.com/dachrisch/dontforget/compare/v0.8.2...v0.9.0) (2026-08-16)
+
+
+### Features
+
+* pre-release UX polish, async magic-link, AI-suggested cadence ([9fdb44a](https://github.com/dachrisch/dontforget/commit/9fdb44ab6743ff3f65edc386697cae788b72d0cc))
+* pre-release UX polish, async magic-link, AI-suggested cadence ([9d23ea8](https://github.com/dachrisch/dontforget/commit/9d23ea89afde1db43adf2de53bf202797c18b182))
+
+
+### Bug Fixes
+
+* update dashboard routes tests to the extraction result shape ([d51e09d](https://github.com/dachrisch/dontforget/commit/d51e09d5e5fdedae3522ac5f1fcd29fbfb23fb72))
+
 ## [0.8.2](https://github.com/dachrisch/dontforget/compare/v0.8.1...v0.8.2) (2026-08-15)
 
 
