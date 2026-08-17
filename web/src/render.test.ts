@@ -83,6 +83,30 @@ describe('renderWorkspace', () => {
     expect(handlers.onCancelSearch).toHaveBeenCalled();
   });
 
+  it('reassures the user once a search takes longer than usual', () => {
+    vi.useFakeTimers();
+    const container = document.createElement('div');
+    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());
+
+    expect(container.textContent).not.toMatch(/longer than usual/i);
+    vi.advanceTimersByTime(60_000);
+    expect(container.textContent).toMatch(/longer than usual/i);
+
+    vi.useRealTimers();
+  });
+
+  it('does not touch a stale loading message after the state moves on', () => {
+    vi.useFakeTimers();
+    const container = document.createElement('div');
+    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());
+    renderWorkspace(container, { kind: 'empty' }, noopHandlers());
+
+    expect(() => vi.advanceTimersByTime(60_000)).not.toThrow();
+    expect(container.textContent).not.toMatch(/longer than usual/i);
+
+    vi.useRealTimers();
+  });
+
   it('renders candidates as calendar-day tiles and toggles selection on click', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
