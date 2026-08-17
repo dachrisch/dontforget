@@ -4,7 +4,7 @@ import { CapturingEmailSender } from './email/EmailSender';
 
 describe('GET /health', () => {
   it('returns ok', async () => {
-    const app = buildApp({
+    const app = await buildApp({
       db: {} as any,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',

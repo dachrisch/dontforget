@@ -12,7 +12,7 @@ async function authenticatedUser(db: Db, email = 'u@example.com') {
   const { insertedId } = await db.collection('users').insertOne({ email });
   const userId = insertedId.toString();
   const sessionId = await new SessionService(db).createSession(userId);
-  const app = buildApp({
+  const app = await buildApp({
     db,
     emailSender: new CapturingEmailSender(),
     publicBaseUrl: 'http://localhost:3000',
@@ -144,7 +144,7 @@ describe('query dashboard routes', () => {
       events: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
       cadence: null,
     });
-    const intervalApp = buildApp({
+    const intervalApp = await buildApp({
       db,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -173,7 +173,7 @@ describe('query dashboard routes', () => {
       events: [{ label: 'Auer Dult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
       cadence: 'yearly',
     });
-    const intervalApp = buildApp({
+    const intervalApp = await buildApp({
       db,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -201,7 +201,7 @@ describe('query dashboard routes', () => {
       events: [{ label: 'Auer Dult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
       cadence: 'yearly',
     });
-    const intervalApp = buildApp({
+    const intervalApp = await buildApp({
       db,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',

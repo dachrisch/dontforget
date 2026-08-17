@@ -6,6 +6,7 @@ import type { CandidateEvent } from '../types.js';
 
 export interface FeedRouteDeps {
   db: Db;
+  publicBaseUrl: string;
 }
 
 export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): void {
@@ -57,6 +58,6 @@ export function registerFeedRoutes(app: FastifyInstance, deps: FeedRouteDeps): v
       return reply.send(buildIcs(events));
     }
     reply.header('Content-Type', 'application/rss+xml');
-    return reply.send(buildRss(events, `${request.protocol}://${request.hostname}/f/${token}`));
+    return reply.send(buildRss(events, `${deps.publicBaseUrl}/f/${token}`));
   });
 }
