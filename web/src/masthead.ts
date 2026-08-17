@@ -1,17 +1,15 @@
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const MONTH_NAMES = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
+import { DAY_NAMES, MONTH_NAMES, getLocale } from './i18n';
 
 const BASE_WORD = 'forget';
 const STRUCK_WORDS = ['bother', 'hassle', 'regret'];
 const PAYOFF_WORD = "you're covered.";
 
 export function formatDateline(date: Date): string {
-  const day = DAY_NAMES[date.getDay()];
-  const month = MONTH_NAMES[date.getMonth()];
-  return `${day}, ${date.getDate()} ${month} ${date.getFullYear()}`;
+  const day = DAY_NAMES[getLocale()][date.getDay()];
+  const month = MONTH_NAMES[getLocale()][date.getMonth()];
+  return getLocale() === 'de'
+    ? `${day}, ${date.getDate()}. ${month} ${date.getFullYear()}`
+    : `${day}, ${date.getDate()} ${month} ${date.getFullYear()}`;
 }
 
 export function renderMasthead(today: Date = new Date()): HTMLElement {

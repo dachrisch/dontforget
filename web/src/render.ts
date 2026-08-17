@@ -1,6 +1,7 @@
 import type { WorkspaceState, SelectableEditEvent } from './state';
 import { RECURRENCE_INTERVALS } from './types';
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
 
 export interface WorkspaceHandlers {
   onRequestMagicLink: (email: string) => void;
@@ -73,17 +74,15 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
   }
 }
 
-const PRODUCT_PITCH = 'Recurring events never land on a fixed date — festivals, markets, tours. dontforget keeps a standing search and puts each new date on your calendar automatically.';
-
 function renderSignedOut(handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <h1>Sign in</h1>
-    <p class="subtext">${PRODUCT_PITCH}</p>
-    <p class="subtext">No password — we'll email you a link.</p>
+    <h1>${t('signIn.title')}</h1>
+    <p class="subtext">${t('signIn.pitch')}</p>
+    <p class="subtext">${t('signIn.noPassword')}</p>
     <form class="ruled-form">
-      <input class="ruled-input" type="email" name="email" placeholder="you@example.com" required />
-      <button class="stamp-button" type="submit">Email me a link</button>
+      <input class="ruled-input" type="email" name="email" placeholder="${t('signIn.placeholder')}" required />
+      <button class="stamp-button" type="submit">${t('signIn.button')}</button>
     </form>
   `;
   wrapper.querySelector('form')!.addEventListener('submit', e => {
@@ -98,7 +97,7 @@ function renderLinkSent(): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <p class="ornament">※</p>
-    <p>Check your inbox — the link signs you in.</p>
+    <p>${t('linkSent.text')}</p>
   `;
   return wrapper;
 }
@@ -107,11 +106,11 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <form class="ruled-form">
-      <label class="entry-label" for="query-input">What do you want to track?</label>
-      <input class="ruled-input" id="query-input" name="query" placeholder="e.g. Auer Dult Munich" value="${escapeHtml(queryText ?? '')}" required />
-      <button class="stamp-button" type="submit">Search</button>
+      <label class="entry-label" for="query-input">${t('empty.label')}</label>
+      <input class="ruled-input" id="query-input" name="query" placeholder="${t('empty.placeholder')}" value="${escapeHtml(queryText ?? '')}" required />
+      <button class="stamp-button" type="submit">${t('empty.button')}</button>
     </form>
-    <p class="subtext how-it-works">Search once, approve the dates you want, then subscribe to your private calendar feed — we re-run the search on a schedule and add new dates automatically.</p>
+    <p class="subtext how-it-works">${t('empty.howItWorks')}</p>
   `;
   wrapper.querySelector('form')!.addEventListener('submit', e => {
     e.preventDefault();
@@ -132,14 +131,14 @@ function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElem
   wrapper.innerHTML = `
     <span class="chip-torn">${escapeHtml(queryText)}</span>
     <p class="loading-status">
-      <span class="loading-status-text">Searching → extracting dates…</span>
+      <span class="loading-status-text">${t('loading.status')}</span>
       <span class="ticks">
         <span class="tick"></span>
         <span class="tick"></span>
         <span class="tick"></span>
       </span>
     </p>
-    <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel-search">Cancel</button>
+    <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel-search">${t('loading.cancel')}</button>
   `;
   wrapper.querySelector('button[data-action=cancel-search]')!.addEventListener('click', () => {
     handlers.onCancelSearch();
@@ -152,12 +151,11 @@ function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElem
     // (Not `isConnected`: that's relative to `document`, and callers in
     // tests render into a container that's never attached to it.)
     if (!wrapper.parentElement) return;
-    statusText.textContent = 'Still working — this is taking longer than usual…';
+    statusText.textContent = t('loading.longer');
   }, LONGER_THAN_USUAL_DELAY_MS);
   return wrapper;
 }
 
-const MONTH_ABBREVS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 const ISO_DATE_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 
 // startDate/endDate come from LLM-extracted search results (see
@@ -171,7 +169,7 @@ function parseIsoDate(iso: string): { year: number; month: number; day: number }
 
 function monthAbbrev(iso: string): string {
   const parsed = parseIsoDate(iso);
-  return parsed ? MONTH_ABBREVS[parsed.month - 1] : '?';
+  return parsed ? MONTH_ABBREVS[getLocale()][parsed.month - 1] : '?';
 }
 
 function dayNumber(iso: string): string {
@@ -181,7 +179,11 @@ function dayNumber(iso: string): string {
 
 function formatIsoDate(iso: string): string {
   const parsed = parseIsoDate(iso);
-  return parsed ? `${MONTH_ABBREVS[parsed.month - 1]} ${parsed.day}, ${parsed.year}` : iso;
+  if (!parsed) return iso;
+  const abbrev = MONTH_ABBREVS[getLocale()][parsed.month - 1];
+  return getLocale() === 'de'
+    ? `${parsed.day}. ${abbrev} ${parsed.year}`
+    : `${abbrev} ${parsed.day}, ${parsed.year}`;
 }
 
 function formatRange(startDate: string, endDate: string): string {
@@ -194,7 +196,8 @@ function formatRange(startDate: string, endDate: string): string {
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
+  const locale = getLocale() === 'de' ? 'de-DE' : 'en-US';
+  return date.toLocaleString(locale, {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -216,19 +219,19 @@ function renderReview(
         <span class="day-tile-month">${monthAbbrev(c.startDate)}</span>
         <span class="day-tile-day">${dayNumber(c.startDate)}</span>
         <span class="day-tile-caption">${escapeHtml(formatRange(c.startDate, c.endDate))} · ${escapeHtml(c.label)}</span>
-        <a class="day-tile-source" href="${escapeHtml(c.sourceUrl)}" target="_blank" rel="noopener">source</a>
+        <a class="day-tile-source" href="${escapeHtml(c.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
       </label>`
     )
     .join('');
   wrapper.innerHTML = `
     <div class="tile-grid">${tiles}</div>
     <div class="interval-wrap review-interval">
-      <label class="interval-label" for="review-interval">Check again</label>
+      <label class="interval-label" for="review-interval">${t('review.checkAgain')}</label>
       ${renderIntervalSelect('reviewInterval', state.selectedInterval)}
-      ${state.suggestedInterval ? `<span class="interval-hint">AI suggested ${INTERVAL_LABELS[state.suggestedInterval]}</span>` : ''}
+      ${state.suggestedInterval ? `<span class="interval-hint">${t('review.aiSuggested', { interval: intervalLabel(state.suggestedInterval) })}</span>` : ''}
     </div>
-    <p class="subtext">Approve the dates you want — they land on your private calendar feed. We re-run this search on the cadence above and add new dates automatically.</p>
-    <button class="stamp-button" type="button" data-action="approve">Approve selected (${state.candidates.filter(c => c.selected).length})</button>
+    <p class="subtext">${t('review.subtext')}</p>
+    <button class="stamp-button" type="button" data-action="approve">${t('review.approve', { count: state.candidates.filter(c => c.selected).length })}</button>
   `;
   wrapper.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(checkbox => {
     checkbox.addEventListener('click', () => {
@@ -252,13 +255,13 @@ function renderReview(
 function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
-    <h2 class="dashboard-section-title">Your feed is ready</h2>
-    <p class="subtext">Add these to your calendar app to subscribe. Future runs add new dates automatically — nothing to approve next time.</p>
-    ${renderFeedRow('Calendar (ICS)', icsUrl)}
-    ${renderFeedRow('RSS', rssUrl)}
+    <h2 class="dashboard-section-title">${t('feedReady.title')}</h2>
+    <p class="subtext">${t('feedReady.subtext')}</p>
+    ${renderFeedRow(t('common.calendarIcs'), icsUrl)}
+    ${renderFeedRow(t('common.rss'), rssUrl)}
     <div class="edit-actions">
-      <button class="stamp-button" type="button" data-action="dashboard">Go to dashboard</button>
-      <button class="stamp-button stamp-button-quiet" type="button" data-action="search-another">Search another topic</button>
+      <button class="stamp-button" type="button" data-action="dashboard">${t('feedReady.dashboard')}</button>
+      <button class="stamp-button stamp-button-quiet" type="button" data-action="search-another">${t('feedReady.searchAnother')}</button>
     </div>
   `;
   wireCopyButtons(wrapper);
@@ -278,7 +281,7 @@ function renderFeedRow(label: string, url: string): string {
       <span class="ledger-label">${label}</span>
       <span class="ledger-value-cell">
         <a class="ledger-value" href="${escapeHtml(url)}">${escapeHtml(url)}</a>
-        <button type="button" class="copy-button" data-copy="${escapeHtml(url)}">Copy</button>
+        <button type="button" class="copy-button" data-copy="${escapeHtml(url)}">${t('common.copy')}</button>
       </span>
     </div>
   `;
@@ -293,9 +296,9 @@ function wireCopyButtons(root: HTMLElement): void {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(url);
         }
-        button.textContent = 'Copied';
+        button.textContent = t('common.copied');
         setTimeout(() => {
-          button.textContent = 'Copy';
+          button.textContent = t('common.copy');
         }, 1500);
       } catch {
         // Clipboard unavailable — leave the URL selectable/copyable by hand.
@@ -304,19 +307,23 @@ function wireCopyButtons(root: HTMLElement): void {
   });
 }
 
-const INTERVAL_LABELS: Record<RecurrenceInterval, string> = {
-  weekly: 'Every week',
-  monthly: 'Every month',
-  quarterly: 'Every quarter',
-  yearly: 'Every year',
+const INTERVAL_LABEL_KEYS: Record<RecurrenceInterval, MessageKey> = {
+  weekly: 'interval.weekly',
+  monthly: 'interval.monthly',
+  quarterly: 'interval.quarterly',
+  yearly: 'interval.yearly',
 };
+
+function intervalLabel(interval: RecurrenceInterval): string {
+  return t(INTERVAL_LABEL_KEYS[interval]);
+}
 
 function renderIntervalSelect(
   name: string,
   selected: RecurrenceInterval
 ): string {
   const options = RECURRENCE_INTERVALS.map(
-    interval => `<option value="${interval}" ${interval === selected ? 'selected' : ''}>${INTERVAL_LABELS[interval]}</option>`
+    interval => `<option value="${interval}" ${interval === selected ? 'selected' : ''}>${intervalLabel(interval)}</option>`
   ).join('');
   return `<select class="ruled-select" name="${name}" data-id="${name}">${options}</select>`;
 }
@@ -343,31 +350,31 @@ function renderDashboard(
 
   wrapper.innerHTML = `
     <form class="ruled-form dashboard-add">
-      <label class="entry-label" for="dashboard-query-input">What do you want to track?</label>
-      <input class="ruled-input" id="dashboard-query-input" name="query" placeholder="e.g. Auer Dult Munich" required />
-      <button class="stamp-button" type="submit">Search</button>
+      <label class="entry-label" for="dashboard-query-input">${t('empty.label')}</label>
+      <input class="ruled-input" id="dashboard-query-input" name="query" placeholder="${t('empty.placeholder')}" required />
+      <button class="stamp-button" type="submit">${t('empty.button')}</button>
     </form>
 
-    ${queries.length > 0 ? `<section class="query-list" aria-label="Saved queries">${cards}</section>` : ''}
+    ${queries.length > 0 ? `<section class="query-list" aria-label="${t('dashboard.savedQueries')}">${cards}</section>` : ''}
 
-    <section class="feed-summary" aria-label="Your calendar feed">
-      <h2 class="dashboard-section-title">Your calendar</h2>
+    <section class="feed-summary" aria-label="${t('dashboard.yourCalendar')}">
+      <h2 class="dashboard-section-title">${t('dashboard.yourCalendar')}</h2>
       ${
         feed
           ? `
-            ${renderFeedRow('Calendar (ICS)', feed.icsUrl)}
-            ${renderFeedRow('RSS', feed.rssUrl)}
+            ${renderFeedRow(t('common.calendarIcs'), feed.icsUrl)}
+            ${renderFeedRow(t('common.rss'), feed.rssUrl)}
             <div class="ledger-row">
-              <span class="ledger-label">Last synced</span>
-              <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : 'Never'}</span>
+              <span class="ledger-label">${t('dashboard.lastSynced')}</span>
+              <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : t('dashboard.never')}</span>
             </div>
-            <button type="button" class="stamp-button stamp-button-quiet" data-action="rotate-feed">Rotate feed URL</button>
-            <p class="subtext">Leaked or shared your calendar link by mistake? Rotating mints a new one and breaks the old link immediately.</p>`
-          : `<p class="subtext">No calendar yet — approve your first search results to mint your private feed link.</p>`
+            <button type="button" class="stamp-button stamp-button-quiet" data-action="rotate-feed">${t('dashboard.rotate')}</button>
+            <p class="subtext">${t('dashboard.rotateSubtext')}</p>`
+          : `<p class="subtext">${t('dashboard.noCalendar')}</p>`
       }
     </section>
     <div class="dashboard-footer">
-      <button type="button" class="link-button" data-action="sign-out">Sign out</button>
+      <button type="button" class="link-button" data-action="sign-out">${t('dashboard.signOut')}</button>
     </div>
   `;
 
@@ -388,7 +395,7 @@ function renderDashboard(
     button.addEventListener('click', () => {
       if (button.dataset.confirmed !== 'true') {
         button.dataset.confirmed = 'true';
-        button.textContent = 'Confirm delete?';
+        button.textContent = t('queryCard.confirmDelete');
         return;
       }
       handlers.onDeleteQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
@@ -399,7 +406,7 @@ function renderDashboard(
     button.addEventListener('click', () => {
       if (button.dataset.confirmed !== 'true') {
         button.dataset.confirmed = 'true';
-        button.textContent = 'Confirm rotate?';
+        button.textContent = t('dashboard.confirmRotate');
         return;
       }
       handlers.onRotateFeedToken();
@@ -441,28 +448,28 @@ function renderDashboard(
 
 function renderQueryCard(query: QuerySummary): string {
   const eventSummary = [];
-  if (query.approvedCount > 0) eventSummary.push(`${query.approvedCount} approved`);
-  if (query.candidateCount > 0) eventSummary.push(`${query.candidateCount} pending approval`);
+  if (query.approvedCount > 0) eventSummary.push(t('queryCard.approved', { count: query.approvedCount }));
+  if (query.candidateCount > 0) eventSummary.push(t('queryCard.pending', { count: query.candidateCount }));
   return `
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
         <span class="query-card-text">${escapeHtml(query.text)}</span>
         <div class="query-card-actions">
-          <button type="button" class="link-button" data-action="edit">Edit</button>
-          <button type="button" class="link-button link-button-danger" data-action="delete">Delete</button>
+          <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
+          <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
         </div>
       </div>
       <div class="ledger-row">
-        <span class="ledger-label">Re-runs</span>
-        <span class="ledger-value">${INTERVAL_LABELS[query.recurrenceInterval]}</span>
+        <span class="ledger-label">${t('queryCard.reruns')}</span>
+        <span class="ledger-value">${intervalLabel(query.recurrenceInterval)}</span>
       </div>
       <div class="ledger-row">
-        <span class="ledger-label">Last run</span>
-        <span class="ledger-value">${query.lastRunAt ? escapeHtml(formatTimestamp(query.lastRunAt)) : 'Never'}</span>
+        <span class="ledger-label">${t('queryCard.lastRun')}</span>
+        <span class="ledger-value">${query.lastRunAt ? escapeHtml(formatTimestamp(query.lastRunAt)) : t('dashboard.never')}</span>
       </div>
       <div class="ledger-row">
-        <span class="ledger-label">Events</span>
-        <span class="ledger-value">${eventSummary.length > 0 ? escapeHtml(eventSummary.join(' · ')) : 'None yet'}</span>
+        <span class="ledger-label">${t('queryCard.events')}</span>
+        <span class="ledger-value">${eventSummary.length > 0 ? escapeHtml(eventSummary.join(' · ')) : t('queryCard.noneYet')}</span>
       </div>
     </article>
   `;
@@ -483,26 +490,30 @@ function renderEditCard(
   const eventsSection = editing.events.length > 0
     ? `
       <div class="edit-events">
-        <label class="entry-label">Events</label>
+        <label class="entry-label">${t('edit.events')}</label>
         <div class="tile-grid edit-tile-grid">${eventTiles}</div>
-        <p class="subtext">Saving approves the selected pending dates. ${pending.length > 0 ? `${approved.length} approved · ${pending.length} pending approval.` : ''}</p>
+        <p class="subtext">${t('edit.saveHint', {
+          summary: pending.length > 0
+            ? `${t('queryCard.approved', { count: approved.length })} · ${t('queryCard.pending', { count: pending.length })}.`
+            : '',
+        })}</p>
       </div>`
     : `
-      <p class="subtext">No events extracted yet for this query yet.</p>`;
+      <p class="subtext">${t('edit.noEvents')}</p>`;
 
   return `
     <article class="query-card query-card-editing" data-id="${editing.queryId}">
       <form class="edit-form ruled-form">
-        <label class="entry-label" for="edit-text">Query</label>
+        <label class="entry-label" for="edit-text">${t('edit.query')}</label>
         <input class="ruled-input" id="edit-text" name="editText" value="${escapeHtml(editing.text)}" required />
         <div class="interval-wrap">
-          <label class="interval-label" for="edit-interval">Check again</label>
+          <label class="interval-label" for="edit-interval">${t('review.checkAgain')}</label>
           ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
         </div>
         ${eventsSection}
         <div class="edit-actions">
-          <button class="stamp-button" type="submit" data-action="save">Save and approve (${selectedCount})</button>
-          <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">Cancel</button>
+          <button class="stamp-button" type="submit" data-action="save">${t('edit.saveAndApprove', { count: selectedCount })}</button>
+          <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">${t('edit.cancel')}</button>
         </div>
       </form>
     </article>
@@ -516,7 +527,7 @@ function renderSelectableTile(event: SelectableEditEvent): string {
       <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
       <span class="day-tile-day">${dayNumber(event.startDate)}</span>
       <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)}</span>
-      <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">source</a>
+      <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
     </label>`;
 }
 
@@ -525,7 +536,7 @@ function renderApprovedTile(event: EventDetail): string {
     <span class="day-tile day-tile-approved" data-id="${event.id}">
       <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
       <span class="day-tile-day">${dayNumber(event.startDate)}</span>
-      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)} · ✓ approved</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)} · ${t('common.approved')}</span>
     </span>`;
 }
 
