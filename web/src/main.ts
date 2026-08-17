@@ -14,6 +14,9 @@ import {
   signOut,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
+import { detectLocale, setLocale, t, type MessageKey } from './i18n';
+
+setLocale(detectLocale());
 
 const root = document.getElementById('root')!;
 root.before(renderMasthead());
@@ -26,16 +29,16 @@ const errorMessage = document.createElement('span');
 const errorDismiss = document.createElement('button');
 errorDismiss.type = 'button';
 errorDismiss.className = 'error-dismiss';
-errorDismiss.setAttribute('aria-label', 'Dismiss error');
+errorDismiss.setAttribute('aria-label', t('error.dismissAria'));
 errorDismiss.textContent = '×';
 errorDismiss.addEventListener('click', clearError);
 errorBanner.appendChild(errorMessage);
 errorBanner.appendChild(errorDismiss);
 root.before(errorBanner);
 
-function showError(context: string, err: unknown): void {
-  console.error(`[dontforget] ${context} failed:`, err);
-  errorMessage.textContent = `Something went wrong while ${context}. Please try again.`;
+function showError(key: MessageKey, err: unknown): void {
+  console.error(`[dontforget] ${key} failed:`, err);
+  errorMessage.textContent = t(key);
   errorBanner.hidden = false;
 }
 
@@ -61,7 +64,7 @@ async function refreshDashboard(): Promise<void> {
       })
     );
   } catch (err) {
-    showError('loading your dashboard', err);
+    showError('error.loadingDashboard', err);
   }
 }
 
@@ -71,7 +74,7 @@ function paint() {
       clearError();
       requestMagicLink(email)
         .then(() => setState(reducer(state, { type: 'MAGIC_LINK_SENT' })))
-        .catch(err => showError('requesting your sign-in link', err));
+        .catch(err => showError('error.requestingLink', err));
     },
     onSubmitQuery: (text, recurrenceInterval) => {
       // Snapshot origin before the optimistic transition — after it the
@@ -84,7 +87,7 @@ function paint() {
           setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates, suggestedInterval }));
         })
         .catch(err => {
-          showError('searching', err);
+          showError('error.searching', err);
           // A returning user's failed search should return them to their
           // saved queries, not a blank workspace.
           if (fromDashboard) refreshDashboard();
@@ -115,7 +118,7 @@ function paint() {
             setState(reducer(state, { type: 'APPROVE_RESOLVED', icsUrl, rssUrl, approved }));
           }
         })
-        .catch(err => showError('approving events', err));
+        .catch(err => showError('error.approving', err));
     },
     onCancelSearch: () => {
       clearError();
@@ -131,7 +134,7 @@ function paint() {
       // The dashboard card opens immediately; the events for it load async.
       getQueryEvents(queryId)
         .then(events => setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events })))
-        .catch(err => showError('loading events', err));
+        .catch(err => showError('error.loadingEvents', err));
     },
     onToggleEditEvent: id => {
       setState(reducer(state, { type: 'TOGGLE_EDIT_EVENT', id }));
@@ -154,7 +157,7 @@ function paint() {
           return undefined;
         })
         .then(() => refreshDashboard())
-        .catch(err => showError('saving changes', err));
+        .catch(err => showError('error.saving', err));
     },
     onDeleteQuery: queryId => {
       clearError();
@@ -167,7 +170,7 @@ function paint() {
             setState(reducer(state, { type: 'QUERY_DELETED', queryId }));
           }
         })
-        .catch(err => showError('deleting query', err));
+        .catch(err => showError('error.deleting', err));
     },
     onRotateFeedToken: () => {
       clearError();
@@ -175,7 +178,7 @@ function paint() {
         .then(({ icsUrl, rssUrl }) => {
           setState(reducer(state, { type: 'FEED_ROTATED', icsUrl, rssUrl }));
         })
-        .catch(err => showError('rotating your feed URL', err));
+        .catch(err => showError('error.rotating', err));
     },
     onGoToDashboard: () => {
       clearError();
@@ -189,7 +192,7 @@ function paint() {
       clearError();
       signOut()
         .then(() => setState({ kind: 'signedOut' }))
-        .catch(err => showError('signing out', err));
+        .catch(err => showError('error.signingOut', err));
     },
   });
 }
@@ -213,6 +216,6 @@ checkSession()
     });
   })
   .catch(err => {
-    showError('loading dontforget', err);
+    showError('error.loadingApp', err);
     setState({ kind: 'signedOut' });
   });
