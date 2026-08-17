@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/dachrisch/dontforget/compare/v0.9.1...v0.10.0) (2026-08-17)
+
+
+### Features
+
+* styled HTML magic link email with plain-text fallback ([#77](https://github.com/dachrisch/dontforget/issues/77)) ([cc7a8d1](https://github.com/dachrisch/dontforget/commit/cc7a8d18a93dfa7b1cc1765798b1517babe81213))
+
 ## [0.9.1](https://github.com/dachrisch/dontforget/compare/v0.9.0...v0.9.1) (2026-08-16)
 
 
