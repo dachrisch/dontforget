@@ -36,7 +36,7 @@ export class MagicLinkService {
     // persisted above, so a late/lost email only wastes a token, never
     // blocks the user.
     void this.emailSender
-      .send(email, 'Your dontforget sign-in link', `Sign in: ${link}`)
+      .send(email, 'Your dontforget sign-in link', `Sign in: ${link}`, magicLinkHtml(link))
       .catch(err => {
         console.error(`[dontforget] failed to send sign-in link to ${email}:`, err);
       });
@@ -73,4 +73,39 @@ export class MagicLinkService {
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function magicLinkHtml(link: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in to dontforget</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:40px 20px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+  <tr><td style="padding:32px 32px 16px;">
+    <h1 style="margin:0 0 8px;font-size:22px;font-weight:600;color:#1a1a2e;">dontforget</h1>
+    <p style="margin:0;font-size:15px;color:#555;line-height:1.5;">Sign in to your account</p>
+  </td></tr>
+  <tr><td style="padding:0 32px 32px;">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;">
+    <tr><td style="padding:24px 0;">
+      <a href="${link}" style="display:block;background-color:#2563eb;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;text-align:center;padding:14px 24px;border-radius:8px;">Sign in to dontforget</a>
+    </td></tr>
+    </table>
+    <p style="margin:0 0 4px;font-size:14px;color:#666;line-height:1.5;">Or copy this link:<br><span style="word-break:break-all;font-size:13px;color:#2563eb;">${link}</span></p>
+  </td></tr>
+  <tr><td style="padding:16px 32px;background-color:#f9fafb;border-top:1px solid #eee;">
+    <p style="margin:0;font-size:13px;color:#888;line-height:1.5;">This link expires in 15 minutes and can only be used once. If you didn't request this, you can safely ignore this email.</p>
+  </td></tr>
+</table>
+<p style="margin:24px 0 0;font-size:12px;color:#999;">dontforget &mdash; recurring event reminders</p>
+</td></tr>
+</table>
+</body>
+</html>`;
 }

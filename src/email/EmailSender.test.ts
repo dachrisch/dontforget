@@ -24,4 +24,20 @@ describe('SmtpEmailSender', () => {
       text: 'Body',
     });
   });
+
+  it('includes html when provided', async () => {
+    const sendMail = vi.fn().mockResolvedValue(undefined);
+    const transporter: MailTransporter = { sendMail };
+    const sender = new SmtpEmailSender(transporter, 'dontforget@lehel.xyz');
+
+    await sender.send('a@example.com', 'Subject', 'Body', '<p>Hello</p>');
+
+    expect(sendMail).toHaveBeenCalledWith({
+      from: 'dontforget@lehel.xyz',
+      to: 'a@example.com',
+      subject: 'Subject',
+      text: 'Body',
+      html: '<p>Hello</p>',
+    });
+  });
 });
