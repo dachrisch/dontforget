@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/dachrisch/dontforget/compare/v0.10.0...v0.10.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* exponential backoff and fallback model for opencode extraction ([#79](https://github.com/dachrisch/dontforget/issues/79)) ([d5e9222](https://github.com/dachrisch/dontforget/commit/d5e9222df6cb795595b5c36a68ca6c494162bcde))
+
 ## [0.10.0](https://github.com/dachrisch/dontforget/compare/v0.9.1...v0.10.0) (2026-08-17)
 
 
