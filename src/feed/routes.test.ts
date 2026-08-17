@@ -32,7 +32,7 @@ describe('feed routes', () => {
     const token = icsUrl.split('/f/')[1].replace('.ics', '');
 
     const app = Fastify();
-    registerFeedRoutes(app, { db });
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
 
     const icsResponse = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
     expect(icsResponse.statusCode).toBe(200);
@@ -46,6 +46,32 @@ describe('feed routes', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('builds the RSS channel link from the configured public base URL, not the request protocol', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'rss@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'https://dontforget.lehel.xyz'))!;
+    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db, publicBaseUrl: 'https://dontforget.lehel.xyz' });
+
+    const rssResponse = await app.inject({
+      method: 'GET',
+      url: `/f/${token}.rss`,
+      headers: { 'x-forwarded-proto': 'http' },
+    });
+
+    expect(rssResponse.statusCode).toBe(200);
+    // Behind Traefik the request protocol reads as http; the channel link
+    // must still use the configured https public base URL so feed readers
+    // and validators don't end up on an http link.
+    expect(rssResponse.body).toContain(`<link>https://dontforget.lehel.xyz/f/${token}</link>`);
+    expect(rssResponse.body).not.toContain('<link>http://');
+  });
+
   it('records when the calendar was last fetched', async () => {
     const { insertedId } = await db.collection('users').insertOne({ email: 'j@example.com' });
     const userId = insertedId.toString();
@@ -56,7 +82,7 @@ describe('feed routes', () => {
     const token = icsUrl.split('/f/')[1].replace('.ics', '');
 
     const app = Fastify();
-    registerFeedRoutes(app, { db });
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
 
     const before = await db.collection('feed_tokens').findOne({ token });
     expect(before?.last_fetched_at).toBeUndefined();
@@ -86,7 +112,7 @@ describe('feed routes', () => {
     const token = icsUrl.split('/f/')[1].replace('.ics', '');
 
     const app = Fastify();
-    registerFeedRoutes(app, { db });
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
 
     const icsResponse = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
     expect(icsResponse.body.indexOf('Frühjahrsdult')).toBeLessThan(icsResponse.body.indexOf('Jakobidult'));

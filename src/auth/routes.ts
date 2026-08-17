@@ -9,14 +9,22 @@ export interface AuthRouteDeps {
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): void {
-  app.post<{ Body: { email: string } }>('/api/auth/magic-link', async (request, reply) => {
-    const email = request.body?.email;
-    if (!email || !email.includes('@')) {
-      return reply.code(400).send({ error: 'invalid email' });
+  app.post<{ Body: { email: string } }>(
+    '/api/auth/magic-link',
+    // Each request fires an email, so this route is the spam/abuse vector —
+    // tighten the app-wide 100/min ceiling to a few requests per minute.
+    // Attackers can still vary the target email, so don't key by email;
+    // per-IP (the plugin default) is the right bucket here.
+    { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const email = request.body?.email;
+      if (!email || !email.includes('@')) {
+        return reply.code(400).send({ error: 'invalid email' });
+      }
+      await deps.magicLinkService.requestLink(email);
+      return reply.code(202).send({ sent: true });
     }
-    await deps.magicLinkService.requestLink(email);
-    return reply.code(202).send({ sent: true });
-  });
+  );
 
   app.get<{ Querystring: { token: string } }>('/api/auth/callback', async (request, reply) => {
     const token = request.query?.token;

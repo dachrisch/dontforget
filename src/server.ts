@@ -37,7 +37,7 @@ async function main() {
   const isProduction = process.env.NODE_ENV === 'production';
   const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
 
-  const app = buildApp({
+  const app = await buildApp({
     db,
     emailSender,
     publicBaseUrl,

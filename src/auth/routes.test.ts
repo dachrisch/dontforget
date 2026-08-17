@@ -18,7 +18,7 @@ function fakeDb(): Db {
 describe('auth routes', () => {
   it('POST /api/auth/magic-link accepts an email and returns 202', async () => {
     const emailSender = new CapturingEmailSender();
-    const app = buildApp({
+    const app = await buildApp({
       db: fakeDb(),
       emailSender,
       publicBaseUrl: 'http://localhost:3000',
@@ -37,7 +37,7 @@ describe('auth routes', () => {
   });
 
   it('POST /api/auth/magic-link returns 400, not 500, with no request body', async () => {
-    const app = buildApp({
+    const app = await buildApp({
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -49,8 +49,29 @@ describe('auth routes', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('POST /api/auth/magic-link returns 429 after the per-IP limit is exceeded', async () => {
+    const emailSender = new CapturingEmailSender();
+    const app = await buildApp({
+      db: fakeDb(),
+      emailSender,
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const responses: Awaited<ReturnType<typeof app.inject>>[] = [];
+    for (let i = 0; i < 6; i++) {
+      responses.push(
+        await app.inject({ method: 'POST', url: '/api/auth/magic-link', payload: { email: 'a@example.com' } })
+      );
+    }
+
+    expect(responses.slice(0, 5).map(r => r.statusCode)).toEqual([202, 202, 202, 202, 202]);
+    expect(responses[5].statusCode).toBe(429);
+  });
+
   it('GET /api/auth/callback returns 400 for a missing token', async () => {
-    const app = buildApp({
+    const app = await buildApp({
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -63,7 +84,7 @@ describe('auth routes', () => {
   });
 
   it('GET /api/auth/callback redirects to frontendUrl, not a hardcoded /', async () => {
-    const app = buildApp({
+    const app = await buildApp({
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -78,7 +99,7 @@ describe('auth routes', () => {
   });
 
   it('GET /api/me returns 401 with no session cookie', async () => {
-    const app = buildApp({
+    const app = await buildApp({
       db: fakeDb(),
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
@@ -92,7 +113,7 @@ describe('auth routes', () => {
 
   it('POST /api/auth/signout deletes the session and clears the cookie', async () => {
     const db = fakeDb();
-    const app = buildApp({
+    const app = await buildApp({
       db,
       emailSender: new CapturingEmailSender(),
       publicBaseUrl: 'http://localhost:3000',
