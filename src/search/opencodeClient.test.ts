@@ -185,8 +185,65 @@ describe('extractDates', () => {
     });
   });
 
-  it('throws the last error after exhausting all retry attempts', async () => {
+  it('increases the backoff delay before each successive retry', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_a'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'))
+      .mockResolvedValueOnce(sessionResponse('ses_b'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'))
+      .mockResolvedValueOnce(sessionResponse('ses_c'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(fetchMock).toHaveBeenCalledTimes(3); // still waiting out attempt 1's 1s backoff
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(6); // attempt 2 fired at 1s, failed, now backing off
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(fetchMock).toHaveBeenCalledTimes(6); // still waiting out attempt 2's longer, 2s backoff
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fetchMock).toHaveBeenCalledTimes(9); // attempt 3 fired at the 2s mark
+
+    const result = await promise;
+    vi.useRealTimers();
+    expect(result).toEqual({ events: [], cadence: null });
+  });
+
+  it('falls back to the backup model after the primary model exhausts all its attempts', async () => {
     for (let i = 0; i < 3; i++) {
+      fetchMock
+        .mockResolvedValueOnce(sessionResponse(`ses_primary_${i}`))
+        .mockResolvedValueOnce(promptAckResponse())
+        .mockResolvedValueOnce(generationErrorResponse('Provider request failed with HTTP 429: rate limited'));
+    }
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_fallback'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    await vi.runAllTimersAsync();
+    const result = await promise;
+
+    vi.useRealTimers();
+    expect(fetchMock).toHaveBeenCalledTimes(12);
+    expect(JSON.parse(fetchMock.mock.calls[9][1].body)).toEqual({
+      model: { id: 'big-pickle', providerID: 'opencode' },
+    });
+    expect(result).toEqual({ events: [], cadence: null });
+  });
+
+  it('throws the last error after exhausting all retry attempts on both models', async () => {
+    for (let i = 0; i < 6; i++) {
       fetchMock
         .mockResolvedValueOnce(sessionResponse(`ses_${i}`))
         .mockResolvedValueOnce(promptAckResponse())
@@ -200,6 +257,6 @@ describe('extractDates', () => {
     await assertion;
 
     vi.useRealTimers();
-    expect(fetchMock).toHaveBeenCalledTimes(9);
+    expect(fetchMock).toHaveBeenCalledTimes(18);
   });
 });

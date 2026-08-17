@@ -121,12 +121,18 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
   return wrapper;
 }
 
+// A search that hits opencode retry/fallback (see opencodeClient.ts) can
+// run well past a normal search's ~30-45s — confirmed against production
+// logs on 2026-08-17. Reassure the user instead of leaving a static message
+// that starts to look stuck.
+const LONGER_THAN_USUAL_DELAY_MS = 60_000;
+
 function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <span class="chip-torn">${escapeHtml(queryText)}</span>
     <p class="loading-status">
-      Searching → extracting dates…
+      <span class="loading-status-text">Searching → extracting dates…</span>
       <span class="ticks">
         <span class="tick"></span>
         <span class="tick"></span>
@@ -138,6 +144,16 @@ function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElem
   wrapper.querySelector('button[data-action=cancel-search]')!.addEventListener('click', () => {
     handlers.onCancelSearch();
   });
+  const statusText = wrapper.querySelector('.loading-status-text')!;
+  setTimeout(() => {
+    // The wrapper is torn down (state resolved, failed, or cancelled) long
+    // before most searches ever reach this delay — skip a pointless write
+    // to a detached node rather than track a cancellation handle for it.
+    // (Not `isConnected`: that's relative to `document`, and callers in
+    // tests render into a container that's never attached to it.)
+    if (!wrapper.parentElement) return;
+    statusText.textContent = 'Still working — this is taking longer than usual…';
+  }, LONGER_THAN_USUAL_DELAY_MS);
   return wrapper;
 }
 

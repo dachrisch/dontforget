@@ -41,10 +41,14 @@ interface OpencodeMessage {
 }
 
 // The upstream LLM provider behind opencode is occasionally flaky (503
-// "Endpoint is unavailable", or a poll timeout) — observed live during
-// testing, not something dontforget or opencode itself can prevent. Retry
-// the whole flow (a fresh session each time) a few times before giving up,
-// so a single transient blip doesn't force the user to resubmit manually.
+// "Endpoint is unavailable", 429 rate limiting, or a poll timeout) —
+// confirmed against production logs on 2026-08-17: 4 of the last 6 real
+// submissions failed this way, none rescued by the flat 1s retry delay that
+// used to be here (a 429 rate limit doesn't clear in 1s). Two changes:
+// exponential backoff between attempts on the same model gives a rate limit
+// or blip more time to clear, and MODEL_TIERS lets a persistently
+// unhealthy model (all MAX_ATTEMPTS exhausted) fail over to a different
+// model on the same provider rather than give up entirely.
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
@@ -55,16 +59,18 @@ export async function extractDates(
   results: SearchResult[]
 ): Promise<ExtractionResult> {
   let lastError: unknown;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const sessionId = await createSession(baseUrl, apiKey);
-      await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
-      const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-      return parseExtraction(replyText);
-    } catch (err) {
-      lastError = err;
-      if (attempt < MAX_ATTEMPTS) {
-        await sleep(RETRY_DELAY_MS);
+  for (const model of MODEL_TIERS) {
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      try {
+        const sessionId = await createSession(baseUrl, apiKey, model);
+        await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+        const replyText = await pollForReply(baseUrl, apiKey, sessionId);
+        return parseExtraction(replyText);
+      } catch (err) {
+        lastError = err;
+        if (attempt < MAX_ATTEMPTS) {
+          await sleep(RETRY_DELAY_MS * 2 ** (attempt - 1));
+        }
       }
     }
   }
@@ -78,11 +84,24 @@ export async function extractDates(
 // same time instead of relying on whatever opencode defaults to.
 const MODEL = { id: 'deepseek-v4-flash-free', providerID: 'opencode' };
 
-async function createSession(baseUrl: string, apiKey: string): Promise<string> {
+// Backup model tried only after MODEL exhausts every attempt above — a
+// distinct free model on the same "opencode" (OpenCode Zen) provider,
+// confirmed live 2026-08-17 to be active/enabled. Rate limits and outages
+// on MODEL are provider-side per-model, so a different model is likely
+// unaffected even when MODEL itself is down.
+const FALLBACK_MODEL = { id: 'big-pickle', providerID: 'opencode' };
+
+const MODEL_TIERS = [MODEL, FALLBACK_MODEL];
+
+async function createSession(
+  baseUrl: string,
+  apiKey: string,
+  model: { id: string; providerID: string }
+): Promise<string> {
   const response = await undiciFetch(`${baseUrl}/api/session`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-    body: JSON.stringify({ model: MODEL }),
+    body: JSON.stringify({ model }),
     dispatcher: insecureDispatcher,
   });
   if (!response.ok) {
