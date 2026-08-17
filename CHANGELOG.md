@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/dachrisch/dontforget/compare/v0.10.1...v0.10.2) (2026-08-17)
+
+
+### Bug Fixes
+
+* use https public base URL in RSS channel link and rate-limit magic-link requests ([#81](https://github.com/dachrisch/dontforget/issues/81)) ([251d70f](https://github.com/dachrisch/dontforget/commit/251d70fc19c3c7ed5be4c4923fabaddc82d85c6c))
+
 ## [0.10.1](https://github.com/dachrisch/dontforget/compare/v0.10.0...v0.10.1) (2026-08-17)
 
 
