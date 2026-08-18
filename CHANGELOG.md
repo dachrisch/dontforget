@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/dachrisch/dontforget/compare/v0.11.2...v0.12.0) (2026-08-18)
+
+
+### Features
+
+* one-click add-to-calendar buttons with service icons ([#90](https://github.com/dachrisch/dontforget/issues/90)) ([4615ab3](https://github.com/dachrisch/dontforget/commit/4615ab3f7d0762460bdd0a5b95b1e6695c51fe07))
+
 ## [0.11.2](https://github.com/dachrisch/dontforget/compare/v0.11.1...v0.11.2) (2026-08-18)
 
 
