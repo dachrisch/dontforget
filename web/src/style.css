@@ -468,6 +468,44 @@ h1, h2 {
   color: var(--accent);
 }
 
+.calendar-add-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: flex-end;
+  margin-top: 0.4rem;
+}
+
+.calendar-add-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.calendar-add-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.calendar-add-icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+}
+
 .ruled-select {
   border: none;
   border-bottom: 1px solid var(--rule);

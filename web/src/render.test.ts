@@ -304,6 +304,17 @@ describe('renderWorkspace', () => {
     expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
     expect(container.querySelectorAll('.copy-button')).toHaveLength(2);
 
+    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.calendar-add-button');
+    expect(addButtons).toHaveLength(3);
+    expect(container.querySelector('.calendar-add-buttons')!.textContent).toContain('Google Calendar');
+    expect(addButtons[0].getAttribute('href')).toBe(
+      `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
+    );
+    expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
+    expect(addButtons[2].getAttribute('href')).toBe(
+      `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
+    );
+
     container.querySelector<HTMLButtonElement>('button[data-action=dashboard]')!.click();
     expect(handlers.onGoToDashboard).toHaveBeenCalled();
     container.querySelector<HTMLButtonElement>('button[data-action=search-another]')!.click();
@@ -346,6 +357,7 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
     expect(container.querySelectorAll('.feed-summary .copy-button')).toHaveLength(2);
+    expect(container.querySelectorAll('.feed-summary .calendar-add-button')).toHaveLength(3);
 
     container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
     expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
