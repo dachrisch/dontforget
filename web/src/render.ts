@@ -288,8 +288,8 @@ function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHand
   wrapper.innerHTML = `
     <h2 class="dashboard-section-title">${t('feedReady.title')}</h2>
     <p class="subtext">${t('feedReady.subtext')}</p>
-    ${renderFeedRow(t('common.calendarIcs'), icsUrl, true)}
-    ${renderFeedRow(t('common.rss'), rssUrl)}
+    ${renderFeedRow(t('common.calendarIcs'), icsUrl, 'ics')}
+    ${renderFeedRow(t('common.rss'), rssUrl, 'rss')}
     <div class="edit-actions">
       <button class="stamp-button" type="button" data-action="dashboard">${t('feedReady.dashboard')}</button>
       <button class="stamp-button stamp-button-quiet" type="button" data-action="search-another">${t('feedReady.searchAnother')}</button>
@@ -305,32 +305,45 @@ function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHand
   return wrapper;
 }
 
-// One calendar feed row: label, the copyable URL, and a copy button. The
-// ICS row additionally gets one-click "add to" buttons per calendar app.
-function renderFeedRow(label: string, url: string, addToCalendar = false): string {
-  const addButtons = addToCalendar
-    ? `
-    <div class="calendar-add-buttons">
-      ${CALENDAR_PROVIDERS.map(provider => {
-        const name = t(provider.labelKey);
+// One calendar feed row: label, the clickable URL, and a compact row of
+// icon actions underneath. The ICS row offers a download, the three
+// "add to" providers, and copy; the RSS row offers an open-feed link and
+// copy. Every action is icon-only with a tooltip/aria-label.
+function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string {
+  const providerLinks = kind === 'ics'
+    ? CALENDAR_PROVIDERS.map(provider => {
+        const labelText = t('calendarAdd.aria', { name: t(provider.labelKey) });
         return `
-        <a class="calendar-add-button" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" aria-label="${escapeHtml(t('calendarAdd.aria', { name }))}">
-          <img class="calendar-add-icon" src="${provider.icon}" alt="" aria-hidden="true" />
-          ${escapeHtml(name)}
+        <a class="feed-action" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
+          <img class="feed-action-brand" src="${provider.icon}" alt="" aria-hidden="true" />
         </a>`;
-      }).join('')}
-    </div>`
+      }).join('')
     : '';
+
+  const actions = `
+      ${kind === 'ics'
+        ? `<a class="feed-action" href="${escapeHtml(url)}" download title="${escapeHtml(t('calendarAction.download'))}" aria-label="${escapeHtml(t('calendarAction.download'))}">${DOWNLOAD_ICON}</a>`
+        : `<a class="feed-action" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(t('calendarAction.openRss'))}" aria-label="${escapeHtml(t('calendarAction.openRss'))}">${RSS_ICON}</a>`}
+      ${providerLinks}
+      <button type="button" class="feed-action copy-button" data-copy="${escapeHtml(url)}" title="${escapeHtml(t('common.copy'))}" aria-label="${escapeHtml(t('common.copy'))}">${COPY_ICON}</button>`;
+
   return `
     <div class="ledger-row">
       <span class="ledger-label">${label}</span>
       <span class="ledger-value-cell">
         <a class="ledger-value" href="${escapeHtml(url)}">${escapeHtml(url)}</a>
-        <button type="button" class="copy-button" data-copy="${escapeHtml(url)}">${t('common.copy')}</button>
       </span>
-    </div>${addButtons}
+    </div>
+    <div class="feed-actions">${actions}</div>
   `;
 }
+
+// Monochrome line icons for the action buttons. They inherit the button
+// color via `currentColor`, so the hover state just changes the text color.
+const COPY_ICON = `<svg class="feed-action-icon icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>`;
+const CHECK_ICON = `<svg class="feed-action-icon icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12.5l5 5L20 6.5"/></svg>`;
+const DOWNLOAD_ICON = `<svg class="feed-action-icon icon-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M6 9l6 6 6-6"/><path d="M4 20h16"/></svg>`;
+const RSS_ICON = `<svg class="feed-action-icon icon-rss" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.6" fill="currentColor" stroke="none"/></svg>`;
 
 // Calendar apps subscribe to the ICS feed over the `webcal://` scheme; the
 // endpoint itself is plain HTTP, so this is just an alias for https.
@@ -371,9 +384,9 @@ function wireCopyButtons(root: HTMLElement): void {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(url);
         }
-        button.textContent = t('common.copied');
+        button.innerHTML = CHECK_ICON;
         setTimeout(() => {
-          button.textContent = t('common.copy');
+          button.innerHTML = COPY_ICON;
         }, 1500);
       } catch {
         // Clipboard unavailable — leave the URL selectable/copyable by hand.
@@ -437,8 +450,8 @@ function renderDashboard(
       ${
         feed
           ? `
-            ${renderFeedRow(t('common.calendarIcs'), feed.icsUrl, true)}
-            ${renderFeedRow(t('common.rss'), feed.rssUrl)}
+            ${renderFeedRow(t('common.calendarIcs'), feed.icsUrl, 'ics')}
+            ${renderFeedRow(t('common.rss'), feed.rssUrl, 'rss')}
             <div class="ledger-row">
               <span class="ledger-label">${t('dashboard.lastSynced')}</span>
               <span class="ledger-value">${feed.lastFetchedAt ? escapeHtml(formatTimestamp(feed.lastFetchedAt)) : t('dashboard.never')}</span>

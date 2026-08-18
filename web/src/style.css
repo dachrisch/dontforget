@@ -448,61 +448,42 @@ h1, h2 {
   justify-content: flex-end;
 }
 
-.copy-button {
-  background: none;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  color: var(--ink-muted);
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0.2rem 0.5rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.copy-button:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.calendar-add-buttons {
+.feed-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
   justify-content: flex-end;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
 }
 
-.calendar-add-button {
+.feed-action {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  justify-content: center;
+  width: 1.8rem;
+  height: 1.8rem;
   background: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   color: var(--ink-muted);
-  font-family: var(--font-body);
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  text-decoration: none;
-  padding: 0.2rem 0.5rem;
+  padding: 0;
   cursor: pointer;
-  white-space: nowrap;
+  text-decoration: none;
 }
 
-.calendar-add-button:hover {
+.feed-action:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.calendar-add-icon {
+.feed-action-icon {
   width: 1rem;
   height: 1rem;
+}
+
+.feed-action-brand {
+  width: 1.2rem;
+  height: 1.2rem;
   display: block;
 }
 
