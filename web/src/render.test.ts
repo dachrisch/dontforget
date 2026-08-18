@@ -303,17 +303,25 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('https://x/f/t.rss');
     expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
     expect(container.querySelectorAll('.copy-button')).toHaveLength(2);
+    expect(container.querySelectorAll('.feed-action')).toHaveLength(7);
 
-    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.calendar-add-button');
-    expect(addButtons).toHaveLength(3);
-    expect(container.querySelector('.calendar-add-buttons')!.textContent).toContain('Google Calendar');
-    expect(addButtons[0].getAttribute('href')).toBe(
+    const downloadLink = container.querySelector<HTMLAnchorElement>('a.feed-action[download]')!;
+    expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
+    expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
+
+    const actionLinks = container.querySelectorAll<HTMLAnchorElement>('a.feed-action');
+    expect(actionLinks[1].getAttribute('href')).toBe(
       `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
     );
-    expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
-    expect(addButtons[2].getAttribute('href')).toBe(
+    expect(actionLinks[2].getAttribute('href')).toBe('webcal://x/f/t.ics');
+    expect(actionLinks[3].getAttribute('href')).toBe(
       `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
     );
+
+    const rssActions = container.querySelectorAll<HTMLElement>('.feed-actions')[1];
+    const rssLink = rssActions.querySelector<HTMLAnchorElement>('a.feed-action')!;
+    expect(rssLink.getAttribute('href')).toBe('https://x/f/t.rss');
+    expect(rssLink.getAttribute('aria-label')).toBe('Open RSS feed');
 
     container.querySelector<HTMLButtonElement>('button[data-action=dashboard]')!.click();
     expect(handlers.onGoToDashboard).toHaveBeenCalled();
@@ -321,7 +329,7 @@ describe('renderWorkspace', () => {
     expect(handlers.onStartOver).toHaveBeenCalled();
   });
 
-  it('shows "Copied" feedback when a copy button is clicked', () => {
+  it('swaps the copy icon for a check when a copy button is clicked', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
@@ -331,7 +339,7 @@ describe('renderWorkspace', () => {
 
     const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
     copyButton.click();
-    expect(copyButton.textContent).toBe('Copied');
+    expect(copyButton.querySelector('.icon-check')).not.toBeNull();
   });
 
   it('renders the dashboard with saved queries, schedules, counts and feed info', () => {
@@ -357,7 +365,7 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('https://x/f/t.ics');
     expect(container.textContent).toContain('https://x/f/t.rss');
     expect(container.querySelectorAll('.feed-summary .copy-button')).toHaveLength(2);
-    expect(container.querySelectorAll('.feed-summary .calendar-add-button')).toHaveLength(3);
+    expect(container.querySelectorAll('.feed-summary .feed-action')).toHaveLength(7);
 
     container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
     expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
