@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/dachrisch/dontforget/compare/v0.12.0...v0.13.0) (2026-08-18)
+
+
+### Features
+
+* streamline feed rows to icon-only actions with download and RSS ([#92](https://github.com/dachrisch/dontforget/issues/92)) ([f5bbad3](https://github.com/dachrisch/dontforget/commit/f5bbad359d7fb294a44acd718e0606534aa09540))
+
 ## [0.12.0](https://github.com/dachrisch/dontforget/compare/v0.11.2...v0.12.0) (2026-08-18)
 
 
