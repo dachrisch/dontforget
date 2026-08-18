@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/dachrisch/dontforget/compare/v0.11.0...v0.11.1) (2026-08-18)
+
+
+### Bug Fixes
+
+* no-results state, tap-to-select suggestions, mobile AI-hint layout ([#86](https://github.com/dachrisch/dontforget/issues/86)) ([ce5c0e4](https://github.com/dachrisch/dontforget/commit/ce5c0e4a17eb521c4e6d6a4cbf22131713b5bdf2))
+
 ## [0.11.0](https://github.com/dachrisch/dontforget/compare/v0.10.2...v0.11.0) (2026-08-17)
 
 
