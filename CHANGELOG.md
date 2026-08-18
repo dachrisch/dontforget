@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/dachrisch/dontforget/compare/v0.11.1...v0.11.2) (2026-08-18)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v4.1.11 ([#88](https://github.com/dachrisch/dontforget/issues/88)) ([d3f48ed](https://github.com/dachrisch/dontforget/commit/d3f48ed137c4b5ce36666f0473546df52311e271))
+
 ## [0.11.1](https://github.com/dachrisch/dontforget/compare/v0.11.0...v0.11.1) (2026-08-18)
 
 
