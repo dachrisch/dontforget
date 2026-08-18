@@ -305,36 +305,39 @@ function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHand
   return wrapper;
 }
 
-// One calendar feed row: label, the clickable URL, and a compact row of
-// icon actions underneath. The ICS row offers a download, the three
-// "add to" providers, and copy; the RSS row offers an open-feed link and
-// copy. Every action is icon-only with a tooltip/aria-label.
+// One calendar feed row: label, and the feed's actions. The ICS row leads
+// with big "add to" buttons per calendar app and tucks the download and
+// copy away as small icons; the RSS row offers a small open-feed link and
+// copy. The raw URL is deliberately hidden — copy hands it to the
+// clipboard.
 function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string {
-  const providerLinks = kind === 'ics'
-    ? CALENDAR_PROVIDERS.map(provider => {
-        const labelText = t('calendarAdd.aria', { name: t(provider.labelKey) });
+  const addButtons = kind === 'ics'
+    ? `
+    <div class="feed-add-buttons">
+      ${CALENDAR_PROVIDERS.map(provider => {
+        const name = t(provider.labelKey);
+        const labelText = t('calendarAdd.aria', { name });
         return `
-        <a class="feed-action" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
-          <img class="feed-action-brand" src="${provider.icon}" alt="" aria-hidden="true" />
+        <a class="feed-add-button" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
+          <img class="feed-add-brand" src="${provider.icon}" alt="" aria-hidden="true" />
+          ${escapeHtml(name)}
         </a>`;
-      }).join('')
+      }).join('')}
+    </div>`
     : '';
 
-  const actions = `
-      ${kind === 'ics'
-        ? `<a class="feed-action" href="${escapeHtml(url)}" download title="${escapeHtml(t('calendarAction.download'))}" aria-label="${escapeHtml(t('calendarAction.download'))}">${DOWNLOAD_ICON}</a>`
-        : `<a class="feed-action" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(t('calendarAction.openRss'))}" aria-label="${escapeHtml(t('calendarAction.openRss'))}">${RSS_ICON}</a>`}
-      ${providerLinks}
-      <button type="button" class="feed-action copy-button" data-copy="${escapeHtml(url)}" title="${escapeHtml(t('common.copy'))}" aria-label="${escapeHtml(t('common.copy'))}">${COPY_ICON}</button>`;
+  const smallAction = kind === 'ics'
+    ? `<a class="feed-action" href="${escapeHtml(url)}" download title="${escapeHtml(t('calendarAction.download'))}" aria-label="${escapeHtml(t('calendarAction.download'))}">${DOWNLOAD_ICON}</a>`
+    : `<a class="feed-action" href="${escapeHtml(url)}" target="_blank" rel="noopener" title="${escapeHtml(t('calendarAction.openRss'))}" aria-label="${escapeHtml(t('calendarAction.openRss'))}">${RSS_ICON}</a>`;
 
   return `
     <div class="ledger-row">
       <span class="ledger-label">${label}</span>
       <span class="ledger-value-cell">
-        <a class="ledger-value" href="${escapeHtml(url)}">${escapeHtml(url)}</a>
+        ${smallAction}
+        <button type="button" class="feed-action copy-button" data-copy="${escapeHtml(url)}" title="${escapeHtml(t('common.copy'))}" aria-label="${escapeHtml(t('common.copy'))}">${COPY_ICON}</button>
       </span>
-    </div>
-    <div class="feed-actions">${actions}</div>
+    </div>${addButtons}
   `;
 }
 

@@ -448,14 +448,6 @@ h1, h2 {
   justify-content: flex-end;
 }
 
-.feed-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
-}
-
 .feed-action {
   display: inline-flex;
   align-items: center;
@@ -481,9 +473,37 @@ h1, h2 {
   height: 1rem;
 }
 
-.feed-action-brand {
-  width: 1.2rem;
-  height: 1.2rem;
+.feed-add-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.feed-add-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.9rem;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.feed-add-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.feed-add-brand {
+  width: 1.4rem;
+  height: 1.4rem;
   display: block;
 }
 
