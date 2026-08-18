@@ -288,7 +288,7 @@ function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHand
   wrapper.innerHTML = `
     <h2 class="dashboard-section-title">${t('feedReady.title')}</h2>
     <p class="subtext">${t('feedReady.subtext')}</p>
-    ${renderFeedRow(t('common.calendarIcs'), icsUrl)}
+    ${renderFeedRow(t('common.calendarIcs'), icsUrl, true)}
     ${renderFeedRow(t('common.rss'), rssUrl)}
     <div class="edit-actions">
       <button class="stamp-button" type="button" data-action="dashboard">${t('feedReady.dashboard')}</button>
@@ -305,8 +305,22 @@ function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHand
   return wrapper;
 }
 
-// One calendar feed row: label, the copyable URL, and a copy button.
-function renderFeedRow(label: string, url: string): string {
+// One calendar feed row: label, the copyable URL, and a copy button. The
+// ICS row additionally gets one-click "add to" buttons per calendar app.
+function renderFeedRow(label: string, url: string, addToCalendar = false): string {
+  const addButtons = addToCalendar
+    ? `
+    <div class="calendar-add-buttons">
+      ${CALENDAR_PROVIDERS.map(provider => {
+        const name = t(provider.labelKey);
+        return `
+        <a class="calendar-add-button" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" aria-label="${escapeHtml(t('calendarAdd.aria', { name }))}">
+          <img class="calendar-add-icon" src="${provider.icon}" alt="" aria-hidden="true" />
+          ${escapeHtml(name)}
+        </a>`;
+      }).join('')}
+    </div>`
+    : '';
   return `
     <div class="ledger-row">
       <span class="ledger-label">${label}</span>
@@ -314,9 +328,39 @@ function renderFeedRow(label: string, url: string): string {
         <a class="ledger-value" href="${escapeHtml(url)}">${escapeHtml(url)}</a>
         <button type="button" class="copy-button" data-copy="${escapeHtml(url)}">${t('common.copy')}</button>
       </span>
-    </div>
+    </div>${addButtons}
   `;
 }
+
+// Calendar apps subscribe to the ICS feed over the `webcal://` scheme; the
+// endpoint itself is plain HTTP, so this is just an alias for https.
+function webcalUrl(url: string): string {
+  return url.replace(/^https?:\/\//i, 'webcal://');
+}
+
+// Google's "add calendar" flow accepts the subscription URL in `cid`.
+function googleCalendarUrl(icsUrl: string): string {
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl(icsUrl))}`;
+}
+
+// Outlook's add-from-web page subscribes to the URL in `url`. `.live.com`
+// covers personal accounts; `outlook.office.com` is for work/school.
+function outlookCalendarUrl(icsUrl: string): string {
+  return `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(webcalUrl(icsUrl))}`;
+}
+
+// Apple Calendar has no deep link to subscribe programmatically — pointing
+// at the `webcal://` URL opens its "Add subscription" confirmation, so that
+// URL is used verbatim.
+const CALENDAR_PROVIDERS: Array<{
+  icon: string;
+  labelKey: MessageKey;
+  href: (url: string) => string;
+}> = [
+  { icon: '/icons/google-calendar.svg', labelKey: 'calendarAdd.google', href: googleCalendarUrl },
+  { icon: '/icons/apple-calendar.svg', labelKey: 'calendarAdd.apple', href: webcalUrl },
+  { icon: '/icons/outlook.svg', labelKey: 'calendarAdd.outlook', href: outlookCalendarUrl },
+];
 
 function wireCopyButtons(root: HTMLElement): void {
   root.querySelectorAll<HTMLButtonElement>('.copy-button').forEach(button => {
@@ -393,7 +437,7 @@ function renderDashboard(
       ${
         feed
           ? `
-            ${renderFeedRow(t('common.calendarIcs'), feed.icsUrl)}
+            ${renderFeedRow(t('common.calendarIcs'), feed.icsUrl, true)}
             ${renderFeedRow(t('common.rss'), feed.rssUrl)}
             <div class="ledger-row">
               <span class="ledger-label">${t('dashboard.lastSynced')}</span>
