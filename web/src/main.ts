@@ -78,8 +78,12 @@ function paint() {
     },
     onSubmitQuery: (text, recurrenceInterval) => {
       // Snapshot origin before the optimistic transition — after it the
-      // state is already `loading` and the dashboard data is gone.
-      const fromDashboard = state.kind === 'dashboard';
+      // state is already `loading` and the dashboard data is gone. A
+      // re-search from the no-results screen keeps a returning user's
+      // return path so a failed attempt lands back on their dashboard.
+      const fromDashboard =
+        state.kind === 'dashboard' ||
+        (state.kind === 'noResults' && state.fromDashboard === true);
       clearError();
       setState(reducer(state, { type: 'SUBMIT_QUERY', text }));
       submitQuery(text, recurrenceInterval)

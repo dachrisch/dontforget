@@ -491,6 +491,7 @@ h1, h2 {
 
 .interval-wrap {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 1rem;
 }
@@ -508,6 +509,15 @@ h1, h2 {
 .interval-hint {
   color: var(--ink-muted);
   font-size: 0.8rem;
+}
+
+/* The "AI suggested …" hint sits inline next to the cadence select on
+   desktop; on narrow screens that row overflows instead of wrapping. Give
+   the hint its own line there. */
+@media (max-width: 480px) {
+  .interval-hint {
+    flex-basis: 100%;
+  }
 }
 
 .dashboard-add {

@@ -40,11 +40,18 @@ interface ReviewState {
   fromDashboard?: boolean;
 }
 
+interface NoResultsState {
+  kind: 'noResults';
+  queryText: string;
+  fromDashboard?: boolean;
+}
+
 export type WorkspaceState =
   | { kind: 'signedOut' }
   | { kind: 'linkSent' }
   | { kind: 'empty'; queryText?: string }
   | LoadingState
+  | NoResultsState
   | ReviewState
   | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
   | DashboardState;
@@ -75,6 +82,9 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       if (state.kind === 'empty') {
         return { kind: 'loading', queryText: event.text };
       }
+      if (state.kind === 'noResults') {
+        return { kind: 'loading', queryText: event.text, fromDashboard: state.fromDashboard };
+      }
       if (state.kind === 'dashboard') {
         return { kind: 'loading', queryText: event.text, fromDashboard: true };
       }
@@ -82,10 +92,19 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
 
     case 'QUERY_RESOLVED': {
       if (state.kind !== 'loading') return state;
+      // A search that surfaces no candidate dates lands on a dedicated
+      // "nothing found" state with a way to change the term and search
+      // again, instead of a blank review screen with nothing to approve.
+      if (event.candidates.length === 0) {
+        return { kind: 'noResults', queryText: state.queryText, fromDashboard: state.fromDashboard };
+      }
+      // Suggested dates start unselected — tapping a tile selects it (the
+      // pre-checked default confused users: clicking to pick a date instead
+      // deselected it).
       const next: ReviewState = {
         kind: 'review',
         queryId: event.queryId,
-        candidates: event.candidates.map(c => ({ ...c, selected: true })),
+        candidates: event.candidates.map(c => ({ ...c, selected: false })),
         selectedInterval: event.suggestedInterval ?? DEFAULT_RECURRENCE_INTERVAL,
         suggestedInterval: event.suggestedInterval,
       };
@@ -140,9 +159,9 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         editing: {
           ...state.editing,
-          // Pending candidates start pre-selected, mirroring the first-search
-          // review flow; approved events are not re-selectable.
-          events: event.events.map(e => ({ ...e, selected: e.status === 'candidate' })),
+          // Pending candidates start unselected, mirroring the first-search
+          // review flow (tap to pick); approved events are not re-selectable.
+          events: event.events.map(e => ({ ...e, selected: false })),
         },
       };
     }

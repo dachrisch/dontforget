@@ -63,6 +63,8 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
       return renderLinkSent();
     case 'empty':
       return renderEmpty(handlers, state.queryText);
+    case 'noResults':
+      return renderNoResults(state.queryText, state.fromDashboard === true, handlers);
     case 'loading':
       return renderLoading(state.queryText, handlers);
     case 'review':
@@ -116,6 +118,35 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
     e.preventDefault();
     const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
     handlers.onSubmitQuery(text);
+  });
+  return wrapper;
+}
+
+// A search that completes but surfaces no candidate dates. The search is
+// saved (it will be re-run on schedule), but the user wants a way to adjust
+// the term or search again right now instead of staring at an empty review.
+function renderNoResults(queryText: string, fromDashboard: boolean, handlers: WorkspaceHandlers): HTMLElement {
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = `
+    <span class="chip-torn">${escapeHtml(queryText)}</span>
+    <p class="subtext no-results-message">${t('noResults.message', { query: escapeHtml(queryText) })}</p>
+    <form class="ruled-form">
+      <label class="entry-label" for="no-results-input">${t('empty.label')}</label>
+      <input class="ruled-input" id="no-results-input" name="query" value="${escapeHtml(queryText)}" placeholder="${t('empty.placeholder')}" required />
+      <button class="stamp-button" type="submit">${t('noResults.searchAgain')}</button>
+    </form>
+    <div class="edit-actions">
+      <button class="stamp-button stamp-button-quiet" type="button" data-action="no-results-cancel">${fromDashboard ? t('noResults.backToDashboard') : t('noResults.cancel')}</button>
+    </div>
+  `;
+  wrapper.querySelector('form')!.addEventListener('submit', e => {
+    e.preventDefault();
+    const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
+    handlers.onSubmitQuery(text);
+  });
+  wrapper.querySelector('button[data-action=no-results-cancel]')!.addEventListener('click', () => {
+    if (fromDashboard) handlers.onGoToDashboard();
+    else handlers.onStartOver();
   });
   return wrapper;
 }

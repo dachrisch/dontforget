@@ -103,6 +103,19 @@ describe('German rendering', () => {
     expect(container.textContent).toContain('Auswahl bestätigen (1)');
   });
 
+  it('renders the no-results state in German with the saved term and a re-search form', () => {
+    setLocale('de');
+    const container = document.createElement('div');
+    renderWorkspace(container, { kind: 'noResults', queryText: 'Auer Dult München' }, noopHandlers());
+
+    expect(container.textContent).toContain('Auer Dult München');
+    expect(container.textContent).toMatch(/keine Termine gefunden/i);
+    expect(container.textContent).toContain('Erneut suchen');
+    expect(container.textContent).toContain('Abbrechen');
+    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
+    expect(input.value).toBe('Auer Dult München');
+  });
+
   it('renders the dashboard with German labels', () => {
     setLocale('de');
     const container = document.createElement('div');
