@@ -70,6 +70,34 @@ describe('renderWorkspace', () => {
     expect(input.value).toBe('Auer Dult Munich');
   });
 
+  it('renders the no-results state with an editable term and a search-again action', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(container, { kind: 'noResults', queryText: 'Auer Dult Munich' }, handlers);
+
+    expect(container.textContent).toMatch(/no dates found/i);
+    expect(container.textContent).toContain('Auer Dult Munich');
+    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
+    expect(input.value).toBe('Auer Dult Munich');
+
+    input.value = 'Auer Dult dates';
+    container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult dates');
+
+    container.querySelector<HTMLButtonElement>('button[data-action=no-results-cancel]')!.click();
+    expect(handlers.onStartOver).toHaveBeenCalled();
+  });
+
+  it('routes the no-results cancel back to the dashboard for returning users', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(container, { kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true }, handlers);
+
+    expect(container.textContent).toMatch(/back to dashboard/i);
+    container.querySelector<HTMLButtonElement>('button[data-action=no-results-cancel]')!.click();
+    expect(handlers.onGoToDashboard).toHaveBeenCalled();
+  });
+
   it('renders the loading state with a torn-ticket chip, ticking indicator, and cancel action', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();

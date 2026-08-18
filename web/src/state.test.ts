@@ -15,7 +15,7 @@ describe('reducer', () => {
     expect(next).toEqual({ kind: 'loading', queryText: 'Auer Dult Munich' });
   });
 
-  it('moves from loading to review with all candidates pre-selected and the AI-suggested cadence', () => {
+  it('moves from loading to review with candidates unselected and the AI-suggested cadence', () => {
     const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
     const next = reducer(state, {
       type: 'QUERY_RESOLVED',
@@ -29,7 +29,7 @@ describe('reducer', () => {
       kind: 'review',
       queryId: 'q1',
       candidates: [
-        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate', selected: true },
+        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate', selected: false },
       ],
       selectedInterval: 'yearly',
       suggestedInterval: 'yearly',
@@ -42,9 +42,39 @@ describe('reducer', () => {
       type: 'QUERY_RESOLVED',
       queryId: 'q1',
       suggestedInterval: null,
-      candidates: [],
+      candidates: [
+        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' },
+      ],
     });
     expect(next).toMatchObject({ kind: 'review', selectedInterval: 'weekly', suggestedInterval: null });
+  });
+
+  it('moves to a "nothing found" state when the search returns no candidates', () => {
+    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
+    const next = reducer(state, {
+      type: 'QUERY_RESOLVED',
+      queryId: 'q1',
+      suggestedInterval: null,
+      candidates: [],
+    });
+    expect(next).toEqual({ kind: 'noResults', queryText: 'Auer Dult Munich' });
+  });
+
+  it('keeps the dashboard return path when a returning search finds nothing', () => {
+    const state: WorkspaceState = { kind: 'loading', queryText: 'Oktoberfest', fromDashboard: true };
+    const next = reducer(state, {
+      type: 'QUERY_RESOLVED',
+      queryId: 'q1',
+      suggestedInterval: null,
+      candidates: [],
+    });
+    expect(next).toEqual({ kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true });
+  });
+
+  it('moves from noResults to loading on SUBMIT_QUERY, keeping the return path', () => {
+    const state: WorkspaceState = { kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true };
+    const next = reducer(state, { type: 'SUBMIT_QUERY', text: 'Oktoberfest dates' });
+    expect(next).toEqual({ kind: 'loading', queryText: 'Oktoberfest dates', fromDashboard: true });
   });
 
   it('updates the review cadence the user picks before approving', () => {
@@ -133,7 +163,7 @@ describe('reducer', () => {
     });
   });
 
-  it('loads events into the open edit card, pre-selecting pending candidates', () => {
+  it('loads events into the open edit card, leaving pending candidates unselected', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
       queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 1, candidateCount: 1 }],
@@ -150,7 +180,7 @@ describe('reducer', () => {
       editing: {
         events: [
           { id: 'e1', status: 'approved', selected: false },
-          { id: 'e2', status: 'candidate', selected: true },
+          { id: 'e2', status: 'candidate', selected: false },
         ],
       },
     });
@@ -242,12 +272,16 @@ describe('reducer', () => {
       type: 'QUERY_RESOLVED',
       queryId: 'q1',
       suggestedInterval: null,
-      candidates: [],
+      candidates: [
+        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' },
+      ],
     });
     expect(next).toEqual({
       kind: 'review',
       queryId: 'q1',
-      candidates: [],
+      candidates: [
+        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate', selected: false },
+      ],
       selectedInterval: 'weekly',
       suggestedInterval: null,
     });
