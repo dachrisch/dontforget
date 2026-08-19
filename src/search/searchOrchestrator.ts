@@ -1,15 +1,35 @@
 import type { ExtractedEvent, ExtractionResult, SearchResult } from '../types.js';
+import type { MetricsService } from './metrics.js';
 
 export interface SearchOrchestratorDeps {
   searxngSearch: (query: string) => Promise<SearchResult[]>;
   extractDates: (query: string, results: SearchResult[]) => Promise<ExtractionResult>;
+  // Records one search_metric per search call. Optional — no-op when absent.
+  metrics?: MetricsService | null;
 }
 
 export function createSearchOrchestrator(
   deps: SearchOrchestratorDeps
 ): (query: string) => Promise<ExtractionResult> {
   return async function runQuery(query: string): Promise<ExtractionResult> {
-    const results = await deps.searxngSearch(query);
+    const started = Date.now();
+    let results: SearchResult[];
+    try {
+      results = await deps.searxngSearch(query);
+    } catch (err) {
+      await deps.metrics?.recordSearchCall({
+        outcome: 'failure',
+        errorType: err instanceof Error ? err.message : String(err),
+        resultCount: 0,
+        durationMs: Date.now() - started,
+      });
+      throw err;
+    }
+    await deps.metrics?.recordSearchCall({
+      outcome: 'success',
+      resultCount: results.length,
+      durationMs: Date.now() - started,
+    });
     if (results.length === 0) {
       return { events: [], cadence: null };
     }

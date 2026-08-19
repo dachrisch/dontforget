@@ -85,3 +85,27 @@ export interface AdminUser {
   createdAt: string | null;
   queryCount: number;
 }
+
+export type ModelRole = 'default' | 'backup';
+
+export interface AdminModel {
+  id: string;
+  providerId: string;
+  role: ModelRole | null;
+  enabled: boolean;
+  calls: number;
+  failures: number;
+  successRate: number | null;
+  avgLatencyMs: number | null;
+  maxLatencyMs: number | null;
+}
+
+export interface AdminSearch {
+  calls: number;
+  failures: number;
+  errorRate: number | null;
+  avgLatencyMs: number | null;
+  maxLatencyMs: number | null;
+  avgResultCount: number | null;
+  lastErrorAt: string | null;
+}

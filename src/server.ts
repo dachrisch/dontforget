@@ -5,6 +5,8 @@ import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/E
 import { searxngSearch } from './search/searxngClient.js';
 import { extractDates } from './search/opencodeClient.js';
 import { createSearchOrchestrator } from './search/searchOrchestrator.js';
+import { createModelRegistry } from './search/models.js';
+import { createMetricsService } from './search/metrics.js';
 import { startScheduler } from './scheduler/scheduler.js';
 import nodemailer from 'nodemailer';
 import fastifyStatic from '@fastify/static';
@@ -27,11 +29,23 @@ async function main() {
       )
     : new ConsoleEmailSender(); // dev fallback — prints the magic link to stdout
 
+  const modelRegistry = createModelRegistry({ db });
+  const metrics = createMetricsService(db);
+
   const runQuery = createSearchOrchestrator({
     searxngSearch: query =>
       searxngSearch(process.env.SEARXNG_BASE_URL!, query, process.env.SEARXNG_TOKEN!),
-    extractDates: (query, results) =>
-      extractDates(process.env.OPENCODE_BASE_URL!, process.env.OPENCODE_API_KEY!, query, results),
+    // Resolve the active model tiers fresh on every search so an admin's
+    // switch-default/backup or retire takes effect immediately, without a
+    // restart.
+    extractDates: async (query, results) => {
+      const models = await modelRegistry.listActive();
+      return extractDates(process.env.OPENCODE_BASE_URL!, process.env.OPENCODE_API_KEY!, query, results, {
+        models,
+        metrics,
+      });
+    },
+    metrics,
   });
 
   const isProduction = process.env.NODE_ENV === 'production';
@@ -55,6 +69,8 @@ async function main() {
     // route outside production.
     frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
+    modelRegistry,
+    metrics,
   });
 
   // Default enabled — only skip starting the scheduler when explicitly

@@ -23,6 +23,8 @@ function noopHandlers(): WorkspaceHandlers {
     onRetrySearch: vi.fn(),
     onCloseAdmin: vi.fn(),
     onDeleteAdminUser: vi.fn(),
+    onSetAdminModel: vi.fn(),
+    onAddAdminModel: vi.fn(),
   };
 }
 

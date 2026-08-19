@@ -22,6 +22,8 @@ function noopHandlers(): WorkspaceHandlers {
     onRetrySearch: vi.fn(),
     onCloseAdmin: vi.fn(),
     onDeleteAdminUser: vi.fn(),
+    onSetAdminModel: vi.fn(),
+    onAddAdminModel: vi.fn(),
   };
 }
 
@@ -573,6 +575,28 @@ describe('renderWorkspace', () => {
           { id: 'u1', email: 'admin@example.com', role: 'admin', createdAt: null, queryCount: 0 },
           { id: 'u2', email: 'u@example.com', role: 'user', createdAt: null, queryCount: 3 },
         ],
+        models: [
+          {
+            id: 'deepseek-v4-flash-free',
+            providerId: 'opencode',
+            role: 'default',
+            enabled: true,
+            calls: 10,
+            failures: 1,
+            successRate: 90,
+            avgLatencyMs: 1200,
+            maxLatencyMs: 3000,
+          },
+        ],
+        search: {
+          calls: 12,
+          failures: 0,
+          errorRate: 0,
+          avgLatencyMs: 400,
+          maxLatencyMs: 900,
+          avgResultCount: 5,
+          lastErrorAt: null,
+        },
       },
       handlers
     );
@@ -580,7 +604,7 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('Admin');
     expect(container.textContent).toContain('admin@example.com');
     expect(container.textContent).toContain('u@example.com');
-    expect(container.querySelectorAll('.admin-stat')).toHaveLength(4);
+    expect(container.querySelectorAll('.admin-stat')).toHaveLength(8);
 
     const rows = container.querySelectorAll<HTMLElement>('.admin-user-row');
     expect(rows).toHaveLength(3); // header + two users
@@ -600,7 +624,7 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'admin', stats: null, users: [] },
+      { kind: 'admin', stats: null, users: [], models: [], search: null },
       noopHandlers()
     );
 
