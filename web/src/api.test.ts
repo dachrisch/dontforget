@@ -128,6 +128,20 @@ describe('api client', () => {
     );
   });
 
+  it('approveEvents sends dismissEventIds alongside the event ids', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await approveEvents('q1', ['e1'], undefined, ['e2']);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/queries/q1/approve',
+      expect.objectContaining({ method: 'POST', body: JSON.stringify({ eventIds: ['e1'], dismissEventIds: ['e2'] }) })
+    );
+  });
+
   it('approveEvents throws ApiError on a non-ok response', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
 
