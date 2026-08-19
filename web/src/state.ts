@@ -1,9 +1,4 @@
-import type { CandidateEvent, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
-import { DEFAULT_RECURRENCE_INTERVAL } from './types';
-
-export interface SelectableCandidate extends CandidateEvent {
-  selected: boolean;
-}
+import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export interface SelectableEditEvent extends EventDetail {
   selected: boolean;
@@ -16,61 +11,44 @@ export interface EditingDraft {
   events: SelectableEditEvent[];
 }
 
+// A landed search that's open for inline approval on its dashboard card. The
+// cadence select is pre-filled from the query's stored interval (which the
+// AI suggestion fills when the user picked none).
+export interface ReviewingDraft {
+  queryId: string;
+  recurrenceInterval: RecurrenceInterval;
+  events: SelectableEditEvent[];
+}
+
 interface DashboardState {
   kind: 'dashboard';
   queries: QuerySummary[];
   feed: FeedSummary | null;
   editing: EditingDraft | null;
-}
-
-interface LoadingState {
-  kind: 'loading';
-  queryText: string;
-  fromDashboard?: boolean;
-}
-
-interface ReviewState {
-  kind: 'review';
-  queryId: string;
-  candidates: SelectableCandidate[];
-  // The cadence the user picks before approving — pre-filled with the AI's
-  // suggestion (or the default when extraction gave no signal).
-  selectedInterval: RecurrenceInterval;
-  suggestedInterval: RecurrenceInterval | null;
-  fromDashboard?: boolean;
-}
-
-interface NoResultsState {
-  kind: 'noResults';
-  queryText: string;
-  fromDashboard?: boolean;
+  reviewing: ReviewingDraft | null;
 }
 
 export type WorkspaceState =
   | { kind: 'signedOut' }
   | { kind: 'linkSent' }
-  | { kind: 'empty'; queryText?: string }
-  | LoadingState
-  | NoResultsState
-  | ReviewState
-  | { kind: 'feedReady'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
+  | { kind: 'empty' }
   | DashboardState;
 
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
-  | { type: 'SUBMIT_QUERY'; text: string }
-  | { type: 'QUERY_RESOLVED'; queryId: string; candidates: CandidateEvent[]; suggestedInterval: RecurrenceInterval | null }
-  | { type: 'QUERY_FAILED' }
-  | { type: 'TOGGLE_CANDIDATE'; id: string }
-  | { type: 'SET_REVIEW_INTERVAL'; interval: RecurrenceInterval }
-  | { type: 'APPROVE_RESOLVED'; icsUrl: string; rssUrl: string; approved: SelectableCandidate[] }
   | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null }
   | { type: 'START_EDIT'; queryId: string }
   | { type: 'EDIT_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
   | { type: 'TOGGLE_EDIT_EVENT'; id: string }
   | { type: 'CANCEL_EDIT' }
   | { type: 'QUERY_DELETED'; queryId: string }
-  | { type: 'FEED_ROTATED'; icsUrl: string; rssUrl: string };
+  | { type: 'FEED_ROTATED'; icsUrl: string; rssUrl: string }
+  | { type: 'START_REVIEW'; queryId: string }
+  | { type: 'REVIEW_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
+  | { type: 'TOGGLE_REVIEW_EVENT'; id: string }
+  | { type: 'SET_REVIEW_INTERVAL'; interval: RecurrenceInterval }
+  | { type: 'CANCEL_REVIEW' }
+  | { type: 'REVIEW_APPROVED'; queryId: string };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
@@ -78,70 +56,20 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       if (state.kind !== 'signedOut') return state;
       return { kind: 'linkSent' };
 
-    case 'SUBMIT_QUERY':
-      if (state.kind === 'empty') {
-        return { kind: 'loading', queryText: event.text };
-      }
-      if (state.kind === 'noResults') {
-        return { kind: 'loading', queryText: event.text, fromDashboard: state.fromDashboard };
-      }
-      if (state.kind === 'dashboard') {
-        return { kind: 'loading', queryText: event.text, fromDashboard: true };
-      }
-      return state;
-
-    case 'QUERY_RESOLVED': {
-      if (state.kind !== 'loading') return state;
-      // A search that surfaces no candidate dates lands on a dedicated
-      // "nothing found" state with a way to change the term and search
-      // again, instead of a blank review screen with nothing to approve.
-      if (event.candidates.length === 0) {
-        return { kind: 'noResults', queryText: state.queryText, fromDashboard: state.fromDashboard };
-      }
-      // Suggested dates start unselected — tapping a tile selects it (the
-      // pre-checked default confused users: clicking to pick a date instead
-      // deselected it).
-      const next: ReviewState = {
-        kind: 'review',
-        queryId: event.queryId,
-        candidates: event.candidates.map(c => ({ ...c, selected: false })),
-        selectedInterval: event.suggestedInterval ?? DEFAULT_RECURRENCE_INTERVAL,
-        suggestedInterval: event.suggestedInterval,
-      };
-      if (state.fromDashboard) next.fromDashboard = true;
-      return next;
+    case 'DASHBOARD_LOADED': {
+      // Keep an open edit/review card alive across refreshes (the search
+      // poll re-renders every few seconds while a query runs) — but only if
+      // the query it belongs to still exists.
+      const editing =
+        state.kind === 'dashboard' && state.editing && event.queries.some(q => q.id === state.editing!.queryId)
+          ? state.editing
+          : null;
+      const reviewing =
+        state.kind === 'dashboard' && state.reviewing && event.queries.some(q => q.id === state.reviewing!.queryId)
+          ? state.reviewing
+          : null;
+      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing, reviewing };
     }
-
-    case 'QUERY_FAILED':
-      if (state.kind !== 'loading') return state;
-      return { kind: 'empty', queryText: state.queryText };
-
-    case 'TOGGLE_CANDIDATE':
-      if (state.kind !== 'review') return state;
-      return {
-        ...state,
-        candidates: state.candidates.map(c => (c.id === event.id ? { ...c, selected: !c.selected } : c)),
-      };
-
-    case 'SET_REVIEW_INTERVAL':
-      if (state.kind !== 'review') return state;
-      return { ...state, selectedInterval: event.interval };
-
-    case 'APPROVE_RESOLVED':
-      if (state.kind !== 'review') return state;
-      // `approved` comes from the event, not state.candidates here — the
-      // caller must snapshot selections at the moment it sent the approve
-      // request, since the user can keep toggling checkboxes while that
-      // request is in flight and state.candidates would have moved on.
-      return {
-        kind: 'feedReady',
-        icsUrl: event.icsUrl,
-        rssUrl: event.rssUrl,
-        approved: event.approved,
-      };
-
-    case 'DASHBOARD_LOADED':
-      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing: null };
 
     case 'START_EDIT': {
       if (state.kind !== 'dashboard') return state;
@@ -150,6 +78,7 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       return {
         ...state,
         editing: { queryId: query.id, text: query.text, recurrenceInterval: query.recurrenceInterval, events: [] },
+        reviewing: state.reviewing?.queryId === query.id ? null : state.reviewing,
       };
     }
 
@@ -183,12 +112,61 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
       if (state.kind !== 'dashboard') return state;
       return { ...state, editing: null };
 
+    case 'START_REVIEW': {
+      if (state.kind !== 'dashboard') return state;
+      const query = state.queries.find(q => q.id === event.queryId);
+      if (!query) return state;
+      return {
+        ...state,
+        reviewing: { queryId: query.id, recurrenceInterval: query.recurrenceInterval, events: [] },
+        editing: state.editing?.queryId === query.id ? null : state.editing,
+      };
+    }
+
+    case 'REVIEW_EVENTS_LOADED': {
+      if (state.kind !== 'dashboard' || state.reviewing?.queryId !== event.queryId) return state;
+      return {
+        ...state,
+        reviewing: {
+          ...state.reviewing,
+          events: event.events.map(e => ({ ...e, selected: false })),
+        },
+      };
+    }
+
+    case 'TOGGLE_REVIEW_EVENT': {
+      if (state.kind !== 'dashboard' || !state.reviewing) return state;
+      return {
+        ...state,
+        reviewing: {
+          ...state.reviewing,
+          events: state.reviewing.events.map(e =>
+            e.status === 'candidate' && e.id === event.id ? { ...e, selected: !e.selected } : e
+          ),
+        },
+      };
+    }
+
+    case 'SET_REVIEW_INTERVAL': {
+      if (state.kind !== 'dashboard' || !state.reviewing) return state;
+      return { ...state, reviewing: { ...state.reviewing, recurrenceInterval: event.interval } };
+    }
+
+    case 'CANCEL_REVIEW':
+      if (state.kind !== 'dashboard') return state;
+      return { ...state, reviewing: null };
+
+    case 'REVIEW_APPROVED':
+      if (state.kind !== 'dashboard' || state.reviewing?.queryId !== event.queryId) return state;
+      return { ...state, reviewing: null };
+
     case 'QUERY_DELETED':
       if (state.kind !== 'dashboard') return state;
       return {
         ...state,
         queries: state.queries.filter(q => q.id !== event.queryId),
         editing: state.editing?.queryId === event.queryId ? null : state.editing,
+        reviewing: state.reviewing?.queryId === event.queryId ? null : state.reviewing,
       };
 
     case 'FEED_ROTATED':

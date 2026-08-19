@@ -39,6 +39,11 @@ export function isRecurrenceInterval(value: unknown): value is RecurrenceInterva
   return typeof value === 'string' && (RECURRENCE_INTERVALS as string[]).includes(value);
 }
 
+// `running` means a search is in flight (the initial submit, or a retry) and
+// the query card shows a status until it lands as `ready` or `failed`. Older
+// queries predate the field and are treated as `ready`.
+export type QueryStatus = 'running' | 'ready' | 'failed';
+
 export interface QuerySummary {
   id: string;
   text: string;
@@ -47,6 +52,7 @@ export interface QuerySummary {
   createdAt: string; // ISO 8601
   approvedCount: number;
   candidateCount: number;
+  status: QueryStatus;
 }
 
 export interface FeedSummary {

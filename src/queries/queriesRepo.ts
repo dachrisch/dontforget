@@ -4,9 +4,11 @@ import {
   type CandidateEvent,
   type Dashboard,
   type ExtractedEvent,
+  type QueryStatus,
   type QuerySummary,
   type RecurrenceInterval,
 } from '../types.js';
+import { filterNewEvents } from '../scheduler/dedupeEvents.js';
 
 interface EventRow {
   _id: ObjectId;
@@ -24,6 +26,16 @@ interface QueryRow {
   recurrence_interval?: RecurrenceInterval;
   created_at: Date;
   last_run_at?: Date | null;
+  status?: QueryStatus;
+}
+
+// The shape `runInitialQuery` needs to kick off a background search for a
+// freshly created query.
+export interface NewQuery {
+  _id: ObjectId;
+  queryId: string;
+  user_id: string;
+  query_text: string;
 }
 
 interface FeedTokenRow {
@@ -37,48 +49,86 @@ interface EventCounts {
   candidate: number;
 }
 
-export async function createQueryWithCandidates(
+export async function createQuery(
   db: Db,
   userId: string,
   queryText: string,
-  events: ExtractedEvent[],
   recurrenceInterval: RecurrenceInterval = DEFAULT_RECURRENCE_INTERVAL
-): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
+): Promise<NewQuery> {
   const now = new Date();
   const queryResult = await db.collection('queries').insertOne({
     user_id: userId,
     query_text: queryText,
     recurrence_interval: recurrenceInterval,
     created_at: now,
-    // The synchronous first run just happened — the scheduler (future pass)
-    // will bump this on every re-run.
+    // Stamped at creation so the scheduler's due-check has something to work
+    // with even if the background search dies mid-run; completeQueryRun bumps
+    // it once the run actually lands.
     last_run_at: now,
+    status: 'running' as const,
   });
-  const queryId = queryResult.insertedId.toString();
+  return {
+    _id: queryResult.insertedId,
+    queryId: queryResult.insertedId.toString(),
+    user_id: userId,
+    query_text: queryText,
+  };
+}
 
-  if (events.length === 0) {
-    return { queryId, candidates: [] };
+// Lands a finished search on a query: inserts the not-yet-seen events
+// (candidate unless the query is already trusted, mirroring scheduledRun's
+// auto-approve rule), applies the AI-suggested cadence when the user did not
+// pick one explicitly, and flips the query from `running` to `ready`.
+// Returns the newly inserted events in their input order, so callers (and
+// test helpers) can hand the ids straight back to an approval flow.
+export async function completeQueryRun(
+  db: Db,
+  queryId: ObjectId,
+  events: ExtractedEvent[],
+  cadence?: RecurrenceInterval | null
+): Promise<CandidateEvent[]> {
+  const now = new Date();
+  const existing = await db
+    .collection<EventRow>('events')
+    .find({ query_id: queryId }, { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } })
+    .toArray();
+
+  const newEvents = filterNewEvents(events, existing);
+  const isTrusted = existing.some(e => e.status === 'approved');
+  const status = isTrusted ? 'approved' : 'candidate';
+  const inserted: CandidateEvent[] = [];
+  if (newEvents.length > 0) {
+    const docs = newEvents.map(event => ({
+      _id: new ObjectId(),
+      query_id: queryId,
+      label: event.label,
+      start_date: event.startDate,
+      end_date: event.endDate,
+      source_url: event.sourceUrl,
+      status,
+      created_at: now,
+    }));
+    await db.collection('events').insertMany(docs);
+    inserted.push(
+      ...docs.map(doc => ({
+        id: doc._id.toString(),
+        label: doc.label,
+        startDate: doc.start_date,
+        endDate: doc.end_date,
+        sourceUrl: doc.source_url,
+        status: doc.status as 'candidate' | 'approved',
+      }))
+    );
   }
 
-  const docs = events.map(event => ({
-    _id: new ObjectId(),
-    query_id: queryResult.insertedId,
-    label: event.label,
-    start_date: event.startDate,
-    end_date: event.endDate,
-    source_url: event.sourceUrl,
-    status: 'candidate' as const,
-    created_at: now,
-  }));
-  await db.collection('events').insertMany(docs);
+  const set: Record<string, unknown> = { status: 'ready' as const, last_run_at: now };
+  if (cadence) set.recurrence_interval = cadence;
+  await db.collection('queries').updateOne({ _id: queryId }, { $set: set });
+  return inserted;
+}
 
-  const candidates: CandidateEvent[] = docs.map((doc, i) => ({
-    ...events[i],
-    id: doc._id.toString(),
-    status: 'candidate',
-  }));
-
-  return { queryId, candidates };
+export async function markQueryFailed(db: Db, queryId: ObjectId): Promise<void> {
+  await db.collection('queries').updateOne({ _id: queryId }, { $set: { status: 'failed' as const } });
 }
 
 export async function listQueriesForUser(
@@ -102,6 +152,7 @@ export async function listQueriesForUser(
     createdAt: row.created_at.toISOString(),
     approvedCount: counts.get(row._id.toString())?.approved ?? 0,
     candidateCount: counts.get(row._id.toString())?.candidate ?? 0,
+    status: row.status ?? 'ready',
   }));
 
   const feed = await feedSummary(db, userId, publicBaseUrl);
@@ -148,6 +199,7 @@ export async function updateQuery(
     createdAt: result.created_at.toISOString(),
     approvedCount: rowCounts.approved,
     candidateCount: rowCounts.candidate,
+    status: result.status ?? 'ready',
   };
 }
 

@@ -1,174 +1,193 @@
 import { describe, it, expect } from 'vitest';
 import { reducer, type WorkspaceState } from './state';
-import type { EventDetail, QuerySummary } from './types';
+import type { EventDetail, QueryStatus } from './types';
+
+function query(id: string, status: QueryStatus = 'ready'): import('./types').QuerySummary {
+  return {
+    id,
+    text: 'Auer Dult Munich',
+    recurrenceInterval: 'monthly',
+    lastRunAt: null,
+    createdAt: '2026-08-10T00:00:00Z',
+    approvedCount: 0,
+    candidateCount: 0,
+    status,
+  };
+}
+
+function dashboard(queries: import('./types').QuerySummary[]): WorkspaceState {
+  return { kind: 'dashboard', queries, feed: null, editing: null, reviewing: null };
+}
 
 describe('reducer', () => {
   it('moves from signedOut to linkSent on MAGIC_LINK_SENT', () => {
-    const state: WorkspaceState = { kind: 'signedOut' };
-    const next = reducer(state, { type: 'MAGIC_LINK_SENT' });
+    const next = reducer({ kind: 'signedOut' }, { type: 'MAGIC_LINK_SENT' });
     expect(next).toEqual({ kind: 'linkSent' });
   });
 
-  it('moves from empty to loading on SUBMIT_QUERY', () => {
-    const state: WorkspaceState = { kind: 'empty' };
-    const next = reducer(state, { type: 'SUBMIT_QUERY', text: 'Auer Dult Munich' });
-    expect(next).toEqual({ kind: 'loading', queryText: 'Auer Dult Munich' });
+  it('loads the dashboard and starts with no query being edited or reviewed', () => {
+    const next = reducer({ kind: 'signedOut' }, {
+      type: 'DASHBOARD_LOADED',
+      queries: [query('q1')],
+      feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
+    });
+    expect(next).toMatchObject({ kind: 'dashboard', editing: null, reviewing: null });
   });
 
-  it('moves from loading to review with candidates unselected and the AI-suggested cadence', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: 'yearly',
-      candidates: [
-        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate' },
-      ],
-    });
-    expect(next).toEqual({
-      kind: 'review',
-      queryId: 'q1',
-      candidates: [
-        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'candidate', selected: false },
-      ],
-      selectedInterval: 'yearly',
-      suggestedInterval: 'yearly',
+  it('keeps an open review card across a dashboard refresh when its query still exists', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
+    };
+    const next = reducer(state, { type: 'DASHBOARD_LOADED', queries: [query('q1')], feed: null });
+    expect(next).toMatchObject({ reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] } });
+  });
+
+  it('drops an open review card when a dashboard refresh no longer lists its query', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
+    };
+    const next = reducer(state, { type: 'DASHBOARD_LOADED', queries: [], feed: null });
+    expect(next).toMatchObject({ reviewing: null });
+  });
+
+  it('starts reviewing a query prefilled with its stored cadence', () => {
+    const state = dashboard([query('q1')]);
+    const next = reducer(state, { type: 'START_REVIEW', queryId: 'q1' });
+    expect(next).toMatchObject({
+      kind: 'dashboard',
+      reviewing: { queryId: 'q1', recurrenceInterval: 'monthly', events: [] },
     });
   });
 
-  it('falls back to the default cadence when the AI gives no suggestion', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: null,
-      candidates: [
-        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' },
-      ],
-    });
-    expect(next).toMatchObject({ kind: 'review', selectedInterval: 'weekly', suggestedInterval: null });
+  it('ignores START_REVIEW when the query does not exist', () => {
+    const state = dashboard([]);
+    expect(reducer(state, { type: 'START_REVIEW', queryId: 'q1' })).toBe(state);
   });
 
-  it('moves to a "nothing found" state when the search returns no candidates', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: null,
-      candidates: [],
+  it('loads events into the open review card, leaving pending candidates unselected', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
+    };
+    const events: EventDetail[] = [
+      { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' },
+      { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u', status: 'candidate' },
+    ];
+    const next = reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId: 'q1', events });
+    expect(next).toMatchObject({
+      reviewing: {
+        events: [
+          { id: 'e1', status: 'approved', selected: false },
+          { id: 'e2', status: 'candidate', selected: false },
+        ],
+      },
     });
-    expect(next).toEqual({ kind: 'noResults', queryText: 'Auer Dult Munich' });
   });
 
-  it('keeps the dashboard return path when a returning search finds nothing', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Oktoberfest', fromDashboard: true };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: null,
-      candidates: [],
-    });
-    expect(next).toEqual({ kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true });
+  it('ignores loaded review events when they do not match the query being reviewed', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
+    };
+    expect(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId: 'q2', events: [] })).toBe(state);
   });
 
-  it('moves from noResults to loading on SUBMIT_QUERY, keeping the return path', () => {
-    const state: WorkspaceState = { kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true };
-    const next = reducer(state, { type: 'SUBMIT_QUERY', text: 'Oktoberfest dates' });
-    expect(next).toEqual({ kind: 'loading', queryText: 'Oktoberfest dates', fromDashboard: true });
+  it('toggles a pending candidate in the review card and leaves approved events alone', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: {
+        queryId: 'q1',
+        recurrenceInterval: 'weekly',
+        events: [
+          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
+          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', selected: false },
+        ],
+      },
+    };
+    const next = reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' });
+    expect(next).toMatchObject({ reviewing: { events: [{ id: 'e1', selected: false }, { id: 'e2', selected: false }] } });
   });
 
   it('updates the review cadence the user picks before approving', () => {
     const state: WorkspaceState = {
-      kind: 'review',
-      queryId: 'q1',
-      candidates: [],
-      selectedInterval: 'yearly',
-      suggestedInterval: 'yearly',
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
     };
     const next = reducer(state, { type: 'SET_REVIEW_INTERVAL', interval: 'monthly' });
-    expect(next).toMatchObject({ kind: 'review', selectedInterval: 'monthly' });
+    expect(next).toMatchObject({ reviewing: { recurrenceInterval: 'monthly' } });
   });
 
-  it('toggles one candidate without touching the others', () => {
+  it('closes the review card on CANCEL_REVIEW', () => {
     const state: WorkspaceState = {
-      kind: 'review',
-      queryId: 'q1',
-      candidates: [
-        { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
-        { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: true },
-      ],
-      selectedInterval: 'yearly',
-      suggestedInterval: 'yearly',
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
-    const next = reducer(state, { type: 'TOGGLE_CANDIDATE', id: 'e2' });
-    expect(next).toEqual({
-      ...state,
-      candidates: [state.candidates[0], { ...state.candidates[1], selected: false }],
-    });
+    const next = reducer(state, { type: 'CANCEL_REVIEW' });
+    expect(next).toMatchObject({ reviewing: null });
   });
 
-  it('moves from review to feedReady using the approved list from the event, not live state', () => {
+  it('closes the review card on REVIEW_APPROVED', () => {
     const state: WorkspaceState = {
-      kind: 'review',
-      queryId: 'q1',
-      candidates: [
-        { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
-        // Selection changed after the approve request was already sent —
-        // the event's own `approved` snapshot must win, not this state.
-        { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', selected: true },
-      ],
-      selectedInterval: 'yearly',
-      suggestedInterval: 'yearly',
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
-    const next = reducer(state, {
-      type: 'APPROVE_RESOLVED',
-      icsUrl: 'https://x/f/t.ics',
-      rssUrl: 'https://x/f/t.rss',
-      approved: [{ ...state.candidates[0], selected: true }],
-    });
-    expect(next).toEqual({
-      kind: 'feedReady',
-      icsUrl: 'https://x/f/t.ics',
-      rssUrl: 'https://x/f/t.rss',
-      approved: [state.candidates[0]],
-    });
+    const next = reducer(state, { type: 'REVIEW_APPROVED', queryId: 'q1' });
+    expect(next).toMatchObject({ reviewing: null });
   });
 
-  it('moves from loading back to empty on QUERY_FAILED, preserving the query text for retry', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Auer Dult Munich' };
-    const next = reducer(state, { type: 'QUERY_FAILED' });
-    expect(next).toEqual({ kind: 'empty', queryText: 'Auer Dult Munich' });
-  });
-
-  it('loads the dashboard and starts with no query being edited', () => {
-    const next = reducer({ kind: 'signedOut' }, {
-      type: 'DASHBOARD_LOADED',
-      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 2, candidateCount: 0 }],
-      feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
-    });
-    expect(next).toMatchObject({ kind: 'dashboard', editing: null });
+  it('ignores REVIEW_APPROVED when a different query is open', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1'), query('q2')],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
+    };
+    expect(reducer(state, { type: 'REVIEW_APPROVED', queryId: 'q2' })).toBe(state);
   });
 
   it('starts editing a saved query prefilled with its own values', () => {
-    const state: WorkspaceState = {
-      kind: 'dashboard',
-      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 0, candidateCount: 0 }],
-      feed: null,
-      editing: null,
-    };
+    const state = dashboard([query('q1')]);
     const next = reducer(state, { type: 'START_EDIT', queryId: 'q1' });
     expect(next).toMatchObject({
       kind: 'dashboard',
-      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
+      editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
     });
   });
 
   it('loads events into the open edit card, leaving pending candidates unselected', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
-      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 1, candidateCount: 1 }],
+      queries: [query('q1')],
       feed: null,
       editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
+      reviewing: null,
     };
     const events: EventDetail[] = [
       { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' },
@@ -176,7 +195,6 @@ describe('reducer', () => {
     ];
     const next = reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q1', events });
     expect(next).toMatchObject({
-      kind: 'dashboard',
       editing: {
         events: [
           { id: 'e1', status: 'approved', selected: false },
@@ -186,12 +204,13 @@ describe('reducer', () => {
     });
   });
 
-  it('ignores loaded events when they do not match the query being edited', () => {
+  it('ignores loaded edit events when they do not match the query being edited', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
-      queries: [],
+      queries: [query('q1')],
       feed: null,
       editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
+      reviewing: null,
     };
     expect(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q2', events: [] })).toBe(state);
   });
@@ -210,6 +229,7 @@ describe('reducer', () => {
           { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', selected: false },
         ],
       },
+      reviewing: null,
     };
     const next = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
     expect(next).toMatchObject({ editing: { events: [{ id: 'e1', selected: false }, { id: 'e2', selected: false }] } });
@@ -221,19 +241,15 @@ describe('reducer', () => {
       queries: [],
       feed: null,
       editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
+      reviewing: null,
     };
     const next = reducer(state, { type: 'CANCEL_EDIT' });
-    expect(next).toEqual({ kind: 'dashboard', queries: [], feed: null, editing: null });
+    expect(next).toEqual({ kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null });
   });
 
   it('removes a deleted query from the dashboard', () => {
-    const query: QuerySummary = { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 0, candidateCount: 0 };
-    const state: WorkspaceState = {
-      kind: 'dashboard',
-      queries: [query, { ...query, id: 'q2' }],
-      feed: null,
-      editing: null,
-    };
+    const q1 = query('q1');
+    const state = dashboard([q1, query('q2')]);
     const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
     expect(next).toMatchObject({ kind: 'dashboard', queries: [{ id: 'q2' }] });
   });
@@ -244,51 +260,26 @@ describe('reducer', () => {
       queries: [],
       feed: null,
       editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
+      reviewing: null,
     };
     const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
     expect(next).toMatchObject({ kind: 'dashboard', editing: null });
   });
 
-  it('moves from the dashboard to loading on SUBMIT_QUERY, remembering the return path', () => {
-    const state: WorkspaceState = { kind: 'dashboard', queries: [], feed: null, editing: null };
-    const next = reducer(state, { type: 'SUBMIT_QUERY', text: 'Oktoberfest' });
-    expect(next).toEqual({ kind: 'loading', queryText: 'Oktoberfest', fromDashboard: true });
-  });
-
-  it('carries the dashboard return path through to review', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Oktoberfest', fromDashboard: true };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: 'yearly',
-      candidates: [{ id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' }],
-    });
-    expect(next).toMatchObject({ kind: 'review', fromDashboard: true });
-  });
-
-  it('does not tag review with a return path for first-time searches', () => {
-    const state: WorkspaceState = { kind: 'loading', queryText: 'Oktoberfest' };
-    const next = reducer(state, {
-      type: 'QUERY_RESOLVED',
-      queryId: 'q1',
-      suggestedInterval: null,
-      candidates: [
-        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate' },
-      ],
-    });
-    expect(next).toEqual({
-      kind: 'review',
-      queryId: 'q1',
-      candidates: [
-        { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u', status: 'candidate', selected: false },
-      ],
-      selectedInterval: 'weekly',
-      suggestedInterval: null,
-    });
+  it('clears an open review when the query being deleted is the one being reviewed', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [],
+      feed: null,
+      editing: null,
+      reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
+    };
+    const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
+    expect(next).toMatchObject({ kind: 'dashboard', reviewing: null });
   });
 
   it('ignores events that do not apply to the current state', () => {
     const state: WorkspaceState = { kind: 'empty' };
-    expect(reducer(state, { type: 'TOGGLE_CANDIDATE', id: 'e1' })).toBe(state);
+    expect(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' })).toBe(state);
   });
 });

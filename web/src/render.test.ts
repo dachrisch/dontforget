@@ -1,23 +1,38 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderWorkspace, type WorkspaceHandlers } from './render';
+import type { QuerySummary } from './types';
 
 function noopHandlers(): WorkspaceHandlers {
   return {
     onRequestMagicLink: vi.fn(),
     onSubmitQuery: vi.fn(),
-    onToggleCandidate: vi.fn(),
-    onSetReviewInterval: vi.fn(),
-    onApprove: vi.fn(),
-    onCancelSearch: vi.fn(),
     onStartEdit: vi.fn(),
     onToggleEditEvent: vi.fn(),
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
-    onGoToDashboard: vi.fn(),
-    onStartOver: vi.fn(),
     onSignOut: vi.fn(),
+    onStartReview: vi.fn(),
+    onToggleReviewEvent: vi.fn(),
+    onSetReviewInterval: vi.fn(),
+    onApproveReview: vi.fn(),
+    onCancelReview: vi.fn(),
+    onRetrySearch: vi.fn(),
+  };
+}
+
+function query(overrides: Partial<QuerySummary> = {}): QuerySummary {
+  return {
+    id: 'q1',
+    text: 'Auer Dult Munich',
+    recurrenceInterval: 'quarterly',
+    lastRunAt: null,
+    createdAt: '2026-08-01T00:00:00Z',
+    approvedCount: 0,
+    candidateCount: 0,
+    status: 'ready',
+    ...overrides,
   };
 }
 
@@ -57,64 +72,34 @@ describe('renderWorkspace', () => {
     input.value = 'Auer Dult Munich';
     container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    // The cadence is chosen on the review screen after the search returns,
-    // so the empty state submits without one.
+    // The cadence is chosen on the review card after the search lands, so
+    // the empty state submits without one.
     expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult Munich');
   });
 
-  it('prefills the query input when returning to empty after a failed search', () => {
-    const container = document.createElement('div');
-    renderWorkspace(container, { kind: 'empty', queryText: 'Auer Dult Munich' }, noopHandlers());
-
-    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
-    expect(input.value).toBe('Auer Dult Munich');
-  });
-
-  it('renders the no-results state with an editable term and a search-again action', () => {
+  it('renders a running query card with a ticking indicator', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
-    renderWorkspace(container, { kind: 'noResults', queryText: 'Auer Dult Munich' }, handlers);
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query({ text: 'Oktoberfest', status: 'running' })], feed: null, editing: null, reviewing: null },
+      handlers
+    );
 
-    expect(container.textContent).toMatch(/no dates found/i);
-    expect(container.textContent).toContain('Auer Dult Munich');
-    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
-    expect(input.value).toBe('Auer Dult Munich');
-
-    input.value = 'Auer Dult dates';
-    container.querySelector('form')!.dispatchEvent(new Event('submit', { cancelable: true }));
-    expect(handlers.onSubmitQuery).toHaveBeenCalledWith('Auer Dult dates');
-
-    container.querySelector<HTMLButtonElement>('button[data-action=no-results-cancel]')!.click();
-    expect(handlers.onStartOver).toHaveBeenCalled();
-  });
-
-  it('routes the no-results cancel back to the dashboard for returning users', () => {
-    const container = document.createElement('div');
-    const handlers = noopHandlers();
-    renderWorkspace(container, { kind: 'noResults', queryText: 'Oktoberfest', fromDashboard: true }, handlers);
-
-    expect(container.textContent).toMatch(/back to dashboard/i);
-    container.querySelector<HTMLButtonElement>('button[data-action=no-results-cancel]')!.click();
-    expect(handlers.onGoToDashboard).toHaveBeenCalled();
-  });
-
-  it('renders the loading state with a torn-ticket chip, ticking indicator, and cancel action', () => {
-    const container = document.createElement('div');
-    const handlers = noopHandlers();
-    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, handlers);
-    expect(container.textContent).toContain('Auer Dult Munich');
+    expect(container.textContent).toContain('Oktoberfest');
     expect(container.textContent).toMatch(/searching/i);
-    expect(container.querySelector('.chip-torn')).not.toBeNull();
     expect(container.querySelectorAll('.tick')).toHaveLength(3);
-
-    container.querySelector<HTMLButtonElement>('button[data-action=cancel-search]')!.click();
-    expect(handlers.onCancelSearch).toHaveBeenCalled();
+    expect(container.querySelector('.query-card-running')).not.toBeNull();
   });
 
   it('reassures the user once a search takes longer than usual', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
-    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null },
+      noopHandlers()
+    );
 
     expect(container.textContent).not.toMatch(/longer than usual/i);
     vi.advanceTimersByTime(60_000);
@@ -123,10 +108,14 @@ describe('renderWorkspace', () => {
     vi.useRealTimers();
   });
 
-  it('does not touch a stale loading message after the state moves on', () => {
+  it('does not touch a stale running status after the state moves on', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
-    renderWorkspace(container, { kind: 'loading', queryText: 'Auer Dult Munich' }, noopHandlers());
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null },
+      noopHandlers()
+    );
     renderWorkspace(container, { kind: 'empty' }, noopHandlers());
 
     expect(() => vi.advanceTimersByTime(60_000)).not.toThrow();
@@ -135,61 +124,98 @@ describe('renderWorkspace', () => {
     vi.useRealTimers();
   });
 
-  it('renders candidates as calendar-day tiles and toggles selection on click', () => {
+  it('renders a failed query card with a retry action', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query({ status: 'failed' })], feed: null, editing: null, reviewing: null },
+      handlers
+    );
+
+    expect(container.textContent).toMatch(/failed/i);
+    container.querySelector<HTMLButtonElement>('.query-card button[data-action=retry]')!.click();
+    expect(handlers.onRetrySearch).toHaveBeenCalledWith('q1');
+  });
+
+  it('shows a review action on a ready card that has pending candidates', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query({ candidateCount: 3, approvedCount: 1 })], feed: null, editing: null, reviewing: null },
+      handlers
+    );
+
+    expect(container.textContent).toContain('1 approved');
+    expect(container.textContent).toContain('3 pending approval');
+    container.querySelector<HTMLButtonElement>('.query-card button[data-action=review]')!.click();
+    expect(handlers.onStartReview).toHaveBeenCalledWith('q1');
+  });
+
+  it('renders the reviewing card with candidate tiles and wires approve/cancel', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
       container,
       {
-        kind: 'review',
-        queryId: 'q1',
-        candidates: [
-          {
-            id: 'e1',
-            label: 'Frühjahrsdult',
-            startDate: '2026-04-11',
-            endDate: '2026-04-11',
-            sourceUrl: 'u',
-            status: 'candidate',
-            selected: true,
-          },
-        ],
-        selectedInterval: 'yearly',
-        suggestedInterval: 'yearly',
+        kind: 'dashboard',
+        queries: [query({ candidateCount: 1 })],
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'yearly',
+          events: [
+            {
+              id: 'e1',
+              label: 'Frühjahrsdult',
+              startDate: '2026-04-11',
+              endDate: '2026-04-11',
+              sourceUrl: 'u',
+              status: 'candidate',
+              selected: true,
+            },
+          ],
+        },
       },
       handlers
     );
 
+    expect(container.querySelector('.query-card-reviewing')).not.toBeNull();
     expect(container.textContent).toContain('Frühjahrsdult');
     expect(container.textContent).toContain('APR');
     expect(container.textContent).toContain('11');
     expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(true);
 
-    container.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();
-    expect(handlers.onToggleCandidate).toHaveBeenCalledWith('e1');
+    const checkbox = container.querySelector<HTMLInputElement>('.query-card-reviewing .day-tile input[type=checkbox]')!;
+    checkbox.click();
+    expect(handlers.onToggleReviewEvent).toHaveBeenCalledWith('e1');
 
-    container.querySelector<HTMLButtonElement>('button[data-action=approve]')!.click();
-    expect(handlers.onApprove).toHaveBeenCalled();
+    container.querySelector<HTMLButtonElement>('button[data-action=approve-review]')!.click();
+    expect(handlers.onApproveReview).toHaveBeenCalledWith('q1');
+
+    container.querySelector<HTMLButtonElement>('button[data-action=cancel-review]')!.click();
+    expect(handlers.onCancelReview).toHaveBeenCalled();
   });
 
-  it('shows the cadence selector pre-filled with the AI suggestion and explains approval', () => {
+  it('shows the cadence selector pre-filled from the query and explains approval', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
       container,
       {
-        kind: 'review',
-        queryId: 'q1',
-        candidates: [],
-        selectedInterval: 'yearly',
-        suggestedInterval: 'yearly',
+        kind: 'dashboard',
+        queries: [query()],
+        feed: null,
+        editing: null,
+        reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
       },
       handlers
     );
 
     const select = container.querySelector<HTMLSelectElement>('select[name=reviewInterval]')!;
     expect(select.value).toBe('yearly');
-    expect(container.textContent).toMatch(/AI suggested Every year/i);
     expect(container.textContent).toMatch(/private calendar feed/i);
 
     select.value = 'quarterly';
@@ -202,21 +228,25 @@ describe('renderWorkspace', () => {
     renderWorkspace(
       container,
       {
-        kind: 'review',
-        queryId: 'q1',
-        candidates: [
-          {
-            id: 'e2',
-            label: 'Oktoberfest',
-            startDate: '2026-09-19',
-            endDate: '2026-10-04',
-            sourceUrl: 'u',
-            status: 'candidate',
-            selected: false,
-          },
-        ],
-        selectedInterval: 'weekly',
-        suggestedInterval: null,
+        kind: 'dashboard',
+        queries: [query()],
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'weekly',
+          events: [
+            {
+              id: 'e2',
+              label: 'Oktoberfest',
+              startDate: '2026-09-19',
+              endDate: '2026-10-04',
+              sourceUrl: 'u',
+              status: 'candidate',
+              selected: false,
+            },
+          ],
+        },
       },
       noopHandlers()
     );
@@ -227,30 +257,21 @@ describe('renderWorkspace', () => {
 
   it('only replays the enter animation on an actual state change, not a same-state re-render', () => {
     const container = document.createElement('div');
-    const candidate = {
-      id: 'e1',
-      label: 'Frühjahrsdult',
-      startDate: '2026-04-11',
-      endDate: '2026-04-11',
-      sourceUrl: 'u',
-      status: 'candidate' as const,
-      selected: true,
-    };
     renderWorkspace(
       container,
-      { kind: 'review', queryId: 'q1', candidates: [candidate], selectedInterval: 'yearly', suggestedInterval: 'yearly' },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
       noopHandlers()
     );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
 
     renderWorkspace(
       container,
-      { kind: 'review', queryId: 'q1', candidates: [{ ...candidate, selected: false }], selectedInterval: 'yearly', suggestedInterval: 'yearly' },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
       noopHandlers()
     );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(false);
 
-    renderWorkspace(container, { kind: 'loading', queryText: 'x' }, noopHandlers());
+    renderWorkspace(container, { kind: 'empty' }, noopHandlers());
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
   });
 
@@ -259,21 +280,25 @@ describe('renderWorkspace', () => {
     renderWorkspace(
       container,
       {
-        kind: 'review',
-        queryId: 'q1',
-        candidates: [
-          {
-            id: 'e3',
-            label: 'Mystery Fest',
-            startDate: 'not-a-date',
-            endDate: 'not-a-date',
-            sourceUrl: 'u',
-            status: 'candidate',
-            selected: false,
-          },
-        ],
-        selectedInterval: 'weekly',
-        suggestedInterval: null,
+        kind: 'dashboard',
+        queries: [query()],
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'weekly',
+          events: [
+            {
+              id: 'e3',
+              label: 'Mystery Fest',
+              startDate: 'not-a-date',
+              endDate: 'not-a-date',
+              sourceUrl: 'u',
+              status: 'candidate',
+              selected: false,
+            },
+          ],
+        },
       },
       noopHandlers()
     );
@@ -284,67 +309,7 @@ describe('renderWorkspace', () => {
     expect(container.querySelector('.day-tile-day')!.textContent).toBe('?');
   });
 
-  it('renders the feed-ready state with both URLs, copy buttons, and exits', () => {
-    const container = document.createElement('div');
-    const handlers = noopHandlers();
-    renderWorkspace(
-      container,
-      {
-        kind: 'feedReady',
-        icsUrl: 'https://x/f/t.ics',
-        rssUrl: 'https://x/f/t.rss',
-        approved: [],
-      },
-      handlers
-    );
-
-    expect(container.textContent).toContain('Your feed is ready');
-    // The raw URLs are hidden — copy hands them to the clipboard instead.
-    expect(container.textContent).not.toContain('https://x/f/');
-    expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
-    expect(container.querySelectorAll('.copy-button')).toHaveLength(2);
-    expect(container.querySelectorAll('.feed-action')).toHaveLength(4);
-
-    const downloadLink = container.querySelector<HTMLAnchorElement>('a.feed-action[download]')!;
-    expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
-    expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
-
-    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.feed-add-button');
-    expect(addButtons).toHaveLength(3);
-    expect(addButtons[0].getAttribute('href')).toBe(
-      `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
-    );
-    expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
-    expect(addButtons[2].getAttribute('href')).toBe(
-      `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
-    );
-
-    const rssLink = container
-      .querySelectorAll<HTMLElement>('.ledger-row')[1]
-      .querySelector<HTMLAnchorElement>('a.feed-action')!;
-    expect(rssLink.getAttribute('href')).toBe('https://x/f/t.rss');
-    expect(rssLink.getAttribute('aria-label')).toBe('Open RSS feed');
-
-    container.querySelector<HTMLButtonElement>('button[data-action=dashboard]')!.click();
-    expect(handlers.onGoToDashboard).toHaveBeenCalled();
-    container.querySelector<HTMLButtonElement>('button[data-action=search-another]')!.click();
-    expect(handlers.onStartOver).toHaveBeenCalled();
-  });
-
-  it('swaps the copy icon for a check when a copy button is clicked', () => {
-    const container = document.createElement('div');
-    renderWorkspace(
-      container,
-      { kind: 'feedReady', icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', approved: [] },
-      noopHandlers()
-    );
-
-    const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
-    copyButton.click();
-    expect(copyButton.querySelector('.icon-check')).not.toBeNull();
-  });
-
-  it('renders the dashboard with saved queries, schedules, counts and feed info', () => {
+  it('renders the dashboard with feed add buttons, copy actions, schedules and counts', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
@@ -352,10 +317,11 @@ describe('renderWorkspace', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: '2026-08-10T09:00:00Z', createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1 },
+          query({ text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: '2026-08-10T09:00:00Z', approvedCount: 2, candidateCount: 1 }),
         ],
         feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: '2026-08-10T11:30:00Z' },
         editing: null,
+        reviewing: null,
       },
       handlers
     );
@@ -370,15 +336,47 @@ describe('renderWorkspace', () => {
     expect(container.querySelectorAll('.feed-summary .feed-action')).toHaveLength(4);
     expect(container.querySelectorAll('.feed-summary .feed-add-button')).toHaveLength(3);
 
+    const downloadLink = container.querySelector<HTMLAnchorElement>('.feed-summary a.feed-action[download]')!;
+    expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
+    expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
+
+    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.feed-add-button');
+    expect(addButtons[0].getAttribute('href')).toBe(
+      `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
+    );
+    expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
+    expect(addButtons[2].getAttribute('href')).toBe(
+      `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
+    );
+
     container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
     expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
+  });
+
+  it('swaps the copy icon for a check when a copy button is clicked', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [],
+        feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
+        editing: null,
+        reviewing: null,
+      },
+      noopHandlers()
+    );
+
+    const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
+    copyButton.click();
+    expect(copyButton.querySelector('.icon-check')).not.toBeNull();
   });
 
   it('shows a hint instead of feed links until the user has approved something', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
       noopHandlers()
     );
     expect(container.textContent).toMatch(/no calendar yet/i);
@@ -389,7 +387,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
       handlers
     );
 
@@ -406,7 +404,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
       handlers
     );
 
@@ -421,11 +419,10 @@ describe('renderWorkspace', () => {
       container,
       {
         kind: 'dashboard',
-        queries: [
-          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
-        ],
+        queries: [query()],
         feed: null,
         editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
+        reviewing: null,
       },
       handlers
     );
@@ -451,9 +448,7 @@ describe('renderWorkspace', () => {
       container,
       {
         kind: 'dashboard',
-        queries: [
-          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 1, candidateCount: 1 },
-        ],
+        queries: [query({ approvedCount: 1, candidateCount: 1 })],
         feed: null,
         editing: {
           queryId: 'q1',
@@ -464,6 +459,7 @@ describe('renderWorkspace', () => {
             { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', selected: true },
           ],
         },
+        reviewing: null,
       },
       handlers
     );
@@ -480,14 +476,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      {
-        kind: 'dashboard',
-        queries: [
-          { id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
-        ],
-        feed: null,
-        editing: null,
-      },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
       handlers
     );
 

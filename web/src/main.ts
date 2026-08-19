@@ -11,6 +11,7 @@ import {
   getQueryEvents,
   deleteQuery,
   rotateFeedToken,
+  runQuery,
   signOut,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
@@ -53,19 +54,55 @@ function setState(next: WorkspaceState) {
   paint();
 }
 
+// While any query is mid-search the dashboard polls itself so the running
+// card flips to its results without a reload. One timer at a time, and it
+// only exists while something is actually running.
+const POLL_INTERVAL_MS = 4000;
+let pollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleDashboardPoll(): void {
+  if (pollTimer) return;
+  if (state.kind !== 'dashboard') return;
+  if (!state.queries.some(q => q.status === 'running')) return;
+  pollTimer = setTimeout(() => {
+    pollTimer = null;
+    void refreshDashboard();
+  }, POLL_INTERVAL_MS);
+}
+
 async function refreshDashboard(): Promise<void> {
   try {
+    const previous = state.kind === 'dashboard' ? state.queries : [];
     const data = await listQueries();
-    setState(
-      reducer(state, {
-        type: 'DASHBOARD_LOADED',
-        queries: data.queries,
-        feed: data.feed,
-      })
-    );
+    setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed }));
+    // A query that finished searching while we were watching opens its
+    // review inline — the user just submitted it from here and is waiting
+    // on the card, so land them straight on the approval tiles.
+    if (state.kind === 'dashboard') {
+      const dashboardState = state;
+      const landed = dashboardState.queries.find(
+        q =>
+          q.status !== 'running' &&
+          q.candidateCount > 0 &&
+          previous.some(p => p.id === q.id && p.status === 'running') &&
+          dashboardState.editing?.queryId !== q.id &&
+          dashboardState.reviewing?.queryId !== q.id
+      );
+      if (landed) startReview(landed.id);
+    }
   } catch (err) {
     showError('error.loadingDashboard', err);
+  } finally {
+    scheduleDashboardPoll();
   }
+}
+
+function startReview(queryId: string): void {
+  setState(reducer(state, { type: 'START_REVIEW', queryId }));
+  // The card opens immediately; the events for it load async.
+  getQueryEvents(queryId)
+    .then(events => setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events })))
+    .catch(err => showError('error.loadingEvents', err));
 }
 
 function paint() {
@@ -76,61 +113,48 @@ function paint() {
         .then(() => setState(reducer(state, { type: 'MAGIC_LINK_SENT' })))
         .catch(err => showError('error.requestingLink', err));
     },
-    onSubmitQuery: (text, recurrenceInterval) => {
-      // Snapshot origin before the optimistic transition — after it the
-      // state is already `loading` and the dashboard data is gone. A
-      // re-search from the no-results screen keeps a returning user's
-      // return path so a failed attempt lands back on their dashboard.
-      const fromDashboard =
-        state.kind === 'dashboard' ||
-        (state.kind === 'noResults' && state.fromDashboard === true);
+    onSubmitQuery: text => {
       clearError();
-      setState(reducer(state, { type: 'SUBMIT_QUERY', text }));
-      submitQuery(text, recurrenceInterval)
-        .then(({ queryId, candidates, suggestedInterval }) => {
-          setState(reducer(state, { type: 'QUERY_RESOLVED', queryId, candidates, suggestedInterval }));
-        })
-        .catch(err => {
-          showError('error.searching', err);
-          // A returning user's failed search should return them to their
-          // saved queries, not a blank workspace.
-          if (fromDashboard) refreshDashboard();
-          else setState(reducer(state, { type: 'QUERY_FAILED' }));
-        });
+      // The search runs in the background now — this only creates the query
+      // row. The dashboard (or, for a first-time user, the dashboard the
+      // refresh lands them on) picks the results up on its next poll.
+      submitQuery(text)
+        .then(() => refreshDashboard())
+        .catch(err => showError('error.searching', err));
     },
-    onToggleCandidate: id => {
-      setState(reducer(state, { type: 'TOGGLE_CANDIDATE', id }));
+    onStartReview: queryId => {
+      clearError();
+      startReview(queryId);
+    },
+    onToggleReviewEvent: id => {
+      setState(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id }));
     },
     onSetReviewInterval: interval => {
       setState(reducer(state, { type: 'SET_REVIEW_INTERVAL', interval }));
     },
-    onApprove: () => {
-      if (state.kind !== 'review') return;
-      const fromDashboard = state.fromDashboard === true;
+    onApproveReview: queryId => {
+      if (state.kind !== 'dashboard' || state.reviewing?.queryId !== queryId) return;
       // Snapshot the current selection now — the user can keep toggling
-      // checkboxes while this request is in flight, and the confirmation
-      // screen must reflect what was actually sent (and persisted), not
-      // whatever `state` has drifted to by the time the response arrives.
-      const approved = state.candidates.filter(c => c.selected);
-      const eventIds = approved.map(c => c.id);
+      // checkboxes while this request is in flight.
+      const eventIds = state.reviewing.events
+        .filter(e => e.status === 'candidate' && e.selected)
+        .map(e => e.id);
       clearError();
-      approveEvents(state.queryId, eventIds, state.selectedInterval)
-        .then(({ icsUrl, rssUrl }) => {
-          if (fromDashboard) {
-            refreshDashboard();
-          } else {
-            setState(reducer(state, { type: 'APPROVE_RESOLVED', icsUrl, rssUrl, approved }));
-          }
+      approveEvents(queryId, eventIds, state.reviewing.recurrenceInterval)
+        .then(() => {
+          setState(reducer(state, { type: 'REVIEW_APPROVED', queryId }));
+          refreshDashboard();
         })
         .catch(err => showError('error.approving', err));
     },
-    onCancelSearch: () => {
+    onCancelReview: () => {
+      setState(reducer(state, { type: 'CANCEL_REVIEW' }));
+    },
+    onRetrySearch: queryId => {
       clearError();
-      if (state.kind === 'loading' && state.fromDashboard) {
-        refreshDashboard();
-      } else if (state.kind === 'loading') {
-        setState({ kind: 'empty', queryText: state.queryText });
-      }
+      runQuery(queryId)
+        .then(() => refreshDashboard())
+        .catch(err => showError('error.searching', err));
     },
     onStartEdit: queryId => {
       clearError();
@@ -184,14 +208,6 @@ function paint() {
         })
         .catch(err => showError('error.rotating', err));
     },
-    onGoToDashboard: () => {
-      clearError();
-      refreshDashboard();
-    },
-    onStartOver: () => {
-      clearError();
-      setState({ kind: 'empty' });
-    },
     onSignOut: () => {
       clearError();
       signOut()
@@ -216,6 +232,9 @@ checkSession()
         setState(
           reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed })
         );
+        // If the server was mid-search when the page loaded (a reload during
+        // a slow run), resume polling so the card can land.
+        scheduleDashboardPoll();
       }
     });
   })

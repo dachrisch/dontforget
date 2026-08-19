@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { createQueryWithCandidates, listQueriesForUser, updateQuery } from './queriesRepo';
+import { createQuery, completeQueryRun, listQueriesForUser, updateQuery, markQueryFailed } from './queriesRepo';
 import { approveEvents } from './approveEvents';
 
 describe('queries repo', () => {
@@ -23,52 +23,78 @@ describe('queries repo', () => {
     await teardownTestDb(client);
   });
 
-  describe('createQueryWithCandidates', () => {
-    it('inserts the query and one candidate row per event', async () => {
-      const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
-        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
-        { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://muenchen.de' },
-      ]);
+  describe('createQuery', () => {
+    it('inserts a running query with the first run stamped and returns the id', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
 
-      expect(queryId).toBeTruthy();
-      expect(candidates).toHaveLength(2);
-      expect(candidates.every(c => c.status === 'candidate')).toBe(true);
-
-      const stored = await db.collection('events').countDocuments({ query_id: new ObjectId(queryId) });
-      expect(stored).toBe(2);
-    });
-
-    it('defaults to weekly and stamps the first run as the last run', async () => {
-      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
-
-      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(query.queryId).toBeTruthy();
+      const row = await db.collection('queries').findOne({ _id: query._id });
       expect(row?.recurrence_interval).toBe('weekly');
+      expect(row?.status).toBe('running');
       expect(row?.last_run_at).toBeInstanceOf(Date);
     });
 
-    it('honours an explicit recurrence interval', async () => {
-      const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [], 'weekly');
-      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+    it('defaults to weekly and honours an explicit recurrence interval', async () => {
+      const { queryId: defaultQuery } = await createQuery(db, userId, 'Oktoberfest');
+      const defaultRow = await db.collection('queries').findOne({ _id: new ObjectId(defaultQuery) });
+      expect(defaultRow?.recurrence_interval).toBe('weekly');
+
+      const { queryId: explicitQuery } = await createQuery(db, userId, 'Auer Dult Munich', 'quarterly');
+      const explicitRow = await db.collection('queries').findOne({ _id: new ObjectId(explicitQuery) });
+      expect(explicitRow?.recurrence_interval).toBe('quarterly');
+    });
+  });
+
+  describe('completeQueryRun', () => {
+    it('inserts one candidate row per event, marks the query ready, and applies the cadence', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      await completeQueryRun(db, query._id, [
+        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+        { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://muenchen.de' },
+      ], 'yearly');
+
+      const stored = await db.collection('events').find({ query_id: query._id }).toArray();
+      expect(stored).toHaveLength(2);
+      expect(stored.every(e => e.status === 'candidate')).toBe(true);
+
+      const row = await db.collection('queries').findOne({ _id: query._id });
+      expect(row?.status).toBe('ready');
+      expect(row?.recurrence_interval).toBe('yearly');
+      expect(row?.last_run_at).toBeInstanceOf(Date);
+    });
+
+    it('does not override the cadence when none is suggested', async () => {
+      const query = await createQuery(db, userId, 'Oktoberfest', 'weekly');
+      await completeQueryRun(db, query._id, [], null);
+      const row = await db.collection('queries').findOne({ _id: query._id });
+      expect(row?.status).toBe('ready');
       expect(row?.recurrence_interval).toBe('weekly');
     });
   });
 
+  describe('markQueryFailed', () => {
+    it('flips a query to failed', async () => {
+      const { _id } = await createQuery(db, userId, 'Oktoberfest');
+      await markQueryFailed(db, _id);
+      const row = await db.collection('queries').findOne({ _id });
+      expect(row?.status).toBe('failed');
+    });
+  });
+
   describe('listQueriesForUser', () => {
-    it('returns the user\u2019s queries newest-first with event counts and feed links once approved', async () => {
-      const older = await createQueryWithCandidates(db, userId, 'Older query', [
+    it('returns the user’s queries newest-first with event counts, status, and feed links once approved', async () => {
+      const older = await createQuery(db, userId, 'Older query');
+      await completeQueryRun(db, older._id, [
         { label: 'Approved event', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u' },
-      ]);
-      const newer = await createQueryWithCandidates(
-        db,
-        userId,
-        'Newer query',
-        [
-          { label: 'First', startDate: '2026-02-01', endDate: '2026-02-01', sourceUrl: 'u' },
-          { label: 'Second', startDate: '2026-03-01', endDate: '2026-03-01', sourceUrl: 'u' },
-        ],
-        'quarterly'
-      );
-      await approveEvents(db, userId, older.queryId, [older.candidates[0].id], 'http://x');
+      ], null);
+      const newer = await createQuery(db, userId, 'Newer query', 'quarterly');
+      await completeQueryRun(db, newer._id, [
+        { label: 'First', startDate: '2026-02-01', endDate: '2026-02-01', sourceUrl: 'u' },
+        { label: 'Second', startDate: '2026-03-01', endDate: '2026-03-01', sourceUrl: 'u' },
+      ], null);
+
+      const olderEvents = (await db.collection('events').find({ query_id: older._id }).toArray());
+      await approveEvents(db, userId, older.queryId, [olderEvents[0]._id.toString()], 'http://x');
 
       const dashboard = await listQueriesForUser(db, userId, 'http://localhost:3000');
 
@@ -81,6 +107,7 @@ describe('queries repo', () => {
         createdAt: expect.any(String),
         approvedCount: 0,
         candidateCount: 2,
+        status: 'ready',
       });
       expect(dashboard.queries[1].approvedCount).toBe(1);
       expect(dashboard.queries[1].candidateCount).toBe(0);
@@ -94,11 +121,19 @@ describe('queries repo', () => {
       });
     });
 
+    it('exposes a query stuck in a search as running', async () => {
+      const query = await createQuery(db, userId, 'Running query');
+      const dashboard = await listQueriesForUser(db, userId, 'http://localhost:3000');
+      expect(dashboard.queries[0]).toMatchObject({ id: query.queryId, status: 'running', candidateCount: 0 });
+    });
+
     it('returns feed links and last fetched once a token exists', async () => {
-      const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      await completeQueryRun(db, query._id, [
         { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
-      ]);
-      await approveEvents(db, userId, queryId, [candidates[0].id], 'http://localhost:3000');
+      ], null);
+      const events = (await db.collection('events').find({ query_id: query._id }).toArray());
+      await approveEvents(db, userId, query.queryId, [events[0]._id.toString()], 'http://localhost:3000');
       const fetchedAt = new Date('2026-08-10T12:00:00Z');
       await db.collection('feed_tokens').updateOne({ user_id: userId }, { $set: { last_fetched_at: fetchedAt } });
 
@@ -111,10 +146,10 @@ describe('queries repo', () => {
       });
     });
 
-    it('does not mix one user\u2019s queries into another user\u2019s dashboard', async () => {
-      await createQueryWithCandidates(db, userId, 'Mine', []);
+    it('does not mix one user’s queries into another user’s dashboard', async () => {
+      await createQuery(db, userId, 'Mine');
       const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });
-      await createQueryWithCandidates(db, insertedId.toString(), 'Not mine', []);
+      await createQuery(db, insertedId.toString(), 'Not mine');
 
       const dashboard = await listQueriesForUser(db, userId, 'http://localhost:3000');
       expect(dashboard.queries).toHaveLength(1);
@@ -126,35 +161,37 @@ describe('queries repo', () => {
 
   describe('updateQuery', () => {
     it('updates text and recurrence interval and returns the refreshed summary', async () => {
-      const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', []);
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      await completeQueryRun(db, query._id, [], null);
 
-      const updated = await updateQuery(db, userId, queryId, {
+      const updated = await updateQuery(db, userId, query.queryId, {
         text: 'Auer Dult Munich dates',
         recurrenceInterval: 'quarterly',
       });
 
       expect(updated).toMatchObject({
-        id: queryId,
+        id: query.queryId,
         text: 'Auer Dult Munich dates',
         recurrenceInterval: 'quarterly',
+        status: 'ready',
       });
 
-      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      const row = await db.collection('queries').findOne({ _id: query._id });
       expect(row?.query_text).toBe('Auer Dult Munich dates');
       expect(row?.recurrence_interval).toBe('quarterly');
     });
 
     it('allows updating just the schedule', async () => {
-      const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', []);
-      const updated = await updateQuery(db, userId, queryId, { recurrenceInterval: 'yearly' });
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      const updated = await updateQuery(db, userId, query.queryId, { recurrenceInterval: 'yearly' });
       expect(updated?.text).toBe('Auer Dult Munich');
       expect(updated?.recurrenceInterval).toBe('yearly');
     });
 
     it('returns null for a query the user does not own', async () => {
-      const { queryId } = await createQueryWithCandidates(db, userId, 'Mine', []);
+      const query = await createQuery(db, userId, 'Mine');
       const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });
-      const result = await updateQuery(db, insertedId.toString(), queryId, { text: 'hijack' });
+      const result = await updateQuery(db, insertedId.toString(), query.queryId, { text: 'hijack' });
       expect(result).toBeNull();
     });
   });

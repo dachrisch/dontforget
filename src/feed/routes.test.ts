@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
-import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { createQueryWithCandidates } from '../queries/queriesRepo';
+import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { approveEvents } from '../queries/approveEvents';
 import { registerFeedRoutes } from './routes';
 import Fastify from 'fastify';

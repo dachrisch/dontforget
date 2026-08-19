@@ -1,7 +1,7 @@
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
-import type { Db } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
 import {
-  createQueryWithCandidates,
+  createQuery,
   deleteQuery,
   getQueryEvents,
   listQueriesForUser,
@@ -9,10 +9,13 @@ import {
 } from './queriesRepo.js';
 import { approveEvents } from './approveEvents.js';
 import { rotateFeedToken } from '../feed/feedToken.js';
+import { enqueueSearch } from './searchQueue.js';
+import { runInitialQuery } from './initialRun.js';
 import {
   DEFAULT_RECURRENCE_INTERVAL,
   isRecurrenceInterval,
   type ExtractionResult,
+  type QueryStatus,
 } from '../types.js';
 
 export interface QueryRouteDeps {
@@ -35,19 +38,13 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (interval !== undefined && !isRecurrenceInterval(interval)) {
         return reply.code(400).send({ error: 'invalid recurrenceInterval' });
       }
-      const { events, cadence } = await deps.runQuery(text);
-      // The user picks the cadence on the review screen after the query
-      // returns — until then, prefer the AI's suggestion, then the client's
-      // explicit choice, then the default.
-      const storedInterval = interval ?? cadence ?? DEFAULT_RECURRENCE_INTERVAL;
-      const { queryId, candidates } = await createQueryWithCandidates(
-        deps.db,
-        request.userId!,
-        text,
-        events,
-        storedInterval
-      );
-      return reply.send({ queryId, candidates, suggestedInterval: cadence });
+      // The search runs in the background (searxng + opencode can take a
+      // minute or more), so the request only creates the query row and
+      // returns. The dashboard shows the running card and picks up the
+      // results on its next poll.
+      const query = await createQuery(deps.db, request.userId!, text, interval ?? DEFAULT_RECURRENCE_INTERVAL);
+      enqueueSearch(() => runInitialQuery(deps.db, query, { runQuery: deps.runQuery, applyCadence: interval === undefined }));
+      return reply.code(202).send({ queryId: query.queryId });
     }
   );
 
@@ -112,6 +109,35 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       return reply.send(events);
+    }
+  );
+
+  // Re-runs a query's search in the background — used by the dashboard's
+  // "Try again" action on a failed card. Accepts any non-running query (a
+  // ready query can be searched on demand too); running ones are rejected so
+  // we never stack a second search on top of one in flight.
+  app.post<{ Params: { id: string } }>(
+    '/api/queries/:id/run',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+      if (!queryObjectId) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      const row = await deps.db
+        .collection<{ _id: ObjectId; user_id: string; query_text: string; status?: QueryStatus }>('queries')
+        .findOne({ _id: queryObjectId, user_id: request.userId! });
+      if (!row) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      if (row.status === 'running') {
+        return reply.code(409).send({ error: 'already running' });
+      }
+      await deps.db.collection('queries').updateOne({ _id: row._id }, { $set: { status: 'running' as const } });
+      enqueueSearch(() =>
+        runInitialQuery(deps.db, { _id: row._id, query_text: row.query_text }, { runQuery: deps.runQuery, applyCadence: false })
+      );
+      return reply.code(202).send({ queryId: row._id.toString() });
     }
   );
 

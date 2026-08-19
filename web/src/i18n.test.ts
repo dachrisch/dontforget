@@ -7,19 +7,19 @@ function noopHandlers(): WorkspaceHandlers {
   return {
     onRequestMagicLink: vi.fn(),
     onSubmitQuery: vi.fn(),
-    onToggleCandidate: vi.fn(),
-    onSetReviewInterval: vi.fn(),
-    onApprove: vi.fn(),
-    onCancelSearch: vi.fn(),
     onStartEdit: vi.fn(),
     onToggleEditEvent: vi.fn(),
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
-    onGoToDashboard: vi.fn(),
-    onStartOver: vi.fn(),
     onSignOut: vi.fn(),
+    onStartReview: vi.fn(),
+    onToggleReviewEvent: vi.fn(),
+    onSetReviewInterval: vi.fn(),
+    onApproveReview: vi.fn(),
+    onCancelReview: vi.fn(),
+    onRetrySearch: vi.fn(),
   };
 }
 
@@ -72,48 +72,83 @@ describe('German rendering', () => {
     expect(document.documentElement.lang).toBe('de');
   });
 
-  it('renders review tiles with German month abbreviations and date order', () => {
+  it('renders reviewing tiles with German month abbreviations and date order', () => {
     setLocale('de');
     const container = document.createElement('div');
     renderWorkspace(
       container,
       {
-        kind: 'review',
-        queryId: 'q1',
-        candidates: [
-          {
-            id: 'e1',
-            label: 'Frühjahrsdult',
-            startDate: '2026-03-15',
-            endDate: '2026-03-22',
-            sourceUrl: 'u',
-            status: 'candidate',
-            selected: true,
-          },
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 1, status: 'ready' },
         ],
-        selectedInterval: 'yearly',
-        suggestedInterval: 'yearly',
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'yearly',
+          events: [
+            {
+              id: 'e1',
+              label: 'Frühjahrsdult',
+              startDate: '2026-03-15',
+              endDate: '2026-03-22',
+              sourceUrl: 'u',
+              status: 'candidate',
+              selected: true,
+            },
+          ],
+        },
       },
       noopHandlers()
     );
 
     expect(container.textContent).toContain('MÄR');
     expect(container.textContent).toContain('15. MÄR 2026–22. MÄR 2026');
-    expect(container.textContent).toContain('KI empfohlen: Jedes Jahr');
     expect(container.textContent).toContain('Auswahl bestätigen (1)');
   });
 
-  it('renders the no-results state in German with the saved term and a re-search form', () => {
+  it('renders the running query card in German', () => {
     setLocale('de');
     const container = document.createElement('div');
-    renderWorkspace(container, { kind: 'noResults', queryText: 'Auer Dult München' }, noopHandlers());
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'running' },
+        ],
+        feed: null,
+        editing: null,
+        reviewing: null,
+      },
+      noopHandlers()
+    );
 
     expect(container.textContent).toContain('Auer Dult München');
-    expect(container.textContent).toMatch(/keine Termine gefunden/i);
-    expect(container.textContent).toContain('Erneut suchen');
-    expect(container.textContent).toContain('Abbrechen');
-    const input = container.querySelector<HTMLInputElement>('input[name=query]')!;
-    expect(input.value).toBe('Auer Dult München');
+    expect(container.textContent).toMatch(/Suche/i);
+    expect(container.querySelectorAll('.tick')).toHaveLength(3);
+  });
+
+  it('renders the failed query card in German with a retry action', () => {
+    setLocale('de');
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'failed' },
+        ],
+        feed: null,
+        editing: null,
+        reviewing: null,
+      },
+      noopHandlers()
+    );
+
+    expect(container.textContent).toContain('fehlgeschlagen');
+    expect(container.textContent).toContain('Erneut versuchen');
   });
 
   it('renders the dashboard with German labels', () => {
@@ -124,10 +159,11 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1 },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1, status: 'ready' },
         ],
         feed: null,
         editing: null,
+        reviewing: null,
       },
       noopHandlers()
     );
@@ -146,10 +182,11 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0 },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'ready' },
         ],
         feed: null,
         editing: null,
+        reviewing: null,
       },
       noopHandlers()
     );

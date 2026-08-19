@@ -8,6 +8,7 @@ import {
   updateQuery,
   getQueryEvents,
   deleteQuery,
+  runQuery,
   signOut,
   ApiError,
 } from './api';
@@ -38,14 +39,14 @@ describe('api client', () => {
   });
 
   it('submitQuery parses the JSON body on success', async () => {
-    const body = { queryId: 'q1', candidates: [] };
+    const body = { queryId: 'q1' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
 
     expect(await submitQuery('Auer Dult Munich')).toEqual(body);
   });
 
   it('submitQuery sends the chosen recurrence interval', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ queryId: 'q1', candidates: [] }) });
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ queryId: 'q1' }) });
     vi.stubGlobal('fetch', fetchMock);
 
     await submitQuery('Auer Dult Munich', 'quarterly');
@@ -56,9 +57,21 @@ describe('api client', () => {
     );
   });
 
+  it('runQuery posts to the query run endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ queryId: 'q1' }) });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await runQuery('q1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/queries/q1/run', {
+      method: 'POST',
+      credentials: 'include',
+    });
+  });
+
   it('listQueries parses the dashboard payload', async () => {
     const body = {
-      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 2, candidateCount: 0 }],
+      queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 2, candidateCount: 0, status: 'ready' }],
       feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
     };
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
