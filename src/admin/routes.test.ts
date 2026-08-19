@@ -17,9 +17,11 @@ async function appFor(db: Db) {
 }
 
 async function userWithRole(db: Db, email: string, role: 'admin' | 'user') {
-  const { insertedId } = await db
-    .collection('users')
-    .insertOne({ email, ...(role === 'admin' ? { role: 'admin' } : {}) });
+  const { insertedId } = await db.collection('users').insertOne({
+    email,
+    created_at: new Date(),
+    ...(role === 'admin' ? { role: 'admin' } : {}),
+  });
   const userId = insertedId.toString();
   const sessionId = await new SessionService(db).createSession(userId);
   return { userId, sessionId };
