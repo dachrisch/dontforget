@@ -12,6 +12,10 @@ import { registerAdminRoutes } from './admin/routes.js';
 import { registerBillingRoutes } from './billing/routes.js';
 import { registerBillingWebhook } from './billing/webhook.js';
 import type { BillingService } from './billing/billingService.js';
+import { createNoopModelRegistry } from './search/models.js';
+import type { ModelRegistry } from './search/models.js';
+import { createMetricsService } from './search/metrics.js';
+import type { MetricsService } from './search/metrics.js';
 import type { ExtractionResult } from './types.js';
 
 export interface AppDeps {
@@ -22,6 +26,11 @@ export interface AppDeps {
   runQuery: (query: string) => Promise<ExtractionResult>;
   billingService: BillingService;
   webhookSecret?: string;
+  // Model registry + metrics are required for the admin model/health
+  // endpoints; defaulted to no-op variants when omitted so unit tests that
+  // only exercise user/query flows don't need to provide them.
+  modelRegistry?: ModelRegistry;
+  metrics?: MetricsService;
   // Emails that get the admin role on sign-in. Defaults to none — a
   // deployment without ADMIN_EMAILS simply has no admin UI.
   adminEmails?: readonly string[];
@@ -61,7 +70,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     billingService: deps.billingService,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
-  registerAdminRoutes(app, { db: deps.db, requireAdmin: createRequireAdmin(sessionService) });
+  registerAdminRoutes(app, {
+    db: deps.db,
+    requireAdmin: createRequireAdmin(sessionService),
+    // Defaults when a test only exercises user/query flows: an empty model
+    // registry and a metrics service that records nothing.
+    modelRegistry:
+      deps.modelRegistry ??
+      createNoopModelRegistry(),
+    metrics: deps.metrics ?? createMetricsService(null),
+  });
   registerBillingRoutes(app, {
     billingService: deps.billingService,
     requireAuth,

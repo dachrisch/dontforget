@@ -25,6 +25,8 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteAdminUser: vi.fn(),
     onUpgrade: vi.fn(),
     onManageBilling: vi.fn(),
+    onSetAdminModel: vi.fn(),
+    onAddAdminModel: vi.fn(),
   };
 }
 

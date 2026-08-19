@@ -1,5 +1,7 @@
 import { Agent, fetch as undiciFetch } from 'undici';
 import { isRecurrenceInterval, type ExtractionResult, type SearchResult } from '../types.js';
+import type { ActiveModel } from './models.js';
+import type { MetricsService } from './metrics.js';
 
 // servyy-test's opencode instance is only reachable at an internal-only
 // `.lxd` hostname (Traefik's Let's Encrypt resolver can't issue a real cert
@@ -52,22 +54,55 @@ interface OpencodeMessage {
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
+export interface ExtractDatesOptions {
+  // The ordered list of models to try (default first, then backups). Falls
+  // back to the built-in MODEL_TIERS when omitted. Admin-controlled via the
+  // model registry.
+  models?: ActiveModel[];
+  // Records one model_metric per attempt (success or failure). No-op when
+  // omitted or null, so callers without a metrics service are unaffected.
+  metrics?: MetricsService | null;
+}
+
+const noopMetrics: MetricsService = {
+  async recordModelCall() {},
+  async recordSearchCall() {},
+};
+
 export async function extractDates(
   baseUrl: string,
   apiKey: string,
   query: string,
-  results: SearchResult[]
+  results: SearchResult[],
+  opts: ExtractDatesOptions = {}
 ): Promise<ExtractionResult> {
+  const models = opts.models ?? MODEL_TIERS;
+  const metrics = opts.metrics ?? noopMetrics;
   let lastError: unknown;
-  for (const model of MODEL_TIERS) {
+  for (const model of models) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const started = Date.now();
       try {
         const sessionId = await createSession(baseUrl, apiKey, model);
         await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
         const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-        return parseExtraction(replyText);
+        const parsed = parseExtraction(replyText);
+        await metrics.recordModelCall({
+          modelId: model.id,
+          providerId: model.providerID,
+          outcome: 'success',
+          durationMs: Date.now() - started,
+        });
+        return parsed;
       } catch (err) {
         lastError = err;
+        await metrics.recordModelCall({
+          modelId: model.id,
+          providerId: model.providerID,
+          outcome: 'failure',
+          errorType: classifyError(err),
+          durationMs: Date.now() - started,
+        });
         if (attempt < MAX_ATTEMPTS) {
           await sleep(RETRY_DELAY_MS * 2 ** (attempt - 1));
         }
@@ -75,6 +110,17 @@ export async function extractDates(
     }
   }
   throw lastError;
+}
+
+// Bucket error messages into a coarse type for admin visibility — a provider
+// outage (503/429) and a malformed reply are very different signals.
+function classifyError(err: unknown): string {
+  const msg = err instanceof Error ? err.message : String(err);
+  if (msg.includes('503') || msg.includes('429') || msg.includes('Endpoint is unavailable')) return 'provider-unavailable';
+  if (msg.includes('timed out')) return 'timeout';
+  if (msg.includes('no text content') || msg.includes('JSON') || msg.includes('unterminated')) return 'bad-reply';
+  if (msg.includes('session create failed')) return 'session-create';
+  return 'other';
 }
 
 // Left unspecified, opencode picks its own default model — confirmed live

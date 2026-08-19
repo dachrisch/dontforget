@@ -1,4 +1,4 @@
-import type { AdminStats, AdminUser, BillingStatus, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, BillingStatus, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export type EventDecision = 'none' | 'approve' | 'dismiss';
 
@@ -41,6 +41,8 @@ export interface AdminState {
   kind: 'admin';
   stats: AdminStats | null;
   users: AdminUser[];
+  models: AdminModel[];
+  search: AdminSearch | null;
 }
 
 export type WorkspaceState =
@@ -65,7 +67,8 @@ export type WorkspaceEvent =
   | { type: 'SET_REVIEW_INTERVAL'; interval: RecurrenceInterval }
   | { type: 'CANCEL_REVIEW' }
   | { type: 'REVIEW_APPROVED'; queryId: string }
-  | { type: 'ADMIN_LOADED'; stats: AdminStats; users: AdminUser[] }
+  | { type: 'ADMIN_LOADED'; stats: AdminStats; users: AdminUser[]; models: AdminModel[]; search: AdminSearch }
+  | { type: 'ADMIN_MODELS_UPDATED'; models: AdminModel[] }
   | { type: 'ADMIN_USER_DELETED'; id: string };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
@@ -205,7 +208,17 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
 
     case 'ADMIN_LOADED':
       if (state.kind !== 'admin') return state;
-      return { kind: 'admin', stats: event.stats, users: event.users };
+      return {
+        kind: 'admin',
+        stats: event.stats,
+        users: event.users,
+        models: event.models,
+        search: event.search,
+      };
+
+    case 'ADMIN_MODELS_UPDATED':
+      if (state.kind !== 'admin') return state;
+      return { ...state, models: event.models };
 
     case 'ADMIN_USER_DELETED':
       if (state.kind !== 'admin') return state;

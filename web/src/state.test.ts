@@ -352,18 +352,20 @@ describe('reducer', () => {
   });
 
   it('loads stats and users into the admin panel', () => {
-    const state: WorkspaceState = { kind: 'admin', stats: null, users: [] };
+    const state: WorkspaceState = { kind: 'admin', stats: null, users: [], models: [], search: null };
     const stats = { totalUsers: 2, totalQueries: 3, approvedEvents: 1, candidateEvents: 0, activeUsers7d: 1 };
     const users: import('./types').AdminUser[] = [{ id: 'u1', email: 'a@example.com', role: 'user', createdAt: null, queryCount: 1 }];
+    const models: import('./types').AdminModel[] = [];
+    const search = { calls: 0, failures: 0, errorRate: null, avgLatencyMs: null, maxLatencyMs: null, avgResultCount: null, lastErrorAt: null };
 
-    const next = reducer(state, { type: 'ADMIN_LOADED', stats, users });
-    expect(next).toEqual({ kind: 'admin', stats, users });
+    const next = reducer(state, { type: 'ADMIN_LOADED', stats, users, models, search });
+    expect(next).toEqual({ kind: 'admin', stats, users, models, search });
   });
 
   it('ignores ADMIN_LOADED outside the admin panel', () => {
     const state: WorkspaceState = { kind: 'empty' };
     expect(
-      reducer(state, { type: 'ADMIN_LOADED', stats: { totalUsers: 0, totalQueries: 0, approvedEvents: 0, candidateEvents: 0, activeUsers7d: 0 }, users: [] })
+      reducer(state, { type: 'ADMIN_LOADED', stats: { totalUsers: 0, totalQueries: 0, approvedEvents: 0, candidateEvents: 0, activeUsers7d: 0 }, users: [], models: [], search: { calls: 0, failures: 0, errorRate: null, avgLatencyMs: null, maxLatencyMs: null, avgResultCount: null, lastErrorAt: null } })
     ).toBe(state);
   });
 
@@ -375,6 +377,8 @@ describe('reducer', () => {
         { id: 'u1', email: 'a@example.com', role: 'user', createdAt: null, queryCount: 1 },
         { id: 'u2', email: 'b@example.com', role: 'admin', createdAt: null, queryCount: 0 },
       ],
+      models: [],
+      search: null,
     };
 
     const next = reducer(state, { type: 'ADMIN_USER_DELETED', id: 'u1' });

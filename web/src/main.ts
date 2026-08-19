@@ -21,6 +21,10 @@ import {
   startCheckout,
   startPortal,
   ApiError,
+  listAdminModels,
+  getAdminSearch,
+  updateAdminModel,
+  addAdminModel,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
 import { detectLocale, setLocale, t, type MessageKey } from './i18n';
@@ -89,7 +93,7 @@ function mountAdminNav(): void {
   button.textContent = t('admin.nav');
   button.addEventListener('click', () => {
     clearError();
-    setState({ kind: 'admin', stats: null, users: [] });
+    setState({ kind: 'admin', stats: null, users: [], models: [], search: null });
     void refreshAdmin();
   });
   nav.appendChild(button);
@@ -98,8 +102,13 @@ function mountAdminNav(): void {
 
 async function refreshAdmin(): Promise<void> {
   try {
-    const [stats, users] = await Promise.all([getAdminStats(), listAdminUsers()]);
-    setState(reducer(state, { type: 'ADMIN_LOADED', stats, users }));
+    const [stats, users, models, search] = await Promise.all([
+      getAdminStats(),
+      listAdminUsers(),
+      listAdminModels(),
+      getAdminSearch(),
+    ]);
+    setState(reducer(state, { type: 'ADMIN_LOADED', stats, users, models, search }));
   } catch (err) {
     showError('error.loadingAdmin', err);
   }
@@ -343,6 +352,18 @@ function paint() {
     onManageBilling: () => {
       clearError();
       startPortal();
+    },
+    onSetAdminModel: (id, patch) => {
+      clearError();
+      updateAdminModel(id, patch)
+        .then(() => refreshAdmin())
+        .catch(err => showError('error.updatingModel', err));
+    },
+    onAddAdminModel: (id, providerID) => {
+      clearError();
+      addAdminModel(id, providerID)
+        .then(() => refreshAdmin())
+        .catch(err => showError('error.addingModel', err));
     },
   });
 }

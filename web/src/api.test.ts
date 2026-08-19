@@ -15,6 +15,10 @@ import {
   listAdminUsers,
   deleteAdminUser,
   getBillingStatus,
+  listAdminModels,
+  addAdminModel,
+  updateAdminModel,
+  getAdminSearch,
   ApiError,
 } from './api';
 
@@ -249,5 +253,59 @@ describe('api client', () => {
 
     await expect(getBillingStatus()).resolves.toEqual(body);
     expect(fetchMock).toHaveBeenCalledWith('/api/billing/status', { credentials: 'include' });
+  });
+
+  it('listAdminModels parses the model list', async () => {
+    const body = [
+      {
+        id: 'deepseek-v4-flash-free',
+        providerId: 'opencode',
+        role: 'default',
+        enabled: true,
+        calls: 10,
+        failures: 1,
+        successRate: 90,
+        avgLatencyMs: 1200,
+        maxLatencyMs: 3000,
+      },
+    ];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await listAdminModels()).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/models', { credentials: 'include' });
+  });
+
+  it('addAdminModel posts a new model', async () => {
+    const body = { id: 'new-model', providerId: 'opencode', role: null, enabled: true };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await addAdminModel('new-model', 'opencode')).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/models', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: 'new-model', providerID: 'opencode' }),
+    });
+  });
+
+  it('updateAdminModel patches a model', async () => {
+    const body = { id: 'big-pickle', providerId: 'opencode', role: 'default', enabled: true };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await updateAdminModel('big-pickle', { role: 'default' })).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/models/big-pickle', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: 'default' }),
+    });
+  });
+
+  it('getAdminSearch parses the search health payload', async () => {
+    const body = { calls: 12, failures: 0, errorRate: 0, avgLatencyMs: 400, maxLatencyMs: 900, avgResultCount: 5, lastErrorAt: null };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await getAdminSearch()).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/search', { credentials: 'include' });
   });
 });

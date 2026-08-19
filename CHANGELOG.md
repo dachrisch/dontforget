@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.18.1](https://github.com/dachrisch/dontforget/compare/v0.18.0...v0.18.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* stop body's 100vh box from overflowing the viewport on mobile ([#110](https://github.com/dachrisch/dontforget/issues/110)) ([2724db4](https://github.com/dachrisch/dontforget/commit/2724db46fe9369542510bb14664d44cd5cde8cc8))
+
+## [0.18.0](https://github.com/dachrisch/dontforget/compare/v0.17.0...v0.18.0) (2026-08-19)
+
+
+### Reverts
+
+* remove workflow_dispatch from release-please ([1b7d820](https://github.com/dachrisch/dontforget/commit/1b7d820424269f74c7edd3d15ba7554337f410a6))
+
+
+### Miscellaneous Chores
+
+* release as 0.18.0 ([a4e08c1](https://github.com/dachrisch/dontforget/commit/a4e08c1f38c476534e685dbe99214b78e188183b))
+
 ## [0.17.0](https://github.com/dachrisch/dontforget/compare/v0.16.0...v0.17.0) (2026-08-19)
 
 

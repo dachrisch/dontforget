@@ -259,4 +259,36 @@ describe('extractDates', () => {
     vi.useRealTimers();
     expect(fetchMock).toHaveBeenCalledTimes(18);
   });
+
+  it('records a model metric per attempt and honors a custom models list', async () => {
+    // Custom list = admin-configured registry; only "primary" is enabled.
+    const models = [{ id: 'primary', providerID: 'opencode' }];
+    const recordModelCall = vi.fn().mockResolvedValue(undefined);
+    const metrics = { recordModelCall, recordSearchCall: vi.fn() };
+
+    // First attempt fails, second succeeds.
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_1'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'));
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_2'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', [], { models, metrics });
+    await vi.runAllTimersAsync();
+    await promise;
+    vi.useRealTimers();
+
+    // One failure (attempt 1) + one success (attempt 2), both for "primary".
+    expect(recordModelCall).toHaveBeenCalledTimes(2);
+    expect(recordModelCall.mock.calls[0][0]).toMatchObject({ modelId: 'primary', outcome: 'failure' });
+    expect(recordModelCall.mock.calls[1][0]).toMatchObject({ modelId: 'primary', outcome: 'success' });
+    // The custom list is what the client tried — no fallback model was used.
+    expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
+      model: { id: 'primary', providerID: 'opencode' },
+    });
+  });
 });
