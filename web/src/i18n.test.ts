@@ -95,7 +95,7 @@ describe('German rendering', () => {
               endDate: '2026-03-22',
               sourceUrl: 'u',
               status: 'candidate',
-              selected: true,
+              decision: 'approve',
             },
           ],
         },

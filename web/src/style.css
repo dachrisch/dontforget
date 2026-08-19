@@ -358,10 +358,25 @@ h1, h2 {
   outline-offset: 2px;
 }
 
-.day-tile-selected {
+.day-tile-decision-approve {
   border: 2px solid var(--accent);
   background: var(--paper);
   color: var(--ink);
+}
+
+.day-tile-decision-dismiss {
+  border: 1px dashed var(--ink-muted);
+  background: var(--paper-alt);
+  color: var(--ink-muted);
+  text-decoration: line-through;
+}
+
+.day-tile-decision-label {
+  display: block;
+  font-size: 0.7rem;
+  font-style: italic;
+  margin-top: 0.15rem;
+  text-decoration: none;
 }
 
 .day-tile-approved {

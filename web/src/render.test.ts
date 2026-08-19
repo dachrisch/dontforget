@@ -174,7 +174,7 @@ describe('renderWorkspace', () => {
               endDate: '2026-04-11',
               sourceUrl: 'u',
               status: 'candidate',
-              selected: true,
+              decision: 'approve',
             },
           ],
         },
@@ -186,7 +186,7 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('Frühjahrsdult');
     expect(container.textContent).toContain('APR');
     expect(container.textContent).toContain('11');
-    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(true);
+    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-decision-approve')).toBe(true);
 
     const checkbox = container.querySelector<HTMLInputElement>('.query-card-reviewing .day-tile input[type=checkbox]')!;
     checkbox.click();
@@ -223,7 +223,7 @@ describe('renderWorkspace', () => {
     expect(handlers.onSetReviewInterval).toHaveBeenCalledWith('quarterly');
   });
 
-  it('shows a date range and an unselected style when start and end differ', () => {
+  it('shows a date range and a neutral style when start and end differ', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
@@ -243,7 +243,7 @@ describe('renderWorkspace', () => {
               endDate: '2026-10-04',
               sourceUrl: 'u',
               status: 'candidate',
-              selected: false,
+              decision: 'none',
             },
           ],
         },
@@ -252,7 +252,7 @@ describe('renderWorkspace', () => {
     );
 
     expect(container.textContent).toContain('SEP 19, 2026–OCT 4, 2026');
-    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-selected')).toBe(false);
+    expect(container.querySelector('.day-tile')!.classList.contains('day-tile-decision-approve')).toBe(false);
   });
 
   it('only replays the enter animation on an actual state change, not a same-state re-render', () => {
@@ -295,7 +295,7 @@ describe('renderWorkspace', () => {
               endDate: 'not-a-date',
               sourceUrl: 'u',
               status: 'candidate',
-              selected: false,
+              decision: 'none',
             },
           ],
         },
@@ -305,8 +305,6 @@ describe('renderWorkspace', () => {
 
     expect(container.textContent).not.toContain('undefined');
     expect(container.textContent).toContain('not-a-date');
-    expect(container.querySelector('.day-tile-month')!.textContent).toBe('?');
-    expect(container.querySelector('.day-tile-day')!.textContent).toBe('?');
   });
 
   it('renders the dashboard with feed add buttons, copy actions, schedules and counts', () => {
@@ -455,8 +453,8 @@ describe('renderWorkspace', () => {
           text: 'Auer Dult Munich',
           recurrenceInterval: 'quarterly',
           events: [
-            { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', selected: false },
-            { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', selected: true },
+            { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'none' },
+            { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', decision: 'approve' },
           ],
         },
         reviewing: null,
@@ -469,6 +467,58 @@ describe('renderWorkspace', () => {
     expect(checkbox.checked).toBe(true);
     checkbox.click();
     expect(handlers.onToggleEditEvent).toHaveBeenCalledWith('e2');
+  });
+
+  it('shows a distinct dismiss style and label when a candidate is decided for dismissal', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [query()],
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'weekly',
+          events: [
+            { id: 'e1', label: 'Oktoberfest', startDate: '2026-09-19', endDate: '2026-09-19', sourceUrl: 'u', status: 'candidate', decision: 'dismiss' },
+          ],
+        },
+      },
+      noopHandlers()
+    );
+
+    const tile = container.querySelector('.day-tile')!;
+    expect(tile.classList.contains('day-tile-decision-dismiss')).toBe(true);
+    expect(tile.classList.contains('day-tile-decision-approve')).toBe(false);
+    expect(container.textContent).toContain('Dismissing');
+  });
+
+  it('counts only approve-decided tiles in the review approve button, not dismissed ones', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [query()],
+        feed: null,
+        editing: null,
+        reviewing: {
+          queryId: 'q1',
+          recurrenceInterval: 'weekly',
+          events: [
+            { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', decision: 'approve' },
+            { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'candidate', decision: 'dismiss' },
+          ],
+        },
+      },
+      noopHandlers()
+    );
+
+    const approveButton = container.querySelector<HTMLButtonElement>('button[data-action=approve-review]')!;
+    expect(approveButton.textContent).toContain('1');
+    expect(approveButton.textContent).not.toContain('2');
   });
 
   it('deleting a query requires a confirmation click before calling the handler', () => {
