@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.0](https://github.com/dachrisch/dontforget/compare/v0.16.0...v0.17.0) (2026-08-19)
+
+
+### Features
+
+* add admin section with user management and role-based access ([#106](https://github.com/dachrisch/dontforget/issues/106)) ([ecaea1d](https://github.com/dachrisch/dontforget/commit/ecaea1d79fa009fc616c35e160a9d2cbcc2c4aba))
+
 ## [0.16.0](https://github.com/dachrisch/dontforget/compare/v0.15.1...v0.16.0) (2026-08-19)
 
 
