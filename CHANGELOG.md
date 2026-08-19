@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/dachrisch/dontforget/compare/v0.18.1...v0.19.0) (2026-08-19)
+
+
+### Features
+
+* add admin model performance and search availability insights ([#113](https://github.com/dachrisch/dontforget/issues/113)) ([9ae9312](https://github.com/dachrisch/dontforget/commit/9ae9312e5585a50d4770c06fed65dc7643405a9f))
+
 ## [0.18.1](https://github.com/dachrisch/dontforget/compare/v0.18.0...v0.18.1) (2026-08-19)
 
 
