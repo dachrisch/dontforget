@@ -1,4 +1,4 @@
-import type { AdminStats, AdminUser, Dashboard, EventDetail, Me, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -156,4 +156,37 @@ export async function deleteAdminUser(userId: string): Promise<void> {
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
   }
+}
+
+export async function listAdminModels(): Promise<AdminModel[]> {
+  const response = await fetch('/api/admin/models', { credentials: 'include' });
+  return handle(response);
+}
+
+export async function addAdminModel(id: string, providerID: string): Promise<AdminModel> {
+  const response = await fetch('/api/admin/models', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, providerID }),
+  });
+  return handle(response);
+}
+
+export async function updateAdminModel(
+  id: string,
+  patch: { enabled?: boolean; role?: ModelRole | null }
+): Promise<AdminModel> {
+  const response = await fetch(`/api/admin/models/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  return handle(response);
+}
+
+export async function getAdminSearch(): Promise<AdminSearch> {
+  const response = await fetch('/api/admin/search', { credentials: 'include' });
+  return handle(response);
 }

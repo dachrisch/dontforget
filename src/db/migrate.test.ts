@@ -21,11 +21,26 @@ describe('runMigrations', () => {
     await db.dropDatabase();
 
     const firstRun = await runMigrations(db);
-    expect(firstRun).toEqual(['001_init.ts', '002_queries_dashboard.ts', '003_events_dedup_index.ts']);
+    expect(firstRun).toEqual([
+      '001_init.ts',
+      '002_queries_dashboard.ts',
+      '003_events_dedup_index.ts',
+      '004_models_metrics.ts',
+    ]);
 
     const collections = await db.listCollections().toArray();
     expect(collections.map(c => c.name)).toEqual(
-      expect.arrayContaining(['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens'])
+      expect.arrayContaining([
+        'users',
+        'magic_links',
+        'sessions',
+        'queries',
+        'events',
+        'feed_tokens',
+        'models',
+        'model_metrics',
+        'search_metrics',
+      ])
     );
 
     const feedIndexes = await db.collection('feed_tokens').indexes();

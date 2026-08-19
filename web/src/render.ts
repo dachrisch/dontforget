@@ -22,6 +22,8 @@ export interface WorkspaceHandlers {
   onRetrySearch: (queryId: string) => void;
   onCloseAdmin: () => void;
   onDeleteAdminUser: (userId: string) => void;
+  onSetAdminModel: (id: string, patch: { enabled?: boolean; role?: 'default' | 'backup' | null }) => void;
+  onAddAdminModel: (id: string, providerID: string) => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -510,10 +512,81 @@ function renderAdmin(state: AdminState, handlers: WorkspaceHandlers): HTMLElemen
     )
     .join('');
 
+  const search = state.search;
+  const searchCard = search
+    ? `
+    <div class="admin-stats">
+      <div class="admin-stat">
+        <span class="admin-stat-value">${search.calls}</span>
+        <span class="admin-stat-label">${t('admin.searchCalls')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${search.errorRate === null ? '—' : `${search.errorRate}%`}</span>
+        <span class="admin-stat-label">${t('admin.searchErrorRate')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${search.avgLatencyMs === null ? '—' : `${search.avgLatencyMs} ms`}</span>
+        <span class="admin-stat-label">${t('admin.searchAvgLatency')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${search.avgResultCount === null ? '—' : search.avgResultCount}</span>
+        <span class="admin-stat-label">${t('admin.searchAvgResults')}</span>
+      </div>
+    </div>
+    ${search.lastErrorAt ? `<p class="subtext">${t('admin.searchLastError', { at: search.lastErrorAt })}</p>` : ''}`
+    : `<p class="subtext">${t('admin.loading')}</p>`;
+
+  const modelRows = state.models
+    .map(
+      model => {
+        const roleLabel = model.role === 'default' ? t('admin.modelRoleDefault') : model.role === 'backup' ? t('admin.modelRoleBackup') : '—';
+        return `
+    <div class="admin-model-row" data-id="${model.id}">
+      <span class="ledger-label">${escapeHtml(model.id)}</span>
+      <span class="ledger-value">${roleLabel}</span>
+      <span class="ledger-value">${model.enabled ? t('admin.modelEnabled') : t('admin.modelRetired')}</span>
+      <span class="ledger-value">${model.successRate === null ? '—' : `${model.successRate}%`}</span>
+      <span class="ledger-value">${model.avgLatencyMs === null ? '—' : `${model.avgLatencyMs} ms`}</span>
+      <div class="admin-model-actions">
+        <button type="button" class="stamp-button" data-action="model-default" ${model.role === 'default' ? 'disabled' : ''}>${t('admin.modelSetDefault')}</button>
+        <button type="button" class="stamp-button" data-action="model-backup" ${model.role === 'backup' ? 'disabled' : ''}>${t('admin.modelSetBackup')}</button>
+        <button type="button" class="stamp-button" data-action="model-toggle" data-enabled="${model.enabled}" ${model.role === 'default' ? 'disabled' : ''}>${model.enabled ? t('admin.modelRetire') : t('admin.modelEnable')}</button>
+      </div>
+    </div>`;
+      }
+    )
+    .join('');
+
   wrapper.innerHTML = `
     <h1>${t('admin.title')}</h1>
     ${statsCards}
+
+    <section class="admin-search" aria-label="${t('admin.searchTitle')}">
+      <h2>${t('admin.searchTitle')}</h2>
+      ${searchCard}
+    </section>
+
+    <section class="admin-models" aria-label="${t('admin.modelsTitle')}">
+      <h2>${t('admin.modelsTitle')}</h2>
+      ${modelRows.length > 0 ? `
+      <div class="admin-model-row admin-user-head" aria-hidden="true">
+        <span class="ledger-label">${t('admin.model')}</span>
+        <span class="ledger-value">${t('admin.modelRole')}</span>
+        <span class="ledger-value">${t('admin.modelStatus')}</span>
+        <span class="ledger-value">${t('admin.modelSuccess')}</span>
+        <span class="ledger-value">${t('admin.modelLatency')}</span>
+        <span></span>
+      </div>
+      ${modelRows}` : `<p class="subtext">${t('admin.noModels')}</p>`}
+      <form class="admin-add-model" data-action="add-model">
+        <input type="text" name="id" placeholder="${t('admin.addModelId')}" required>
+        <input type="text" name="providerID" placeholder="${t('admin.addModelProvider')}" required>
+        <button type="submit" class="stamp-button">${t('admin.addModel')}</button>
+      </form>
+    </section>
+
     <section class="admin-users" aria-label="${t('admin.users')}">
+      <h2>${t('admin.users')}</h2>
       <div class="admin-user-row admin-user-head" aria-hidden="true">
         <span class="ledger-label">${t('admin.email')}</span>
         <span class="ledger-value">${t('admin.role')}</span>
@@ -538,6 +611,27 @@ function renderAdmin(state: AdminState, handlers: WorkspaceHandlers): HTMLElemen
       const id = button.closest<HTMLElement>('.admin-user-row')!.dataset.id!;
       handlers.onDeleteAdminUser(id);
     });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('button[data-action]').forEach(button => {
+    const action = button.dataset.action;
+    if (action === 'model-default' || action === 'model-backup' || action === 'model-toggle') {
+      const id = button.closest<HTMLElement>('.admin-model-row')!.dataset.id!;
+      button.addEventListener('click', () => {
+        if (action === 'model-default') handlers.onSetAdminModel(id, { role: 'default' });
+        else if (action === 'model-backup') handlers.onSetAdminModel(id, { role: 'backup' });
+        else handlers.onSetAdminModel(id, { enabled: button.dataset.enabled === 'true' ? false : true });
+      });
+    }
+  });
+
+  const addForm = wrapper.querySelector<HTMLFormElement>('form[data-action=add-model]');
+  addForm?.addEventListener('submit', event => {
+    event.preventDefault();
+    const id = addForm.elements.namedItem('id') as HTMLInputElement;
+    const providerID = addForm.elements.namedItem('providerID') as HTMLInputElement;
+    if (!id.value.trim() || !providerID.value.trim()) return;
+    handlers.onAddAdminModel(id.value.trim(), providerID.value.trim());
   });
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=close-admin]')?.addEventListener('click', () => {

@@ -5,6 +5,8 @@ import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } f
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
 import { SessionService, SESSION_COOKIE } from '../auth/session';
+import { createModelRegistry } from '../search/models';
+import { createMetricsService } from '../search/metrics';
 
 async function appFor(db: Db) {
   return buildApp({
@@ -13,6 +15,8 @@ async function appFor(db: Db) {
     publicBaseUrl: 'http://localhost:3000',
     frontendUrl: 'http://localhost:5173',
     runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
+    modelRegistry: createModelRegistry({ db }),
+    metrics: createMetricsService(db),
   });
 }
 
@@ -173,5 +177,98 @@ describe('admin routes', () => {
       headers: authHeaders(sessionId),
     });
     expect(response.statusCode).toBe(400);
+  });
+
+  it('GET /api/admin/models lists seeded models with zeroed metrics', async () => {
+    const app = await appFor(db);
+    const { sessionId } = await userWithRole(db, 'admin@example.com', 'admin');
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/models',
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(200);
+    const models = response.json();
+    expect(models).toHaveLength(2);
+    expect(models[0]).toMatchObject({ id: 'deepseek-v4-flash-free', role: 'default', enabled: true });
+    expect(models[1]).toMatchObject({ id: 'big-pickle', role: 'backup', enabled: true });
+    expect(models[0].calls).toBe(0);
+    expect(models[0].successRate).toBeNull();
+  });
+
+  it('PATCH /api/admin/models/:id switches default and retires models', async () => {
+    const app = await appFor(db);
+    const { sessionId } = await userWithRole(db, 'admin@example.com', 'admin');
+
+    // Promote the backup to default, then retire the old default.
+    const promote = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/models/big-pickle',
+      headers: authHeaders(sessionId),
+      payload: { role: 'default' },
+    });
+    expect(promote.statusCode).toBe(200);
+    expect(promote.json()).toMatchObject({ id: 'big-pickle', role: 'default' });
+
+    const retire = await app.inject({
+      method: 'PATCH',
+      url: '/api/admin/models/deepseek-v4-flash-free',
+      headers: authHeaders(sessionId),
+      payload: { enabled: false },
+    });
+    expect(retire.statusCode).toBe(200);
+    expect(retire.json()).toMatchObject({ id: 'deepseek-v4-flash-free', enabled: false });
+
+    const models = (await app.inject({
+      method: 'GET',
+      url: '/api/admin/models',
+      headers: authHeaders(sessionId),
+    })).json();
+    const defaultModel = models.find((m: { id: string }) => m.id === 'big-pickle');
+    expect(defaultModel.role).toBe('default');
+  });
+
+  it('POST /api/admin/models adds a model and rejects duplicates', async () => {
+    const app = await appFor(db);
+    const { sessionId } = await userWithRole(db, 'admin@example.com', 'admin');
+
+    const add = await app.inject({
+      method: 'POST',
+      url: '/api/admin/models',
+      headers: authHeaders(sessionId),
+      payload: { id: 'new-model', providerID: 'opencode' },
+    });
+    expect(add.statusCode).toBe(201);
+    expect(add.json()).toMatchObject({ id: 'new-model', enabled: true, role: null });
+
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/api/admin/models',
+      headers: authHeaders(sessionId),
+      payload: { id: 'new-model', providerID: 'opencode' },
+    });
+    expect(duplicate.statusCode).toBe(409);
+  });
+
+  it('GET /api/admin/search reports call volume and failure rate', async () => {
+    const app = await appFor(db);
+    const { sessionId } = await userWithRole(db, 'admin@example.com', 'admin');
+
+    const now = new Date();
+    await db.collection('search_metrics').insertMany([
+      { outcome: 'success', result_count: 5, duration_ms: 400, created_at: now },
+      { outcome: 'success', result_count: 3, duration_ms: 600, created_at: now },
+      { outcome: 'failure', error_type: 'searxng request failed: 500', result_count: 0, duration_ms: 800, created_at: now },
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/admin/search',
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ calls: 3, failures: 1, errorRate: 33.3 });
+    expect(response.json().avgLatencyMs).toBe(600);
   });
 });
