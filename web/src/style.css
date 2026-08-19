@@ -591,10 +591,16 @@ h1, h2 {
   font-size: 1.05rem;
 }
 
+/* Vertical-only padding, offset by an equal negative margin, grows the
+   tappable area to clear WCAG 2.5.8's 24px minimum without shifting text
+   position or horizontal spacing (no visible background/border to betray
+   the larger box, and the negative margin cancels the padding's effect on
+   both layout and baseline alignment). */
 .link-button {
   background: none;
   border: none;
-  padding: 0;
+  padding: 0.6rem 0;
+  margin: -0.6rem 0;
   color: var(--accent);
   font-family: var(--font-body);
   font-size: 0.75rem;
