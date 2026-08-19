@@ -1,6 +1,6 @@
 import type { AdminState, WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft, EditingSeriesDraft } from './state';
 import { RECURRENCE_INTERVALS } from './types';
-import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval, SeriesSummary } from './types';
+import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval, BillingStatus, SeriesSummary } from './types';
 import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
 
 export interface WorkspaceHandlers {
@@ -26,6 +26,8 @@ export interface WorkspaceHandlers {
   onDeleteAdminUser: (userId: string) => void;
   onSetAdminModel: (id: string, patch: { enabled?: boolean; role?: 'default' | 'backup' | null }) => void;
   onAddAdminModel: (id: string, providerID: string) => void;
+  onUpgrade: () => void;
+  onManageBilling: () => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -91,7 +93,7 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'empty':
       return renderEmpty(handlers);
     case 'dashboard':
-      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, handlers);
+      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, state.billing, handlers);
     case 'admin':
       return renderAdmin(state, handlers);
   }
@@ -234,6 +236,18 @@ function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string 
       </span>
     </div>${addButtons}
   `;
+}
+
+function renderBillingRow(billing: BillingStatus | null, handlers: WorkspaceHandlers): string {
+  if (!billing) return '';
+  if (billing.subscribed) {
+    return `<p class="subtext">${t('billing.subscribed', { count: billing.activeQueryCount })}</p>
+      <button type="button" class="stamp-button stamp-button-quiet" data-action="manage-billing">${t('billing.manage')}</button>`;
+  }
+  return `<p class="subtext">${t('billing.freeLimit', {
+    count: billing.freeLimit - billing.activeQueryCount,
+  })} · ${t('billing.perQuery', { price: billing.pricePerExtraQuery })}</p>
+    <button type="button" class="stamp-button stamp-button-quiet" data-action="upgrade">${t('billing.upgrade')}</button>`;
 }
 
 // Monochrome line icons for the action buttons. They inherit the button
@@ -418,6 +432,7 @@ function renderDashboard(
   feed: FeedSummary | null,
   editing: EditingDraft | null,
   reviewing: ReviewingDraft | null,
+  billing: BillingStatus | null,
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
@@ -456,6 +471,9 @@ function renderDashboard(
             <p class="subtext">${t('dashboard.rotateSubtext')}</p>`
           : `<p class="subtext">${t('dashboard.noCalendar')}</p>`
       }
+    </section>
+    <section class="billing-summary" aria-label="${t('billing.title')}">
+      ${renderBillingRow(billing, handlers)}
     </section>
     <div class="dashboard-footer">
       <button type="button" class="link-button link-button-danger" data-action="delete-account">${t('dashboard.deleteAccount')}</button>
@@ -543,6 +561,14 @@ function renderDashboard(
       return;
     }
     handlers.onDeleteAccount();
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=upgrade]')?.addEventListener('click', () => {
+    handlers.onUpgrade();
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')?.addEventListener('click', () => {
+    handlers.onManageBilling();
   });
 
   wrapper.querySelectorAll<HTMLInputElement>('.query-card-editing .day-tile input[type=checkbox]').forEach(checkbox => {
