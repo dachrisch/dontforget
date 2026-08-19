@@ -88,8 +88,8 @@ describe('reducer', () => {
     expect(next).toMatchObject({
       reviewing: {
         events: [
-          { id: 'e1', status: 'approved', selected: false },
-          { id: 'e2', status: 'candidate', selected: false },
+          { id: 'e1', status: 'approved', decision: 'none' },
+          { id: 'e2', status: 'candidate', decision: 'none' },
         ],
       },
     });
@@ -116,13 +116,43 @@ describe('reducer', () => {
         queryId: 'q1',
         recurrenceInterval: 'weekly',
         events: [
-          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
-          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', selected: false },
+          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', decision: 'none' },
+          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', decision: 'none' },
         ],
       },
     };
-    const next = reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' });
-    expect(next).toMatchObject({ reviewing: { events: [{ id: 'e1', selected: false }, { id: 'e2', selected: false }] } });
+    const afterFirstClick = reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' });
+    expect(afterFirstClick).toMatchObject({
+      reviewing: { events: [{ id: 'e1', decision: 'approve' }, { id: 'e2', decision: 'none' }] },
+    });
+
+    const afterSecondClick = reducer(afterFirstClick, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' });
+    expect(afterSecondClick).toMatchObject({
+      reviewing: { events: [{ id: 'e1', decision: 'dismiss' }, { id: 'e2', decision: 'none' }] },
+    });
+
+    const afterThirdClick = reducer(afterSecondClick, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' });
+    expect(afterThirdClick).toMatchObject({
+      reviewing: { events: [{ id: 'e1', decision: 'none' }, { id: 'e2', decision: 'none' }] },
+    });
+  });
+
+  it('ignores TOGGLE_REVIEW_EVENT on an already-approved event', () => {
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [query('q1')],
+      feed: null,
+      editing: null,
+      reviewing: {
+        queryId: 'q1',
+        recurrenceInterval: 'weekly',
+        events: [
+          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', decision: 'none' },
+        ],
+      },
+    };
+    const next = reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e2' });
+    expect(next).toMatchObject({ reviewing: { events: [{ id: 'e2', decision: 'none' }] } });
   });
 
   it('updates the review cadence the user picks before approving', () => {
@@ -197,8 +227,8 @@ describe('reducer', () => {
     expect(next).toMatchObject({
       editing: {
         events: [
-          { id: 'e1', status: 'approved', selected: false },
-          { id: 'e2', status: 'candidate', selected: false },
+          { id: 'e1', status: 'approved', decision: 'none' },
+          { id: 'e2', status: 'candidate', decision: 'none' },
         ],
       },
     });
@@ -225,14 +255,21 @@ describe('reducer', () => {
         text: 'A',
         recurrenceInterval: 'monthly',
         events: [
-          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', selected: true },
-          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', selected: false },
+          { id: 'e1', label: 'A', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'u', status: 'candidate', decision: 'none' },
+          { id: 'e2', label: 'B', startDate: '2026-01-02', endDate: '2026-01-02', sourceUrl: 'u', status: 'approved', decision: 'none' },
         ],
       },
       reviewing: null,
     };
-    const next = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
-    expect(next).toMatchObject({ editing: { events: [{ id: 'e1', selected: false }, { id: 'e2', selected: false }] } });
+    const afterFirstClick = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
+    expect(afterFirstClick).toMatchObject({
+      editing: { events: [{ id: 'e1', decision: 'approve' }, { id: 'e2', decision: 'none' }] },
+    });
+
+    const afterSecondClick = reducer(afterFirstClick, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
+    expect(afterSecondClick).toMatchObject({
+      editing: { events: [{ id: 'e1', decision: 'dismiss' }, { id: 'e2', decision: 'none' }] },
+    });
   });
 
   it('cancels editing', () => {

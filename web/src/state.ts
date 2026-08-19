@@ -1,7 +1,15 @@
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
+export type EventDecision = 'none' | 'approve' | 'dismiss';
+
 export interface SelectableEditEvent extends EventDetail {
-  selected: boolean;
+  decision: EventDecision;
+}
+
+function cycleDecision(decision: EventDecision): EventDecision {
+  if (decision === 'none') return 'approve';
+  if (decision === 'approve') return 'dismiss';
+  return 'none';
 }
 
 export interface EditingDraft {
@@ -88,9 +96,9 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         editing: {
           ...state.editing,
-          // Pending candidates start unselected, mirroring the first-search
-          // review flow (tap to pick); approved events are not re-selectable.
-          events: event.events.map(e => ({ ...e, selected: false })),
+          // Pending candidates start undecided; approved events are shown
+          // read-only and never gain a decision.
+          events: event.events.map(e => ({ ...e, decision: 'none' as const })),
         },
       };
     }
@@ -102,7 +110,7 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         editing: {
           ...state.editing,
           events: state.editing.events.map(e =>
-            e.status === 'candidate' && e.id === event.id ? { ...e, selected: !e.selected } : e
+            e.status === 'candidate' && e.id === event.id ? { ...e, decision: cycleDecision(e.decision) } : e
           ),
         },
       };
@@ -129,7 +137,7 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         reviewing: {
           ...state.reviewing,
-          events: event.events.map(e => ({ ...e, selected: false })),
+          events: event.events.map(e => ({ ...e, decision: 'none' as const })),
         },
       };
     }
@@ -141,7 +149,7 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         reviewing: {
           ...state.reviewing,
           events: state.reviewing.events.map(e =>
-            e.status === 'candidate' && e.id === event.id ? { ...e, selected: !e.selected } : e
+            e.status === 'candidate' && e.id === event.id ? { ...e, decision: cycleDecision(e.decision) } : e
           ),
         },
       };
