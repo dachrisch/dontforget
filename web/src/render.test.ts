@@ -299,27 +299,29 @@ describe('renderWorkspace', () => {
     );
 
     expect(container.textContent).toContain('Your feed is ready');
-    expect(container.textContent).toContain('https://x/f/t.ics');
-    expect(container.textContent).toContain('https://x/f/t.rss');
+    // The raw URLs are hidden — copy hands them to the clipboard instead.
+    expect(container.textContent).not.toContain('https://x/f/');
     expect(container.querySelectorAll('.ledger-row')).toHaveLength(2);
     expect(container.querySelectorAll('.copy-button')).toHaveLength(2);
-    expect(container.querySelectorAll('.feed-action')).toHaveLength(7);
+    expect(container.querySelectorAll('.feed-action')).toHaveLength(4);
 
     const downloadLink = container.querySelector<HTMLAnchorElement>('a.feed-action[download]')!;
     expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
     expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
 
-    const actionLinks = container.querySelectorAll<HTMLAnchorElement>('a.feed-action');
-    expect(actionLinks[1].getAttribute('href')).toBe(
+    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.feed-add-button');
+    expect(addButtons).toHaveLength(3);
+    expect(addButtons[0].getAttribute('href')).toBe(
       `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
     );
-    expect(actionLinks[2].getAttribute('href')).toBe('webcal://x/f/t.ics');
-    expect(actionLinks[3].getAttribute('href')).toBe(
+    expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
+    expect(addButtons[2].getAttribute('href')).toBe(
       `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
     );
 
-    const rssActions = container.querySelectorAll<HTMLElement>('.feed-actions')[1];
-    const rssLink = rssActions.querySelector<HTMLAnchorElement>('a.feed-action')!;
+    const rssLink = container
+      .querySelectorAll<HTMLElement>('.ledger-row')[1]
+      .querySelector<HTMLAnchorElement>('a.feed-action')!;
     expect(rssLink.getAttribute('href')).toBe('https://x/f/t.rss');
     expect(rssLink.getAttribute('aria-label')).toBe('Open RSS feed');
 
@@ -362,10 +364,11 @@ describe('renderWorkspace', () => {
     expect(container.textContent).toContain('Every quarter');
     expect(container.textContent).toContain('2 approved');
     expect(container.textContent).toContain('1 pending approval');
-    expect(container.textContent).toContain('https://x/f/t.ics');
-    expect(container.textContent).toContain('https://x/f/t.rss');
+    // The raw feed URLs are hidden in favor of the action buttons.
+    expect(container.textContent).not.toContain('https://x/f/');
     expect(container.querySelectorAll('.feed-summary .copy-button')).toHaveLength(2);
-    expect(container.querySelectorAll('.feed-summary .feed-action')).toHaveLength(7);
+    expect(container.querySelectorAll('.feed-summary .feed-action')).toHaveLength(4);
+    expect(container.querySelectorAll('.feed-summary .feed-add-button')).toHaveLength(3);
 
     container.querySelector<HTMLButtonElement>('.query-card button[data-action=edit]')!.click();
     expect(handlers.onStartEdit).toHaveBeenCalledWith('q1');
