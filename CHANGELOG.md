@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/dachrisch/dontforget/compare/v0.14.0...v0.14.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* enlarge Edit/Delete/Sign-out tap targets on mobile ([#98](https://github.com/dachrisch/dontforget/issues/98)) ([b920b8e](https://github.com/dachrisch/dontforget/commit/b920b8eaad10145666e7e3189bb0a9dd4de60f20))
+
 ## [0.14.0](https://github.com/dachrisch/dontforget/compare/v0.13.1...v0.14.0) (2026-08-19)
 
 
