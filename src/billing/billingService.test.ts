@@ -32,10 +32,10 @@ describe('BillingService', () => {
     await teardownTestDb(client);
   });
 
-  it('isOverFreeLimit: 0 and 1 queries are free, 2 are over', async () => {
+  it('isOverFreeLimit: 0 queries are free, at or above the free limit is over', async () => {
     expect(await isOverFreeLimit(db, userId)).toBe(false);
     await db.collection('queries').insertOne({ user_id: userId, query_text: 'a' });
-    expect(await isOverFreeLimit(db, userId)).toBe(false);
+    expect(await isOverFreeLimit(db, userId)).toBe(true);
     await db.collection('queries').insertOne({ user_id: userId, query_text: 'b' });
     expect(await isOverFreeLimit(db, userId)).toBe(true);
   });

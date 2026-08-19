@@ -49,7 +49,7 @@ describe('POST /api/billing/webhook', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/billing/webhook',
-      headers: { 'stripe-signature': 't=1,v1=sig' },
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=sig' },
       payload: JSON.stringify(gateway.queuedEvent),
     });
     expect(response.statusCode).toBe(200);
@@ -65,7 +65,7 @@ describe('POST /api/billing/webhook', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/billing/webhook',
-      headers: { 'stripe-signature': 't=1,v1=bogus' },
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=bogus' },
       payload: JSON.stringify({}),
     });
     expect(response.statusCode).toBe(400);
@@ -83,7 +83,7 @@ describe('POST /api/billing/webhook', () => {
     const response = await noSecretApp.inject({
       method: 'POST',
       url: '/api/billing/webhook',
-      headers: { 'stripe-signature': 't=1,v1=sig' },
+      headers: { 'content-type': 'application/json', 'stripe-signature': 't=1,v1=sig' },
       payload: '{}',
     });
     expect(response.statusCode).toBe(503);

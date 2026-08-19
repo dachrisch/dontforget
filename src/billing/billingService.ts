@@ -70,8 +70,8 @@ export class BillingService {
 
   async createPortalSession(userId: string, returnUrl: string): Promise<{ url: string }> {
     const user = await this.requireUser(userId);
-    if (!user.stripe_customer_id) throw new Error('no stripe customer');
-    return this.gateway.createPortalSession({ customerId: user.stripe_customer_id, returnUrl });
+    const customerId = await this.getOrCreateCustomerId(user);
+    return this.gateway.createPortalSession({ customerId, returnUrl });
   }
 
   async syncQuantity(userId: string): Promise<void> {
