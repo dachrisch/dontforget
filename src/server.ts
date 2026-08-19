@@ -6,6 +6,8 @@ import { searxngSearch } from './search/searxngClient.js';
 import { extractDates } from './search/opencodeClient.js';
 import { createSearchOrchestrator } from './search/searchOrchestrator.js';
 import { startScheduler } from './scheduler/scheduler.js';
+import { StripeBillingGateway, NullBillingGateway } from './billing/stripeGateway.js';
+import { BillingService } from './billing/billingService.js';
 import nodemailer from 'nodemailer';
 import fastifyStatic from '@fastify/static';
 import { join, dirname } from 'node:path';
@@ -43,6 +45,16 @@ async function main() {
     .map(email => email.trim().toLowerCase())
     .filter(email => email.length > 0);
 
+  const billingEnabled = Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PRICE_ID);
+  const billingGateway = billingEnabled
+    ? new StripeBillingGateway(process.env.STRIPE_SECRET_KEY!)
+    : new NullBillingGateway();
+  const billingService = new BillingService(
+    db,
+    billingGateway,
+    billingEnabled ? process.env.STRIPE_PRICE_ID! : ''
+  );
+
   const app = await buildApp({
     db,
     emailSender,
@@ -55,6 +67,8 @@ async function main() {
     // route outside production.
     frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
+    billingService,
+    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET,
   });
 
   // Default enabled — only skip starting the scheduler when explicitly

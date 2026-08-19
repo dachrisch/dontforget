@@ -5,6 +5,8 @@ import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } f
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
 import { SessionService, SESSION_COOKIE } from '../auth/session';
+import { FakeBillingGateway } from '../billing/stripeGateway';
+import { BillingService } from '../billing/billingService';
 
 async function appFor(db: Db) {
   return buildApp({
@@ -13,6 +15,7 @@ async function appFor(db: Db) {
     publicBaseUrl: 'http://localhost:3000',
     frontendUrl: 'http://localhost:5173',
     runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
+    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
   });
 }
 

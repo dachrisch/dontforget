@@ -9,6 +9,9 @@ import { registerAuthRoutes } from './auth/routes.js';
 import { registerQueryRoutes } from './queries/routes.js';
 import { registerFeedRoutes } from './feed/routes.js';
 import { registerAdminRoutes } from './admin/routes.js';
+import { registerBillingRoutes } from './billing/routes.js';
+import { registerBillingWebhook } from './billing/webhook.js';
+import type { BillingService } from './billing/billingService.js';
 import type { ExtractionResult } from './types.js';
 
 export interface AppDeps {
@@ -17,6 +20,8 @@ export interface AppDeps {
   publicBaseUrl: string;
   frontendUrl: string;
   runQuery: (query: string) => Promise<ExtractionResult>;
+  billingService: BillingService;
+  webhookSecret?: string;
   // Emails that get the admin role on sign-in. Defaults to none — a
   // deployment without ADMIN_EMAILS simply has no admin UI.
   adminEmails?: readonly string[];
@@ -53,9 +58,16 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     runQuery: deps.runQuery,
     requireAuth,
     publicBaseUrl: deps.publicBaseUrl,
+    billingService: deps.billingService,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
   registerAdminRoutes(app, { db: deps.db, requireAdmin: createRequireAdmin(sessionService) });
+  registerBillingRoutes(app, {
+    billingService: deps.billingService,
+    requireAuth,
+    publicBaseUrl: deps.publicBaseUrl,
+  });
+  registerBillingWebhook(app, { billingService: deps.billingService, webhookSecret: deps.webhookSecret });
 
   return app;
 }
