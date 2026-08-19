@@ -396,6 +396,27 @@ describe('query dashboard routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
+  it('POST /api/queries/:id/approve dismisses events sent in dismissEventIds', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1' },
+      { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2' },
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/queries/${queryId}/approve`,
+      headers: authHeaders(sessionId),
+      payload: { eventIds: [candidates[0].id], dismissEventIds: [candidates[1].id] },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const rows = await db.collection('events').find({ query_id: new ObjectId(queryId) }).toArray();
+    const byLabel = Object.fromEntries(rows.map(r => [r.label as string, r.status as string]));
+    expect(byLabel['Frühjahrsdult']).toBe('approved');
+    expect(byLabel['Jakobidult']).toBe('dismissed');
+  });
+
   it('DELETE /api/queries/:id removes the query and its events', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db);
     const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [

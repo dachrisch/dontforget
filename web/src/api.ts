@@ -80,10 +80,12 @@ export async function updateQuery(
 export async function approveEvents(
   queryId: string,
   eventIds: string[],
-  recurrenceInterval?: RecurrenceInterval
+  recurrenceInterval?: RecurrenceInterval,
+  dismissEventIds: string[] = []
 ): Promise<{ icsUrl: string; rssUrl: string }> {
-  const body: { eventIds: string[]; recurrenceInterval?: RecurrenceInterval } = { eventIds };
+  const body: { eventIds: string[]; recurrenceInterval?: RecurrenceInterval; dismissEventIds?: string[] } = { eventIds };
   if (recurrenceInterval) body.recurrenceInterval = recurrenceInterval;
+  if (dismissEventIds.length > 0) body.dismissEventIds = dismissEventIds;
   const response = await fetch(`/api/queries/${queryId}/approve`, {
     method: 'POST',
     credentials: 'include',

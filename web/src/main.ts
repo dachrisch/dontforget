@@ -161,9 +161,13 @@ async function refreshDashboard(): Promise<void> {
 
 function startReview(queryId: string): void {
   setState(reducer(state, { type: 'START_REVIEW', queryId }));
-  // The card opens immediately; the events for it load async.
+  // The card opens immediately; the events for it load async. Which
+  // statuses actually reach the card is decided by the reducer (see
+  // state.ts's REVIEW_EVENTS_LOADED case).
   getQueryEvents(queryId)
-    .then(events => setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events })))
+    .then(events => {
+      setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events }));
+    })
     .catch(err => showError('error.loadingEvents', err));
 }
 
@@ -196,13 +200,21 @@ function paint() {
     },
     onApproveReview: queryId => {
       if (state.kind !== 'dashboard' || state.reviewing?.queryId !== queryId) return;
-      // Snapshot the current selection now — the user can keep toggling
-      // checkboxes while this request is in flight.
-      const eventIds = state.reviewing.events
-        .filter(e => e.status === 'candidate' && e.selected)
+      // Snapshot the current decisions now — the user can keep cycling
+      // tiles while this request is in flight.
+      const approveIds = state.reviewing.events
+        .filter(e => e.status === 'candidate' && e.decision === 'approve')
+        .map(e => e.id);
+      const dismissIds = state.reviewing.events
+        .filter(e => e.status === 'candidate' && e.decision === 'dismiss')
         .map(e => e.id);
       clearError();
-      approveEvents(queryId, eventIds, state.reviewing.recurrenceInterval)
+      // Deliberately unconditional (unlike onSaveEdit's guarded call below):
+      // it must fire even when approveIds is empty, because a dismiss-only
+      // submit (zero approvals, one or more dismissals) still needs to reach
+      // the server. Do not add an `if (approveIds.length > 0)` guard here —
+      // that would silently break dismiss-only submits.
+      approveEvents(queryId, approveIds, state.reviewing.recurrenceInterval, dismissIds)
         .then(() => {
           setState(reducer(state, { type: 'REVIEW_APPROVED', queryId }));
           refreshDashboard();
@@ -222,8 +234,12 @@ function paint() {
       clearError();
       setState(reducer(state, { type: 'START_EDIT', queryId }));
       // The dashboard card opens immediately; the events for it load async.
+      // Which statuses actually reach the card is decided by the reducer
+      // (see state.ts's EDIT_EVENTS_LOADED case).
       getQueryEvents(queryId)
-        .then(events => setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events })))
+        .then(events => {
+          setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events }));
+        })
         .catch(err => showError('error.loadingEvents', err));
     },
     onToggleEditEvent: id => {
@@ -234,16 +250,18 @@ function paint() {
     },
     onSaveEdit: (queryId, patch) => {
       clearError();
-      // Snapshot the selected candidates at save time; the edit card stays
+      // Snapshot the decided candidates at save time; the edit card stays
       // interactive while the PATCH + approve round-trips, and we reload the
       // dashboard once both have settled so counts and feed links refresh.
-      const selectedIds =
-        state.kind === 'dashboard' && state.editing?.queryId === queryId
-          ? state.editing.events.filter(e => e.status === 'candidate' && e.selected).map(e => e.id)
-          : [];
+      const editingEvents =
+        state.kind === 'dashboard' && state.editing?.queryId === queryId ? state.editing.events : [];
+      const approveIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'approve').map(e => e.id);
+      const dismissIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'dismiss').map(e => e.id);
       updateQuery(queryId, patch)
         .then(() => {
-          if (selectedIds.length > 0) return approveEvents(queryId, selectedIds);
+          if (approveIds.length > 0 || dismissIds.length > 0) {
+            return approveEvents(queryId, approveIds, undefined, dismissIds);
+          }
           return undefined;
         })
         .then(() => refreshDashboard())

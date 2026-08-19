@@ -70,6 +70,22 @@ describe('queries repo', () => {
       expect(row?.status).toBe('ready');
       expect(row?.recurrence_interval).toBe('weekly');
     });
+
+    it('does not reinsert a dismissed event when the same date is found again', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      const [candidate] = await completeQueryRun(db, query._id, [
+        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+      ], null);
+      await approveEvents(db, userId, query.queryId, [], 'http://localhost:3000', undefined, [candidate.id]);
+
+      await completeQueryRun(db, query._id, [
+        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+      ], null);
+
+      const stored = await db.collection('events').find({ query_id: query._id }).toArray();
+      expect(stored).toHaveLength(1);
+      expect(stored[0].status).toBe('dismissed');
+    });
   });
 
   describe('markQueryFailed', () => {

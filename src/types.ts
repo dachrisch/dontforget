@@ -21,7 +21,7 @@ export interface ExtractionResult {
 
 export interface CandidateEvent extends ExtractedEvent {
   id: string;
-  status: 'candidate' | 'approved';
+  status: 'candidate' | 'approved' | 'dismissed';
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';

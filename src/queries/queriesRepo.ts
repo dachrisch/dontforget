@@ -16,7 +16,7 @@ interface EventRow {
   start_date: string;
   end_date: string;
   source_url: string;
-  status: 'candidate' | 'approved';
+  status: 'candidate' | 'approved' | 'dismissed';
 }
 
 interface QueryRow {

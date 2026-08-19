@@ -623,14 +623,11 @@ function renderQueryCard(query: QuerySummary): string {
 }
 
 function renderReviewCard(reviewing: ReviewingDraft): string {
-  const approved = reviewing.events.filter(e => e.status === 'approved');
-  const pending = reviewing.events.filter(e => e.status === 'candidate');
-  const selectedCount = pending.filter(e => e.selected).length;
+  // reviewing.events is guaranteed candidate-only by the reducer's
+  // REVIEW_EVENTS_LOADED case — no approved/dismissed bucket to split out.
+  const selectedCount = reviewing.events.filter(e => e.decision === 'approve').length;
 
-  const eventTiles = [
-    ...pending.map(e => renderSelectableTile(e)),
-    ...approved.map(e => renderApprovedTile(e)),
-  ].join('');
+  const eventTiles = reviewing.events.map(e => renderSelectableTile(e)).join('');
 
   const eventsSection = reviewing.events.length > 0
     ? `
@@ -661,7 +658,7 @@ function renderEditCard(
 ): string {
   const approved = editing.events.filter(e => e.status === 'approved');
   const pending = editing.events.filter(e => e.status === 'candidate');
-  const selectedCount = pending.filter(e => e.selected).length;
+  const selectedCount = pending.filter(e => e.decision === 'approve').length;
 
   const eventTiles = [
     ...pending.map(e => renderSelectableTile(e)),
@@ -702,12 +699,19 @@ function renderEditCard(
 }
 
 function renderSelectableTile(event: SelectableEditEvent): string {
+  const stateClass =
+    event.decision === 'approve' ? 'day-tile-decision-approve' :
+    event.decision === 'dismiss' ? 'day-tile-decision-dismiss' : '';
+  const decisionLabel =
+    event.decision === 'approve' ? t('edit.decisionApprove') :
+    event.decision === 'dismiss' ? t('edit.decisionDismiss') : '';
   return `
-    <label class="day-tile ${event.selected ? 'day-tile-selected' : ''}" data-id="${event.id}">
-      <input type="checkbox" ${event.selected ? 'checked' : ''} />
+    <label class="day-tile ${stateClass}" data-id="${event.id}">
+      <input type="checkbox" ${event.decision === 'approve' ? 'checked' : ''} />
       <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
       <span class="day-tile-day">${dayNumber(event.startDate)}</span>
       <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)}</span>
+      ${decisionLabel ? `<span class="day-tile-decision-label">${decisionLabel}</span>` : ''}
       <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
     </label>`;
 }
