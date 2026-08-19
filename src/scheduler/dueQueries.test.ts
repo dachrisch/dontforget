@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
-import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { createQueryWithCandidates } from '../queries/queriesRepo';
+import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { findDueQueries } from './dueQueries';
 
 describe('findDueQueries', () => {

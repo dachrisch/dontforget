@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
-import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { createQueryWithCandidates } from '../queries/queriesRepo';
+import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { approveEvents } from '../queries/approveEvents';
 import { CapturingEmailSender } from '../email/EmailSender';
 import { runScheduledQuery, type ScheduledRunDeps } from './scheduledRun';
@@ -64,6 +63,7 @@ describe('runScheduledQuery', () => {
 
     const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
     expect(row?.last_run_at).toBeInstanceOf(Date);
+    expect(row?.status).toBe('ready');
   });
 
   it('lands new events as candidates for a never-approved query and emails a review prompt', async () => {
@@ -140,6 +140,7 @@ describe('runScheduledQuery', () => {
 
     const after = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
     expect(after?.last_run_at).toEqual(before?.last_run_at);
+    expect(after?.status).toBe('failed');
   });
 
   it('still writes events and updates last_run_at when the email fails to send', async () => {

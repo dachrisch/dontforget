@@ -1,24 +1,24 @@
-import type { WorkspaceState, SelectableEditEvent } from './state';
+import type { WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft } from './state';
 import { RECURRENCE_INTERVALS } from './types';
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
 
 export interface WorkspaceHandlers {
   onRequestMagicLink: (email: string) => void;
-  onSubmitQuery: (text: string, recurrenceInterval?: RecurrenceInterval) => void;
-  onToggleCandidate: (id: string) => void;
-  onSetReviewInterval: (interval: RecurrenceInterval) => void;
-  onApprove: () => void;
-  onCancelSearch: () => void;
+  onSubmitQuery: (text: string) => void;
   onStartEdit: (queryId: string) => void;
   onToggleEditEvent: (id: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
   onDeleteQuery: (queryId: string) => void;
   onRotateFeedToken: () => void;
-  onGoToDashboard: () => void;
-  onStartOver: () => void;
   onSignOut: () => void;
+  onStartReview: (queryId: string) => void;
+  onToggleReviewEvent: (id: string) => void;
+  onSetReviewInterval: (interval: RecurrenceInterval) => void;
+  onApproveReview: (queryId: string) => void;
+  onCancelReview: () => void;
+  onRetrySearch: (queryId: string) => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -36,7 +36,7 @@ export function renderWorkspace(
   container.innerHTML = '';
   const wrapper = render(state, handlers);
   // Only animate in on an actual state change — re-rendering the same
-  // state (e.g. toggling one tile in `review`) must not replay the
+  // state (e.g. toggling one tile in a review card) must not replay the
   // whole-panel enter animation on every interaction.
   if (isStateTransition) {
     wrapper.classList.add('workspace-enter');
@@ -62,17 +62,9 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'linkSent':
       return renderLinkSent();
     case 'empty':
-      return renderEmpty(handlers, state.queryText);
-    case 'noResults':
-      return renderNoResults(state.queryText, state.fromDashboard === true, handlers);
-    case 'loading':
-      return renderLoading(state.queryText, handlers);
-    case 'review':
-      return renderReview(state, handlers);
-    case 'feedReady':
-      return renderFeedReady(state.icsUrl, state.rssUrl, handlers);
+      return renderEmpty(handlers);
     case 'dashboard':
-      return renderDashboard(state.queries, state.feed, state.editing, handlers);
+      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, handlers);
   }
 }
 
@@ -104,12 +96,12 @@ function renderLinkSent(): HTMLElement {
   return wrapper;
 }
 
-function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLElement {
+function renderEmpty(handlers: WorkspaceHandlers): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.innerHTML = `
     <form class="ruled-form">
       <label class="entry-label" for="query-input">${t('empty.label')}</label>
-      <input class="ruled-input" id="query-input" name="query" placeholder="${t('empty.placeholder')}" value="${escapeHtml(queryText ?? '')}" required />
+      <input class="ruled-input" id="query-input" name="query" placeholder="${t('empty.placeholder')}" required />
       <button class="stamp-button" type="submit">${t('empty.button')}</button>
     </form>
     <p class="subtext how-it-works">${t('empty.howItWorks')}</p>
@@ -119,71 +111,6 @@ function renderEmpty(handlers: WorkspaceHandlers, queryText?: string): HTMLEleme
     const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
     handlers.onSubmitQuery(text);
   });
-  return wrapper;
-}
-
-// A search that completes but surfaces no candidate dates. The search is
-// saved (it will be re-run on schedule), but the user wants a way to adjust
-// the term or search again right now instead of staring at an empty review.
-function renderNoResults(queryText: string, fromDashboard: boolean, handlers: WorkspaceHandlers): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <span class="chip-torn">${escapeHtml(queryText)}</span>
-    <p class="subtext no-results-message">${t('noResults.message', { query: escapeHtml(queryText) })}</p>
-    <form class="ruled-form">
-      <label class="entry-label" for="no-results-input">${t('empty.label')}</label>
-      <input class="ruled-input" id="no-results-input" name="query" value="${escapeHtml(queryText)}" placeholder="${t('empty.placeholder')}" required />
-      <button class="stamp-button" type="submit">${t('noResults.searchAgain')}</button>
-    </form>
-    <div class="edit-actions">
-      <button class="stamp-button stamp-button-quiet" type="button" data-action="no-results-cancel">${fromDashboard ? t('noResults.backToDashboard') : t('noResults.cancel')}</button>
-    </div>
-  `;
-  wrapper.querySelector('form')!.addEventListener('submit', e => {
-    e.preventDefault();
-    const text = wrapper.querySelector<HTMLInputElement>('input[name=query]')!.value;
-    handlers.onSubmitQuery(text);
-  });
-  wrapper.querySelector('button[data-action=no-results-cancel]')!.addEventListener('click', () => {
-    if (fromDashboard) handlers.onGoToDashboard();
-    else handlers.onStartOver();
-  });
-  return wrapper;
-}
-
-// A search that hits opencode retry/fallback (see opencodeClient.ts) can
-// run well past a normal search's ~30-45s — confirmed against production
-// logs on 2026-08-17. Reassure the user instead of leaving a static message
-// that starts to look stuck.
-const LONGER_THAN_USUAL_DELAY_MS = 60_000;
-
-function renderLoading(queryText: string, handlers: WorkspaceHandlers): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <span class="chip-torn">${escapeHtml(queryText)}</span>
-    <p class="loading-status">
-      <span class="loading-status-text">${t('loading.status')}</span>
-      <span class="ticks">
-        <span class="tick"></span>
-        <span class="tick"></span>
-        <span class="tick"></span>
-      </span>
-    </p>
-    <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel-search">${t('loading.cancel')}</button>
-  `;
-  wrapper.querySelector('button[data-action=cancel-search]')!.addEventListener('click', () => {
-    handlers.onCancelSearch();
-  });
-  const statusText = wrapper.querySelector('.loading-status-text')!;
-  setTimeout(() => {
-    // The wrapper is torn down (state resolved, failed, or cancelled) long
-    // before most searches ever reach this delay — skip a pointless write
-    // to a detached node rather than track a cancellation handle for it.
-    // (Not `isConnected`: that's relative to `document`, and callers in
-    // tests render into a container that's never attached to it.)
-    if (!wrapper.parentElement) return;
-    statusText.textContent = t('loading.longer');
-  }, LONGER_THAN_USUAL_DELAY_MS);
   return wrapper;
 }
 
@@ -235,74 +162,6 @@ function formatTimestamp(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-function renderReview(
-  state: { candidates: Array<{ id: string; label: string; startDate: string; endDate: string; sourceUrl: string; selected: boolean }>; selectedInterval: RecurrenceInterval; suggestedInterval: RecurrenceInterval | null },
-  handlers: WorkspaceHandlers
-): HTMLElement {
-  const wrapper = document.createElement('div');
-  const tiles = state.candidates
-    .map(
-      c => `
-      <label class="day-tile ${c.selected ? 'day-tile-selected' : ''}" data-id="${c.id}">
-        <input type="checkbox" ${c.selected ? 'checked' : ''} />
-        <span class="day-tile-month">${monthAbbrev(c.startDate)}</span>
-        <span class="day-tile-day">${dayNumber(c.startDate)}</span>
-        <span class="day-tile-caption">${escapeHtml(formatRange(c.startDate, c.endDate))} · ${escapeHtml(c.label)}</span>
-        <a class="day-tile-source" href="${escapeHtml(c.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
-      </label>`
-    )
-    .join('');
-  wrapper.innerHTML = `
-    <div class="tile-grid">${tiles}</div>
-    <div class="interval-wrap review-interval">
-      <label class="interval-label" for="review-interval">${t('review.checkAgain')}</label>
-      ${renderIntervalSelect('reviewInterval', state.selectedInterval)}
-      ${state.suggestedInterval ? `<span class="interval-hint">${t('review.aiSuggested', { interval: intervalLabel(state.suggestedInterval) })}</span>` : ''}
-    </div>
-    <p class="subtext">${t('review.subtext')}</p>
-    <button class="stamp-button" type="button" data-action="approve">${t('review.approve', { count: state.candidates.filter(c => c.selected).length })}</button>
-  `;
-  wrapper.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(checkbox => {
-    checkbox.addEventListener('click', () => {
-      const id = checkbox.closest<HTMLElement>('.day-tile')!.dataset.id!;
-      handlers.onToggleCandidate(id);
-    });
-  });
-  wrapper.querySelectorAll<HTMLAnchorElement>('.day-tile-source').forEach(a => {
-    a.addEventListener('click', e => e.stopPropagation());
-  });
-  wrapper.querySelector<HTMLSelectElement>('select[name=reviewInterval]')!.addEventListener('change', e => {
-    const interval = (e.target as HTMLSelectElement).value as RecurrenceInterval;
-    handlers.onSetReviewInterval(interval);
-  });
-  wrapper.querySelector('button[data-action=approve]')!.addEventListener('click', () => {
-    handlers.onApprove();
-  });
-  return wrapper;
-}
-
-function renderFeedReady(icsUrl: string, rssUrl: string, handlers: WorkspaceHandlers): HTMLElement {
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = `
-    <h2 class="dashboard-section-title">${t('feedReady.title')}</h2>
-    <p class="subtext">${t('feedReady.subtext')}</p>
-    ${renderFeedRow(t('common.calendarIcs'), icsUrl, 'ics')}
-    ${renderFeedRow(t('common.rss'), rssUrl, 'rss')}
-    <div class="edit-actions">
-      <button class="stamp-button" type="button" data-action="dashboard">${t('feedReady.dashboard')}</button>
-      <button class="stamp-button stamp-button-quiet" type="button" data-action="search-another">${t('feedReady.searchAnother')}</button>
-    </div>
-  `;
-  wireCopyButtons(wrapper);
-  wrapper.querySelector('button[data-action=dashboard]')!.addEventListener('click', () => {
-    handlers.onGoToDashboard();
-  });
-  wrapper.querySelector('button[data-action=search-another]')!.addEventListener('click', () => {
-    handlers.onStartOver();
-  });
-  return wrapper;
 }
 
 // One calendar feed row: label, and the feed's actions. The ICS row leads
@@ -419,15 +278,17 @@ function renderIntervalSelect(
   return `<select class="ruled-select" name="${name}" data-id="${name}">${options}</select>`;
 }
 
+// A search that hits opencode retry/fallback (see opencodeClient.ts) can
+// run well past a normal search's ~30-45s — confirmed against production
+// logs on 2026-08-17. Reassure the user instead of leaving a static status
+// that starts to look stuck.
+const LONGER_THAN_USUAL_DELAY_MS = 60_000;
+
 function renderDashboard(
   queries: QuerySummary[],
   feed: FeedSummary | null,
-  editing: {
-    queryId: string;
-    text: string;
-    recurrenceInterval: RecurrenceInterval;
-    events: SelectableEditEvent[];
-  } | null,
+  editing: EditingDraft | null,
+  reviewing: ReviewingDraft | null,
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
@@ -435,7 +296,10 @@ function renderDashboard(
   const cards = queries
     .map(query => {
       const isEditing = editing?.queryId === query.id;
-      return isEditing ? renderEditCard(editing) : renderQueryCard(query);
+      const isReviewing = reviewing?.queryId === query.id;
+      if (isEditing) return renderEditCard(editing);
+      if (isReviewing) return renderReviewCard(reviewing);
+      return renderQueryCard(query);
     })
     .join('');
 
@@ -493,6 +357,18 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=review]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onStartReview(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=retry]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onRetrySearch(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
   wrapper.querySelectorAll<HTMLButtonElement>('.feed-summary button[data-action=rotate-feed]').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.confirmed !== 'true') {
@@ -534,18 +410,104 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLInputElement>('.query-card-reviewing .day-tile input[type=checkbox]').forEach(checkbox => {
+    checkbox.addEventListener('click', () => {
+      const id = checkbox.closest<HTMLElement>('.day-tile')!.dataset.id!;
+      handlers.onToggleReviewEvent(id);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLAnchorElement>('.query-card-reviewing .day-tile-source').forEach(a => {
+    a.addEventListener('click', e => e.stopPropagation());
+  });
+
+  wrapper.querySelectorAll<HTMLSelectElement>('.query-card-reviewing select[name=reviewInterval]').forEach(select => {
+    select.addEventListener('change', e => {
+      const interval = (e.target as HTMLSelectElement).value as RecurrenceInterval;
+      handlers.onSetReviewInterval(interval);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card-reviewing button[data-action=approve-review]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onApproveReview(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card-reviewing button[data-action=cancel-review]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onCancelReview();
+    });
+  });
+
+  // A search that runs long gets a reassurance once it crosses the "longer
+  // than usual" threshold. The wrapper reference doubles as the liveness
+  // check: after the next poll re-renders, this wrapper is detached from the
+  // container and the write is skipped.
+  const runningStatusTexts = wrapper.querySelectorAll<HTMLElement>('.query-card-running .query-card-status-text');
+  if (runningStatusTexts.length > 0) {
+    setTimeout(() => {
+      if (!wrapper.parentElement) return;
+      runningStatusTexts.forEach(el => {
+        el.textContent = t('queryCard.searchingLong');
+      });
+    }, LONGER_THAN_USUAL_DELAY_MS);
+  }
+
   return wrapper;
 }
 
 function renderQueryCard(query: QuerySummary): string {
+  if (query.status === 'running') {
+    return `
+      <article class="query-card query-card-running" data-id="${query.id}">
+        <div class="query-card-head">
+          <span class="query-card-text">${escapeHtml(query.text)}</span>
+          <div class="query-card-actions">
+            <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
+            <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
+          </div>
+        </div>
+        <p class="loading-status query-card-status">
+          <span class="query-card-status-text">${t('queryCard.searching')}</span>
+          <span class="ticks">
+            <span class="tick"></span>
+            <span class="tick"></span>
+            <span class="tick"></span>
+          </span>
+        </p>
+      </article>
+    `;
+  }
+
+  if (query.status === 'failed') {
+    return `
+      <article class="query-card query-card-failed" data-id="${query.id}">
+        <div class="query-card-head">
+          <span class="query-card-text">${escapeHtml(query.text)}</span>
+          <div class="query-card-actions">
+            <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
+            <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
+          </div>
+        </div>
+        <p class="subtext">${t('queryCard.failed')}</p>
+        <button class="stamp-button stamp-button-quiet" type="button" data-action="retry">${t('queryCard.retry')}</button>
+      </article>
+    `;
+  }
+
   const eventSummary = [];
   if (query.approvedCount > 0) eventSummary.push(t('queryCard.approved', { count: query.approvedCount }));
   if (query.candidateCount > 0) eventSummary.push(t('queryCard.pending', { count: query.candidateCount }));
+  const reviewAction = query.candidateCount > 0
+    ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
+    : '';
   return `
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
         <span class="query-card-text">${escapeHtml(query.text)}</span>
         <div class="query-card-actions">
+          ${reviewAction}
           <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
           <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
         </div>
@@ -566,8 +528,42 @@ function renderQueryCard(query: QuerySummary): string {
   `;
 }
 
+function renderReviewCard(reviewing: ReviewingDraft): string {
+  const approved = reviewing.events.filter(e => e.status === 'approved');
+  const pending = reviewing.events.filter(e => e.status === 'candidate');
+  const selectedCount = pending.filter(e => e.selected).length;
+
+  const eventTiles = [
+    ...pending.map(e => renderSelectableTile(e)),
+    ...approved.map(e => renderApprovedTile(e)),
+  ].join('');
+
+  const eventsSection = reviewing.events.length > 0
+    ? `
+      <div class="edit-events">
+        <label class="entry-label">${t('edit.events')}</label>
+        <div class="tile-grid edit-tile-grid">${eventTiles}</div>
+      </div>`
+    : `<p class="subtext">${t('edit.noEvents')}</p>`;
+
+  return `
+    <article class="query-card query-card-reviewing" data-id="${reviewing.queryId}">
+      <div class="interval-wrap review-interval">
+        <label class="interval-label" for="review-interval">${t('review.checkAgain')}</label>
+        ${renderIntervalSelect('reviewInterval', reviewing.recurrenceInterval)}
+      </div>
+      ${eventsSection}
+      <p class="subtext">${t('review.subtext')}</p>
+      <div class="edit-actions">
+        <button class="stamp-button" type="button" data-action="approve-review">${t('review.approve', { count: selectedCount })}</button>
+        <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel-review">${t('review.notNow')}</button>
+      </div>
+    </article>
+  `;
+}
+
 function renderEditCard(
-  editing: { queryId: string; text: string; recurrenceInterval: RecurrenceInterval; events: SelectableEditEvent[] }
+  editing: EditingDraft
 ): string {
   const approved = editing.events.filter(e => e.status === 'approved');
   const pending = editing.events.filter(e => e.status === 'candidate');

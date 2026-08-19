@@ -1,4 +1,4 @@
-import type { CandidateEvent, Dashboard, EventDetail, QuerySummary, RecurrenceInterval } from './types';
+import type { Dashboard, EventDetail, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -40,12 +40,23 @@ export async function listQueries(): Promise<Dashboard> {
 export async function submitQuery(
   text: string,
   recurrenceInterval?: RecurrenceInterval
-): Promise<{ queryId: string; candidates: CandidateEvent[]; suggestedInterval: RecurrenceInterval | null }> {
+): Promise<{ queryId: string }> {
   const response = await fetch('/api/queries', {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text, recurrenceInterval }),
+  });
+  return handle(response);
+}
+
+// Re-runs a query's search in the background (dashboard "Try again" on a
+// failed card). Resolves once the query row is queued, not when the search
+// finishes — the dashboard poll picks the results up.
+export async function runQuery(queryId: string): Promise<{ queryId: string }> {
+  const response = await fetch(`/api/queries/${queryId}/run`, {
+    method: 'POST',
+    credentials: 'include',
   });
   return handle(response);
 }

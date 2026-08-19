@@ -26,8 +26,20 @@ export async function runScheduledQuery(db: Db, query: DueQuery, deps: Scheduled
     .find({ query_id: query._id }, { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } })
     .toArray();
 
-  const extracted = (await deps.runQuery(query.query_text)).events;
-  const newEvents = filterNewEvents(extracted, existingEvents);
+  let extracted: ExtractionResult;
+  try {
+    extracted = await deps.runQuery(query.query_text);
+  } catch (err) {
+    // A query that was stuck in `running` (e.g. the server died mid-search)
+    // must not stay stuck forever — mark it failed so the dashboard card
+    // shows an actionable state, then let the scheduler log the failure.
+    await db
+      .collection('queries')
+      .updateOne({ _id: query._id }, { $set: { status: 'failed' as const } })
+      .catch(() => undefined);
+    throw err;
+  }
+  const newEvents = filterNewEvents(extracted.events, existingEvents);
 
   if (newEvents.length > 0) {
     const isTrusted = existingEvents.some(e => e.status === 'approved');
@@ -50,7 +62,10 @@ export async function runScheduledQuery(db: Db, query: DueQuery, deps: Scheduled
     await sendReRunEmail(db, query, newEvents.length, isTrusted, deps);
   }
 
-  await db.collection('queries').updateOne({ _id: query._id }, { $set: { last_run_at: new Date() } });
+  await db.collection('queries').updateOne(
+    { _id: query._id },
+    { $set: { last_run_at: new Date(), status: 'ready' as const } }
+  );
 }
 
 async function sendReRunEmail(

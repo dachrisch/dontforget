@@ -1,6 +1,8 @@
 import { MongoClient, type Db } from 'mongodb';
 import { createClient } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
+import { createQuery, completeQueryRun, getQueryEvents } from './queries/queriesRepo.js';
+import type { CandidateEvent, ExtractedEvent, RecurrenceInterval } from './types.js';
 
 // Deliberately distinct from .env.example's DATABASE_URL (dev DB name
 // "dontforget") — tests deleteMany() every collection in beforeEach, and
@@ -12,6 +14,22 @@ const COLLECTIONS = ['users', 'magic_links', 'sessions', 'queries', 'events', 'f
 export interface TestDb {
   client: MongoClient;
   db: Db;
+}
+
+// Test/seeding helper: creates a query and immediately lands a finished
+// search on it, so suites can work with ready queries that already have
+// candidate events (the production flow splits these two steps across the
+// async POST + background run).
+export async function createQueryWithCandidates(
+  db: Db,
+  userId: string,
+  queryText: string,
+  events: ExtractedEvent[],
+  recurrenceInterval?: RecurrenceInterval
+): Promise<{ queryId: string; candidates: CandidateEvent[] }> {
+  const query = await createQuery(db, userId, queryText, recurrenceInterval);
+  await completeQueryRun(db, query._id, events, null);
+  return { queryId: query.queryId, candidates: (await getQueryEvents(db, userId, query.queryId)) ?? [] };
 }
 
 export async function setupTestDb(): Promise<TestDb> {
