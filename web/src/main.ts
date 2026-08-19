@@ -99,13 +99,12 @@ async function refreshDashboard(): Promise<void> {
 
 function startReview(queryId: string): void {
   setState(reducer(state, { type: 'START_REVIEW', queryId }));
-  // The card opens immediately; the events for it load async. Review is a
-  // lean "decide on what's pending" queue — approved and dismissed events
-  // are never shown here (see docs/superpowers/specs/2026-08-19-review-edit-dismissed-design.md).
+  // The card opens immediately; the events for it load async. Which
+  // statuses actually reach the card is decided by the reducer (see
+  // state.ts's REVIEW_EVENTS_LOADED case).
   getQueryEvents(queryId)
     .then(events => {
-      const pending = events.filter(e => e.status === 'candidate');
-      setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events: pending }));
+      setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events }));
     })
     .catch(err => showError('error.loadingEvents', err));
 }
@@ -148,6 +147,11 @@ function paint() {
         .filter(e => e.status === 'candidate' && e.decision === 'dismiss')
         .map(e => e.id);
       clearError();
+      // Deliberately unconditional (unlike onSaveEdit's guarded call below):
+      // it must fire even when approveIds is empty, because a dismiss-only
+      // submit (zero approvals, one or more dismissals) still needs to reach
+      // the server. Do not add an `if (approveIds.length > 0)` guard here —
+      // that would silently break dismiss-only submits.
       approveEvents(queryId, approveIds, state.reviewing.recurrenceInterval, dismissIds)
         .then(() => {
           setState(reducer(state, { type: 'REVIEW_APPROVED', queryId }));
@@ -168,12 +172,11 @@ function paint() {
       clearError();
       setState(reducer(state, { type: 'START_EDIT', queryId }));
       // The dashboard card opens immediately; the events for it load async.
-      // Edit keeps approved events visible for context (it's the "manage
-      // this query" view); only dismissed ones stay hidden.
+      // Which statuses actually reach the card is decided by the reducer
+      // (see state.ts's EDIT_EVENTS_LOADED case).
       getQueryEvents(queryId)
         .then(events => {
-          const visible = events.filter(e => e.status !== 'dismissed');
-          setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events: visible }));
+          setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events }));
         })
         .catch(err => showError('error.loadingEvents', err));
     },

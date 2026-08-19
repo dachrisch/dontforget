@@ -96,9 +96,13 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         editing: {
           ...state.editing,
+          // Edit keeps approved events visible for context (it's the
+          // "manage this query" view); only dismissed ones stay hidden.
           // Pending candidates start undecided; approved events are shown
           // read-only and never gain a decision.
-          events: event.events.map(e => ({ ...e, decision: 'none' as const })),
+          events: event.events
+            .filter(e => e.status !== 'dismissed')
+            .map(e => ({ ...e, decision: 'none' as const })),
         },
       };
     }
@@ -137,7 +141,12 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         reviewing: {
           ...state.reviewing,
-          events: event.events.map(e => ({ ...e, decision: 'none' as const })),
+          // Review is a lean "decide on what's pending" queue — approved and
+          // dismissed events are never shown here (see
+          // docs/superpowers/specs/2026-08-19-review-edit-dismissed-design.md).
+          events: event.events
+            .filter(e => e.status === 'candidate')
+            .map(e => ({ ...e, decision: 'none' as const })),
         },
       };
     }

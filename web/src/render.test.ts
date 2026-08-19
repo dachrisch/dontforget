@@ -305,6 +305,8 @@ describe('renderWorkspace', () => {
 
     expect(container.textContent).not.toContain('undefined');
     expect(container.textContent).toContain('not-a-date');
+    expect(container.querySelector('.day-tile-month')!.textContent).toBe('?');
+    expect(container.querySelector('.day-tile-day')!.textContent).toBe('?');
   });
 
   it('renders the dashboard with feed add buttons, copy actions, schedules and counts', () => {

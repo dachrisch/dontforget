@@ -30,6 +30,9 @@ export async function approveEvents(
       .updateOne({ _id: queryObjectId }, { $set: { recurrence_interval: recurrenceInterval } });
   }
 
+  // Contract: if the same event id appears in both eventIds and
+  // dismissEventIds, dismiss wins — it runs second and its $set overwrites
+  // whatever the approve call just wrote.
   await setEventStatus(db, queryObjectId, eventIds, 'approved');
   await setEventStatus(db, queryObjectId, dismissEventIds, 'dismissed');
 

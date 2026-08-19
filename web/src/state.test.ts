@@ -72,7 +72,7 @@ describe('reducer', () => {
     expect(reducer(state, { type: 'START_REVIEW', queryId: 'q1' })).toBe(state);
   });
 
-  it('loads events into the open review card, leaving pending candidates unselected', () => {
+  it('loads events into the open review card, keeping only pending candidates', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
       queries: [query('q1')],
@@ -80,17 +80,18 @@ describe('reducer', () => {
       editing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
+    // A mix of all three statuses: only the candidate should survive into
+    // reviewing.events — Review is a lean "decide on what's pending" queue
+    // (see docs/superpowers/specs/2026-08-19-review-edit-dismissed-design.md).
     const events: EventDetail[] = [
       { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' },
       { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u', status: 'candidate' },
+      { id: 'e3', label: 'Kirmesdult', startDate: '2026-11-06', endDate: '2026-11-16', sourceUrl: 'u', status: 'dismissed' },
     ];
     const next = reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId: 'q1', events });
     expect(next).toMatchObject({
       reviewing: {
-        events: [
-          { id: 'e1', status: 'approved', decision: 'none' },
-          { id: 'e2', status: 'candidate', decision: 'none' },
-        ],
+        events: [{ id: 'e2', status: 'candidate', decision: 'none' }],
       },
     });
   });
@@ -211,7 +212,7 @@ describe('reducer', () => {
     });
   });
 
-  it('loads events into the open edit card, leaving pending candidates unselected', () => {
+  it('loads events into the open edit card, keeping candidates and approved but excluding dismissed', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
       queries: [query('q1')],
@@ -219,9 +220,12 @@ describe('reducer', () => {
       editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
       reviewing: null,
     };
+    // A mix of all three statuses: Edit is the "manage this query" view, so
+    // both candidate and approved should survive; only dismissed is hidden.
     const events: EventDetail[] = [
       { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u', status: 'approved' },
       { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u', status: 'candidate' },
+      { id: 'e3', label: 'Kirmesdult', startDate: '2026-11-06', endDate: '2026-11-16', sourceUrl: 'u', status: 'dismissed' },
     ];
     const next = reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q1', events });
     expect(next).toMatchObject({

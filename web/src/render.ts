@@ -529,14 +529,11 @@ function renderQueryCard(query: QuerySummary): string {
 }
 
 function renderReviewCard(reviewing: ReviewingDraft): string {
-  const approved = reviewing.events.filter(e => e.status === 'approved');
-  const pending = reviewing.events.filter(e => e.status === 'candidate');
-  const selectedCount = pending.filter(e => e.decision === 'approve').length;
+  // reviewing.events is guaranteed candidate-only by the reducer's
+  // REVIEW_EVENTS_LOADED case — no approved/dismissed bucket to split out.
+  const selectedCount = reviewing.events.filter(e => e.decision === 'approve').length;
 
-  const eventTiles = [
-    ...pending.map(e => renderSelectableTile(e)),
-    ...approved.map(e => renderApprovedTile(e)),
-  ].join('');
+  const eventTiles = reviewing.events.map(e => renderSelectableTile(e)).join('');
 
   const eventsSection = reviewing.events.length > 0
     ? `
