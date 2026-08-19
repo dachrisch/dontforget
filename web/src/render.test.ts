@@ -13,6 +13,7 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
+    onDeleteAccount: vi.fn(),
     onStartReview: vi.fn(),
     onToggleReviewEvent: vi.fn(),
     onSetReviewInterval: vi.fn(),
@@ -410,6 +411,24 @@ describe('renderWorkspace', () => {
 
     container.querySelector<HTMLButtonElement>('button[data-action=sign-out]')!.click();
     expect(handlers.onSignOut).toHaveBeenCalled();
+  });
+
+  it('deletes the account only after an explicit confirm click', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      handlers
+    );
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-action=delete-account]')!;
+    button.click();
+    expect(handlers.onDeleteAccount).not.toHaveBeenCalled();
+    expect(button.dataset.confirmed).toBe('true');
+
+    button.click();
+    expect(handlers.onDeleteAccount).toHaveBeenCalled();
   });
 
   it('renders an editing card prefilled and saves the edited values', () => {

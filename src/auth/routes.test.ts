@@ -1,16 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
-import type { Db } from 'mongodb';
+import { ObjectId, type Db } from 'mongodb';
+
+// A real, valid ObjectId string — the session/user mocks must return one so
+// requireAuth yields a usable userId and deleteAccount's ObjectId coercion
+// doesn't throw (a fake like 'user-1' would blow up in `new ObjectId(...)`).
+const USER_ID = new ObjectId().toString();
 
 function fakeDb(): Db {
   const collection = {
     updateOne: vi.fn().mockResolvedValue(undefined),
     insertOne: vi.fn().mockResolvedValue(undefined),
-    findOneAndUpdate: vi.fn().mockResolvedValue({ _id: 'user-1', user_id: 'user-1' }),
-    findOne: vi.fn().mockResolvedValue({ _id: 'user-1' }),
+    findOneAndUpdate: vi.fn().mockResolvedValue({ _id: USER_ID, user_id: USER_ID }),
+    findOne: vi.fn().mockResolvedValue({ _id: USER_ID, user_id: USER_ID }),
     find: vi.fn().mockReturnValue({ toArray: () => Promise.resolve([]) }),
     deleteOne: vi.fn().mockResolvedValue({ deletedCount: 1 }),
+    deleteMany: vi.fn().mockResolvedValue({ deletedCount: 1 }),
   };
   return { collection: vi.fn().mockReturnValue(collection) } as unknown as Db;
 }
@@ -133,5 +139,49 @@ describe('auth routes', () => {
     };
     expect(collection('sessions').deleteOne).toHaveBeenCalledWith({ _id: 'session-1' });
     expect(response.headers['set-cookie']).toMatch(/df_session=;/);
+  });
+
+  it('DELETE /api/auth/account wipes the user data and clears the session cookie', async () => {
+    const db = fakeDb();
+    const app = await buildApp({
+      db,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/account',
+      cookies: { df_session: 'session-1' },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['set-cookie']).toMatch(/df_session=;/);
+    const collection = db.collection as unknown as (name: string) => {
+      find: ReturnType<typeof vi.fn>;
+      deleteMany: ReturnType<typeof vi.fn>;
+      deleteOne: ReturnType<typeof vi.fn>;
+    };
+    expect(collection('queries').find).toHaveBeenCalledWith({ user_id: USER_ID }, { projection: { _id: 1 } });
+    expect(collection('queries').deleteMany).toHaveBeenCalledWith({ user_id: USER_ID });
+    expect(collection('feed_tokens').deleteMany).toHaveBeenCalledWith({ user_id: USER_ID });
+    expect(collection('magic_links').deleteMany).toHaveBeenCalledWith({ user_id: USER_ID });
+    expect(collection('sessions').deleteMany).toHaveBeenCalledWith({ user_id: USER_ID });
+    expect(collection('users').deleteOne).toHaveBeenCalledWith({ _id: new ObjectId(USER_ID) });
+  });
+
+  it('DELETE /api/auth/account requires a session', async () => {
+    const app = await buildApp({
+      db: fakeDb(),
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/auth/account' });
+    expect(response.statusCode).toBe(401);
   });
 });

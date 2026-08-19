@@ -100,6 +100,16 @@ export async function signOut(): Promise<void> {
   }
 }
 
+export async function deleteAccount(): Promise<void> {
+  const response = await fetch('/api/auth/account', {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+}
+
 export async function getQueryEvents(queryId: string): Promise<EventDetail[]> {
   const response = await fetch(`/api/queries/${queryId}/events`, { credentials: 'include' });
   return handle(response);

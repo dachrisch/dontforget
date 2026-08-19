@@ -10,6 +10,7 @@ import {
   deleteQuery,
   runQuery,
   signOut,
+  deleteAccount,
   ApiError,
 } from './api';
 
@@ -144,6 +145,24 @@ describe('api client', () => {
       method: 'POST',
       credentials: 'include',
     });
+  });
+
+  it('deleteAccount sends a DELETE to the account endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteAccount();
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/account', {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  });
+
+  it('deleteAccount throws ApiError on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
+
+    await expect(deleteAccount()).rejects.toBeInstanceOf(ApiError);
   });
 
   it('getQueryEvents fetches the events for a query', async () => {
