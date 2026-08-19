@@ -99,9 +99,14 @@ async function refreshDashboard(): Promise<void> {
 
 function startReview(queryId: string): void {
   setState(reducer(state, { type: 'START_REVIEW', queryId }));
-  // The card opens immediately; the events for it load async.
+  // The card opens immediately; the events for it load async. Review is a
+  // lean "decide on what's pending" queue — approved and dismissed events
+  // are never shown here (see docs/superpowers/specs/2026-08-19-review-edit-dismissed-design.md).
   getQueryEvents(queryId)
-    .then(events => setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events })))
+    .then(events => {
+      const pending = events.filter(e => e.status === 'candidate');
+      setState(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId, events: pending }));
+    })
     .catch(err => showError('error.loadingEvents', err));
 }
 
@@ -134,13 +139,16 @@ function paint() {
     },
     onApproveReview: queryId => {
       if (state.kind !== 'dashboard' || state.reviewing?.queryId !== queryId) return;
-      // Snapshot the current selection now — the user can keep toggling
-      // checkboxes while this request is in flight.
-      const eventIds = state.reviewing.events
-        .filter(e => e.status === 'candidate' && e.selected)
+      // Snapshot the current decisions now — the user can keep cycling
+      // tiles while this request is in flight.
+      const approveIds = state.reviewing.events
+        .filter(e => e.status === 'candidate' && e.decision === 'approve')
+        .map(e => e.id);
+      const dismissIds = state.reviewing.events
+        .filter(e => e.status === 'candidate' && e.decision === 'dismiss')
         .map(e => e.id);
       clearError();
-      approveEvents(queryId, eventIds, state.reviewing.recurrenceInterval)
+      approveEvents(queryId, approveIds, state.reviewing.recurrenceInterval, dismissIds)
         .then(() => {
           setState(reducer(state, { type: 'REVIEW_APPROVED', queryId }));
           refreshDashboard();
@@ -160,8 +168,13 @@ function paint() {
       clearError();
       setState(reducer(state, { type: 'START_EDIT', queryId }));
       // The dashboard card opens immediately; the events for it load async.
+      // Edit keeps approved events visible for context (it's the "manage
+      // this query" view); only dismissed ones stay hidden.
       getQueryEvents(queryId)
-        .then(events => setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events })))
+        .then(events => {
+          const visible = events.filter(e => e.status !== 'dismissed');
+          setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events: visible }));
+        })
         .catch(err => showError('error.loadingEvents', err));
     },
     onToggleEditEvent: id => {
@@ -172,16 +185,18 @@ function paint() {
     },
     onSaveEdit: (queryId, patch) => {
       clearError();
-      // Snapshot the selected candidates at save time; the edit card stays
+      // Snapshot the decided candidates at save time; the edit card stays
       // interactive while the PATCH + approve round-trips, and we reload the
       // dashboard once both have settled so counts and feed links refresh.
-      const selectedIds =
-        state.kind === 'dashboard' && state.editing?.queryId === queryId
-          ? state.editing.events.filter(e => e.status === 'candidate' && e.selected).map(e => e.id)
-          : [];
+      const editingEvents =
+        state.kind === 'dashboard' && state.editing?.queryId === queryId ? state.editing.events : [];
+      const approveIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'approve').map(e => e.id);
+      const dismissIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'dismiss').map(e => e.id);
       updateQuery(queryId, patch)
         .then(() => {
-          if (selectedIds.length > 0) return approveEvents(queryId, selectedIds);
+          if (approveIds.length > 0 || dismissIds.length > 0) {
+            return approveEvents(queryId, approveIds, undefined, dismissIds);
+          }
           return undefined;
         })
         .then(() => refreshDashboard())
