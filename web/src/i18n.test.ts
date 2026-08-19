@@ -21,6 +21,8 @@ function noopHandlers(): WorkspaceHandlers {
     onApproveReview: vi.fn(),
     onCancelReview: vi.fn(),
     onRetrySearch: vi.fn(),
+    onCloseAdmin: vi.fn(),
+    onDeleteAdminUser: vi.fn(),
   };
 }
 

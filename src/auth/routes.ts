@@ -48,7 +48,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
   });
 
   const requireAuth = createRequireAuth(deps.sessionService);
-  app.get('/api/me', { preHandler: requireAuth }, async () => ({ authenticated: true }));
+  app.get('/api/me', { preHandler: requireAuth }, async request => {
+    const user = await deps.sessionService.getUser(request.userId!);
+    return { authenticated: true, role: user?.role ?? 'user' };
+  });
 
   app.post('/api/auth/signout', async (request, reply) => {
     const sessionId = request.cookies?.[SESSION_COOKIE];

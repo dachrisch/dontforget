@@ -117,6 +117,24 @@ describe('auth routes', () => {
     expect(response.statusCode).toBe(401);
   });
 
+  it('GET /api/me reports the signed-in user role', async () => {
+    const app = await buildApp({
+      db: fakeDb(),
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/me',
+      cookies: { df_session: 'session-1' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ authenticated: true, role: 'user' });
+  });
+
   it('POST /api/auth/signout deletes the session and clears the cookie', async () => {
     const db = fakeDb();
     const app = await buildApp({

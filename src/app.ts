@@ -4,10 +4,11 @@ import rateLimit from '@fastify/rate-limit';
 import type { Db } from 'mongodb';
 import type { EmailSender } from './email/EmailSender.js';
 import { MagicLinkService } from './auth/magicLink.js';
-import { SessionService, createRequireAuth } from './auth/session.js';
+import { SessionService, createRequireAuth, createRequireAdmin } from './auth/session.js';
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerQueryRoutes } from './queries/routes.js';
 import { registerFeedRoutes } from './feed/routes.js';
+import { registerAdminRoutes } from './admin/routes.js';
 import type { ExtractionResult } from './types.js';
 
 export interface AppDeps {
@@ -16,6 +17,9 @@ export interface AppDeps {
   publicBaseUrl: string;
   frontendUrl: string;
   runQuery: (query: string) => Promise<ExtractionResult>;
+  // Emails that get the admin role on sign-in. Defaults to none — a
+  // deployment without ADMIN_EMAILS simply has no admin UI.
+  adminEmails?: readonly string[];
 }
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
@@ -34,7 +38,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.get('/health', async () => ({ status: 'ok' }));
 
-  const magicLinkService = new MagicLinkService(deps.db, deps.emailSender, deps.publicBaseUrl);
+  const magicLinkService = new MagicLinkService(
+    deps.db,
+    deps.emailSender,
+    deps.publicBaseUrl,
+    deps.adminEmails ?? []
+  );
   const sessionService = new SessionService(deps.db);
   registerAuthRoutes(app, { db: deps.db, magicLinkService, sessionService, frontendUrl: deps.frontendUrl });
 
@@ -46,6 +55,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     publicBaseUrl: deps.publicBaseUrl,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
+  registerAdminRoutes(app, { db: deps.db, requireAdmin: createRequireAdmin(sessionService) });
 
   return app;
 }

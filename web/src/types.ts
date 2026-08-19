@@ -62,3 +62,26 @@ export interface EventDetail {
   sourceUrl: string;
   status: 'candidate' | 'approved';
 }
+
+export type UserRole = 'admin' | 'user';
+
+export interface Me {
+  authenticated: boolean;
+  role: UserRole;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalQueries: number;
+  approvedEvents: number;
+  candidateEvents: number;
+  activeUsers7d: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  createdAt: string | null;
+  queryCount: number;
+}

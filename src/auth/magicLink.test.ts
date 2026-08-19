@@ -39,6 +39,45 @@ describe('MagicLinkService', () => {
     expect(await service.verifyToken('not-a-real-token')).toBeNull();
   });
 
+  it('promotes an allowlisted email to admin on first sign-in', async () => {
+    const service = new MagicLinkService(
+      db,
+      new CapturingEmailSender(),
+      'http://localhost:3000',
+      ['admin@example.com']
+    );
+
+    await service.requestLink('admin@example.com');
+
+    const user = await db.collection('users').findOne({ email: 'admin@example.com' });
+    expect(user).toMatchObject({ role: 'admin' });
+    expect(user!.created_at).toBeInstanceOf(Date);
+  });
+
+  it('keeps an existing admin promoted even if the allowlist shrinks', async () => {
+    const service = new MagicLinkService(db, new CapturingEmailSender(), 'http://localhost:3000');
+    await db.collection('users').insertOne({ email: 'admin@example.com', role: 'admin' });
+
+    await service.requestLink('admin@example.com');
+
+    const user = await db.collection('users').findOne({ email: 'admin@example.com' });
+    expect(user).toMatchObject({ role: 'admin' });
+  });
+
+  it('does not grant the admin role to a non-allowlisted email', async () => {
+    const service = new MagicLinkService(
+      db,
+      new CapturingEmailSender(),
+      'http://localhost:3000',
+      ['admin@example.com']
+    );
+
+    await service.requestLink('user@example.com');
+
+    const user = await db.collection('users').findOne({ email: 'user@example.com' });
+    expect(user!.role).toBeUndefined();
+  });
+
   it('is single-use', async () => {
     const emailSender = new CapturingEmailSender();
     const service = new MagicLinkService(db, emailSender, 'http://localhost:3000');
