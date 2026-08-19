@@ -21,11 +21,16 @@ describe('runMigrations', () => {
     await db.dropDatabase();
 
     const firstRun = await runMigrations(db);
-    expect(firstRun).toEqual(['001_init.ts', '002_queries_dashboard.ts', '003_events_dedup_index.ts']);
+    expect(firstRun).toEqual([
+      '001_init.ts',
+      '002_queries_dashboard.ts',
+      '003_events_dedup_index.ts',
+      '004_billing_users.ts',
+    ]);
 
     const collections = await db.listCollections().toArray();
     expect(collections.map(c => c.name)).toEqual(
-      expect.arrayContaining(['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens'])
+      expect.arrayContaining(['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens', 'stripe_events'])
     );
 
     const feedIndexes = await db.collection('feed_tokens').indexes();
@@ -40,6 +45,9 @@ describe('runMigrations', () => {
     expect(eventsIndexes.map(i => i.name)).toEqual(
       expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_status_1_label_1_start_date_1_end_date_1'])
     );
+
+    const usersIndexes = await db.collection('users').indexes();
+    expect(usersIndexes.map(i => i.name)).toEqual(expect.arrayContaining(['email_1', 'stripe_customer_id_1']));
 
     const secondRun = await runMigrations(db);
     expect(secondRun).toEqual([]);
