@@ -452,8 +452,8 @@ h1, h2 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.8rem;
-  height: 1.8rem;
+  width: 2.2rem;
+  height: 2.2rem;
   background: none;
   border: 1px solid var(--rule);
   border-radius: var(--radius);
@@ -580,6 +580,7 @@ h1, h2 {
 
 .query-card-head {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: baseline;
   gap: 1rem;

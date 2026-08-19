@@ -61,6 +61,36 @@ describe('style.css', () => {
     expect(Number(padding) * 2 * 16 + 13.6).toBeGreaterThanOrEqual(24);
   });
 
+  it('lets .query-card-head wrap so a long action label cannot force the card wider than its container', () => {
+    // .query-card-actions holds up to three nowrap buttons (Review/Edit/
+    // Delete, or Edit/Delete/"Confirm delete?" after a delete tap) sitting
+    // next to the query title in a single flex row. Without flex-wrap on
+    // the row, that cluster's minimum content width plus the title's
+    // minimum content width can exceed the card width on a narrow mobile
+    // viewport — reproduced live at 390px: tapping Delete on a query with
+    // a pending review swaps "Delete" for the longer "Confirm delete?"
+    // and pushes the whole card (and page) into horizontal scroll.
+    const rule = css.match(/\.query-card-head\s*\{([\s\S]*?)\}/)?.[1];
+    expect(rule).toBeDefined();
+    expect(rule).toMatch(/flex-wrap:\s*wrap;?/);
+  });
+
+  it('gives .feed-action (Download/Copy/RSS icon buttons) more headroom above the 24px touch-target floor', () => {
+    // At 1.8rem (28.8px) these already clear WCAG 2.5.8's 24px minimum,
+    // same floor .link-button targets — but unlike .link-button they have
+    // no text label, sit right next to each other with only 0.5rem of
+    // gap, and are the smallest tap targets on the page. Match the
+    // comfort margin .link-button already gets (33px tall, well past the
+    // bare 24px floor) instead of stopping at minimum compliance.
+    const rule = css.match(/\.feed-action\s*\{([\s\S]*?)\}/)?.[1];
+    expect(rule).toBeDefined();
+    const width = rule!.match(/width:\s*([\d.]+)rem;/)?.[1];
+    const height = rule!.match(/height:\s*([\d.]+)rem;/)?.[1];
+    expect(width).toBeDefined();
+    expect(height).toBe(width);
+    expect(Number(width) * 16).toBeGreaterThanOrEqual(32);
+  });
+
   it('ships the actual Latin-subset font file, not a stripped/wrong subset', () => {
     const fontPath = resolve(__dirname, '../public/fonts/playfair-display-700.woff2');
     const { size } = statSync(fontPath);
