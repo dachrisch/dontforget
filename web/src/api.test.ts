@@ -18,6 +18,7 @@ import {
   addAdminModel,
   updateAdminModel,
   getAdminSearch,
+  getBillingStatus,
   ApiError,
 } from './api';
 
@@ -297,5 +298,14 @@ describe('api client', () => {
 
     expect(await getAdminSearch()).toEqual(body);
     expect(fetch).toHaveBeenCalledWith('/api/admin/search', { credentials: 'include' });
+  });
+
+  it('getBillingStatus parses the billing status payload', async () => {
+    const body = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getBillingStatus()).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/status', { credentials: 'include' });
   });
 });

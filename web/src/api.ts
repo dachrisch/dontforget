@@ -1,4 +1,4 @@
-import type { AdminModel, AdminSearch, AdminStats, AdminUser, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, BillingStatus, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -38,6 +38,19 @@ export async function getMe(): Promise<Me> {
 export async function listQueries(): Promise<Dashboard> {
   const response = await fetch('/api/queries', { credentials: 'include' });
   return handle(response);
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const response = await fetch('/api/billing/status', { credentials: 'include' });
+  return handle(response);
+}
+
+export function startCheckout(): void {
+  window.location.href = '/api/billing/checkout';
+}
+
+export function startPortal(): void {
+  window.location.href = '/api/billing/portal';
 }
 
 export async function submitQuery(
