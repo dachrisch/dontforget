@@ -13,12 +13,15 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
+    onDeleteAccount: vi.fn(),
     onStartReview: vi.fn(),
     onToggleReviewEvent: vi.fn(),
     onSetReviewInterval: vi.fn(),
     onApproveReview: vi.fn(),
     onCancelReview: vi.fn(),
     onRetrySearch: vi.fn(),
+    onCloseAdmin: vi.fn(),
+    onDeleteAdminUser: vi.fn(),
   };
 }
 
@@ -412,6 +415,24 @@ describe('renderWorkspace', () => {
     expect(handlers.onSignOut).toHaveBeenCalled();
   });
 
+  it('deletes the account only after an explicit confirm click', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      handlers
+    );
+
+    const button = container.querySelector<HTMLButtonElement>('button[data-action=delete-account]')!;
+    button.click();
+    expect(handlers.onDeleteAccount).not.toHaveBeenCalled();
+    expect(button.dataset.confirmed).toBe('true');
+
+    button.click();
+    expect(handlers.onDeleteAccount).toHaveBeenCalled();
+  });
+
   it('renders an editing card prefilled and saves the edited values', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
@@ -538,5 +559,52 @@ describe('renderWorkspace', () => {
     expect(deleteButton.textContent).toContain('Confirm');
     deleteButton.click();
     expect(handlers.onDeleteQuery).toHaveBeenCalledWith('q1');
+  });
+
+  it('renders the admin panel with stats, a user table and working actions', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'admin',
+        stats: { totalUsers: 2, totalQueries: 3, approvedEvents: 1, candidateEvents: 0, activeUsers7d: 1 },
+        users: [
+          { id: 'u1', email: 'admin@example.com', role: 'admin', createdAt: null, queryCount: 0 },
+          { id: 'u2', email: 'u@example.com', role: 'user', createdAt: null, queryCount: 3 },
+        ],
+      },
+      handlers
+    );
+
+    expect(container.textContent).toContain('Admin');
+    expect(container.textContent).toContain('admin@example.com');
+    expect(container.textContent).toContain('u@example.com');
+    expect(container.querySelectorAll('.admin-stat')).toHaveLength(4);
+
+    const rows = container.querySelectorAll<HTMLElement>('.admin-user-row');
+    expect(rows).toHaveLength(3); // header + two users
+
+    const deleteButton = rows[1].querySelector<HTMLButtonElement>('button[data-action=delete-user]')!;
+    deleteButton.click();
+    expect(handlers.onDeleteAdminUser).not.toHaveBeenCalled();
+    expect(deleteButton.textContent).toContain('Confirm');
+    deleteButton.click();
+    expect(handlers.onDeleteAdminUser).toHaveBeenCalledWith('u1');
+
+    container.querySelector<HTMLButtonElement>('button[data-action=close-admin]')!.click();
+    expect(handlers.onCloseAdmin).toHaveBeenCalled();
+  });
+
+  it('shows a loading hint in the admin panel before stats land', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      { kind: 'admin', stats: null, users: [] },
+      noopHandlers()
+    );
+
+    expect(container.textContent).toContain('Loading');
+    expect(container.querySelectorAll('.admin-stat')).toHaveLength(0);
   });
 });

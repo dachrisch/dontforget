@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.17.0](https://github.com/dachrisch/dontforget/compare/v0.16.0...v0.17.0) (2026-08-19)
+
+
+### Features
+
+* add admin section with user management and role-based access ([#106](https://github.com/dachrisch/dontforget/issues/106)) ([ecaea1d](https://github.com/dachrisch/dontforget/commit/ecaea1d79fa009fc616c35e160a9d2cbcc2c4aba))
+
+## [0.16.0](https://github.com/dachrisch/dontforget/compare/v0.15.1...v0.16.0) (2026-08-19)
+
+
+### Features
+
+* add account deletion ([5f80bd7](https://github.com/dachrisch/dontforget/commit/5f80bd7abc934571b0b35bec3a3395069820f24a))
+* add account deletion ([f910918](https://github.com/dachrisch/dontforget/commit/f910918719663b658e8b6f306c6735aa68af0dc5))
+
+
+### Bug Fixes
+
+* use a real ObjectId in auth route test fakes ([0e1e7d9](https://github.com/dachrisch/dontforget/commit/0e1e7d93ce9aa72a4afc1f4f9596d753165bb0b8))
+
 ## [0.15.1](https://github.com/dachrisch/dontforget/compare/v0.15.0...v0.15.1) (2026-08-19)
 
 

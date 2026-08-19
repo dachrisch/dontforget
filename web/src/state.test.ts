@@ -323,4 +323,34 @@ describe('reducer', () => {
     const state: WorkspaceState = { kind: 'empty' };
     expect(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id: 'e1' })).toBe(state);
   });
+
+  it('loads stats and users into the admin panel', () => {
+    const state: WorkspaceState = { kind: 'admin', stats: null, users: [] };
+    const stats = { totalUsers: 2, totalQueries: 3, approvedEvents: 1, candidateEvents: 0, activeUsers7d: 1 };
+    const users: import('./types').AdminUser[] = [{ id: 'u1', email: 'a@example.com', role: 'user', createdAt: null, queryCount: 1 }];
+
+    const next = reducer(state, { type: 'ADMIN_LOADED', stats, users });
+    expect(next).toEqual({ kind: 'admin', stats, users });
+  });
+
+  it('ignores ADMIN_LOADED outside the admin panel', () => {
+    const state: WorkspaceState = { kind: 'empty' };
+    expect(
+      reducer(state, { type: 'ADMIN_LOADED', stats: { totalUsers: 0, totalQueries: 0, approvedEvents: 0, candidateEvents: 0, activeUsers7d: 0 }, users: [] })
+    ).toBe(state);
+  });
+
+  it('removes a deleted user from the admin list', () => {
+    const state: WorkspaceState = {
+      kind: 'admin',
+      stats: null,
+      users: [
+        { id: 'u1', email: 'a@example.com', role: 'user', createdAt: null, queryCount: 1 },
+        { id: 'u2', email: 'b@example.com', role: 'admin', createdAt: null, queryCount: 0 },
+      ],
+    };
+
+    const next = reducer(state, { type: 'ADMIN_USER_DELETED', id: 'u1' });
+    expect(next).toMatchObject({ kind: 'admin', users: [{ id: 'u2' }] });
+  });
 });

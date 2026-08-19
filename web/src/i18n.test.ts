@@ -14,12 +14,15 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
+    onDeleteAccount: vi.fn(),
     onStartReview: vi.fn(),
     onToggleReviewEvent: vi.fn(),
     onSetReviewInterval: vi.fn(),
     onApproveReview: vi.fn(),
     onCancelReview: vi.fn(),
     onRetrySearch: vi.fn(),
+    onCloseAdmin: vi.fn(),
+    onDeleteAdminUser: vi.fn(),
   };
 }
 

@@ -3,7 +3,7 @@ import { reducer, type WorkspaceState } from './state';
 import { renderWorkspace } from './render';
 import {
   requestMagicLink,
-  checkSession,
+  getMe,
   submitQuery,
   approveEvents,
   listQueries,
@@ -13,6 +13,10 @@ import {
   rotateFeedToken,
   runQuery,
   signOut,
+  deleteAccount,
+  getAdminStats,
+  listAdminUsers,
+  deleteAdminUser,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
 import { detectLocale, setLocale, t, type MessageKey } from './i18n';
@@ -52,6 +56,64 @@ let state: WorkspaceState = { kind: 'signedOut' };
 function setState(next: WorkspaceState) {
   state = next;
   paint();
+}
+
+// Admin-only entry point, mounted into the masthead once auth reveals the
+// current user is an admin. Lives outside the workspace state machine on
+// purpose — the masthead persists across every workspace state, so an admin
+// can reach the panel from the empty state or the dashboard alike.
+function mountAdminNav(): void {
+  const masthead = document.querySelector<HTMLElement>('.masthead');
+  if (!masthead || masthead.querySelector('.admin-nav')) return;
+  const nav = document.createElement('nav');
+  nav.className = 'admin-nav';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'link-button';
+  button.textContent = t('admin.nav');
+  button.addEventListener('click', () => {
+    clearError();
+    setState({ kind: 'admin', stats: null, users: [] });
+    void refreshAdmin();
+  });
+  nav.appendChild(button);
+  masthead.appendChild(nav);
+}
+
+async function refreshAdmin(): Promise<void> {
+  try {
+    const [stats, users] = await Promise.all([getAdminStats(), listAdminUsers()]);
+    setState(reducer(state, { type: 'ADMIN_LOADED', stats, users }));
+  } catch (err) {
+    showError('error.loadingAdmin', err);
+  }
+}
+
+async function boot(): Promise<void> {
+  try {
+    const me = await getMe();
+    if (!me.authenticated) {
+      setState({ kind: 'signedOut' });
+      return;
+    }
+    if (me.role === 'admin') {
+      mountAdminNav();
+    }
+    const data = await listQueries();
+    // First-time users have no saved queries and get the focused
+    // single-input workspace; returning users get the full dashboard.
+    if (data.queries.length === 0) {
+      setState({ kind: 'empty' });
+    } else {
+      setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed }));
+      // If the server was mid-search when the page loaded (a reload during
+      // a slow run), resume polling so the card can land.
+      scheduleDashboardPoll();
+    }
+  } catch (err) {
+    showError('error.loadingApp', err);
+    setState({ kind: 'signedOut' });
+  }
 }
 
 // While any query is mid-search the dashboard polls itself so the running
@@ -232,31 +294,23 @@ function paint() {
         .then(() => setState({ kind: 'signedOut' }))
         .catch(err => showError('error.signingOut', err));
     },
+    onDeleteAccount: () => {
+      clearError();
+      deleteAccount()
+        .then(() => setState({ kind: 'signedOut' }))
+        .catch(err => showError('error.deletingAccount', err));
+    },
+    onCloseAdmin: () => {
+      clearError();
+      void boot();
+    },
+    onDeleteAdminUser: userId => {
+      clearError();
+      deleteAdminUser(userId)
+        .then(() => refreshAdmin())
+        .catch(err => showError('error.deletingUser', err));
+    },
   });
 }
 
-checkSession()
-  .then(authenticated => {
-    if (!authenticated) {
-      setState({ kind: 'signedOut' });
-      return;
-    }
-    return listQueries().then(data => {
-      // First-time users have no saved queries and get the focused
-      // single-input workspace; returning users get the full dashboard.
-      if (data.queries.length === 0) {
-        setState({ kind: 'empty' });
-      } else {
-        setState(
-          reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed })
-        );
-        // If the server was mid-search when the page loaded (a reload during
-        // a slow run), resume polling so the card can land.
-        scheduleDashboardPoll();
-      }
-    });
-  })
-  .catch(err => {
-    showError('error.loadingApp', err);
-    setState({ kind: 'signedOut' });
-  });
+void boot();

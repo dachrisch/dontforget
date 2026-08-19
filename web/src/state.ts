@@ -1,4 +1,4 @@
-import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminStats, AdminUser, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export type EventDecision = 'none' | 'approve' | 'dismiss';
 
@@ -36,11 +36,18 @@ interface DashboardState {
   reviewing: ReviewingDraft | null;
 }
 
+export interface AdminState {
+  kind: 'admin';
+  stats: AdminStats | null;
+  users: AdminUser[];
+}
+
 export type WorkspaceState =
   | { kind: 'signedOut' }
   | { kind: 'linkSent' }
   | { kind: 'empty' }
-  | DashboardState;
+  | DashboardState
+  | AdminState;
 
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
@@ -56,7 +63,9 @@ export type WorkspaceEvent =
   | { type: 'TOGGLE_REVIEW_EVENT'; id: string }
   | { type: 'SET_REVIEW_INTERVAL'; interval: RecurrenceInterval }
   | { type: 'CANCEL_REVIEW' }
-  | { type: 'REVIEW_APPROVED'; queryId: string };
+  | { type: 'REVIEW_APPROVED'; queryId: string }
+  | { type: 'ADMIN_LOADED'; stats: AdminStats; users: AdminUser[] }
+  | { type: 'ADMIN_USER_DELETED'; id: string };
 
 export function reducer(state: WorkspaceState, event: WorkspaceEvent): WorkspaceState {
   switch (event.type) {
@@ -192,6 +201,14 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         ...state,
         feed: { ...state.feed, icsUrl: event.icsUrl, rssUrl: event.rssUrl },
       };
+
+    case 'ADMIN_LOADED':
+      if (state.kind !== 'admin') return state;
+      return { kind: 'admin', stats: event.stats, users: event.users };
+
+    case 'ADMIN_USER_DELETED':
+      if (state.kind !== 'admin') return state;
+      return { ...state, users: state.users.filter(user => user.id !== event.id) };
 
     default:
       return state;

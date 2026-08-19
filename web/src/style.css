@@ -227,6 +227,70 @@ h1, h2 {
   color: var(--ink-muted);
 }
 
+.admin-nav {
+  margin-top: 0.5rem;
+}
+
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.admin-stat {
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-alt);
+  padding: 0.75rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.admin-stat-value {
+  font-family: var(--font-display);
+  font-size: 1.75rem;
+  line-height: 1.1;
+}
+
+.admin-stat-label {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.admin-users {
+  margin-top: 1.5rem;
+}
+
+.admin-user-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.85rem;
+}
+
+.admin-user-row:last-child {
+  border-bottom: none;
+}
+
+.admin-user-head {
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--rule);
+}
+
+.admin-user-head .ledger-label {
+  white-space: normal;
+}
+
 .ruled-form {
   display: flex;
   flex-direction: column;
@@ -718,4 +782,5 @@ h1, h2 {
   border-top: 1px solid var(--rule);
   display: flex;
   justify-content: flex-end;
+  gap: 1.25rem;
 }
