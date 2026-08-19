@@ -13,6 +13,9 @@ import { createNoopModelRegistry } from './search/models.js';
 import type { ModelRegistry } from './search/models.js';
 import { createMetricsService } from './search/metrics.js';
 import type { MetricsService } from './search/metrics.js';
+import { registerBillingRoutes } from './billing/routes.js';
+import { registerBillingWebhook } from './billing/webhook.js';
+import type { BillingService } from './billing/billingService.js';
 import type { ExtractionResult } from './types.js';
 
 export interface AppDeps {
@@ -26,6 +29,8 @@ export interface AppDeps {
   // only exercise user/query flows don't need to provide them.
   modelRegistry?: ModelRegistry;
   metrics?: MetricsService;
+  billingService: BillingService;
+  webhookSecret?: string;
   // Emails that get the admin role on sign-in. Defaults to none — a
   // deployment without ADMIN_EMAILS simply has no admin UI.
   adminEmails?: readonly string[];
@@ -62,6 +67,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     runQuery: deps.runQuery,
     requireAuth,
     publicBaseUrl: deps.publicBaseUrl,
+    billingService: deps.billingService,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
   registerAdminRoutes(app, {
@@ -74,6 +80,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       createNoopModelRegistry(),
     metrics: deps.metrics ?? createMetricsService(null),
   });
+  registerBillingRoutes(app, {
+    billingService: deps.billingService,
+    requireAuth,
+    publicBaseUrl: deps.publicBaseUrl,
+  });
+  registerBillingWebhook(app, { billingService: deps.billingService, webhookSecret: deps.webhookSecret });
 
   return app;
 }
