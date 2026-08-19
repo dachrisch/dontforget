@@ -22,6 +22,8 @@ function noopHandlers(): WorkspaceHandlers {
     onRetrySearch: vi.fn(),
     onCloseAdmin: vi.fn(),
     onDeleteAdminUser: vi.fn(),
+    onUpgrade: vi.fn(),
+    onManageBilling: vi.fn(),
     onSetAdminModel: vi.fn(),
     onAddAdminModel: vi.fn(),
   };
@@ -87,7 +89,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query({ text: 'Oktoberfest', status: 'running' })], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query({ text: 'Oktoberfest', status: 'running' })], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -102,7 +104,7 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null, billing: null },
       noopHandlers()
     );
 
@@ -118,7 +120,7 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query({ status: 'running' })], feed: null, editing: null, reviewing: null, billing: null },
       noopHandlers()
     );
     renderWorkspace(container, { kind: 'empty' }, noopHandlers());
@@ -134,7 +136,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query({ status: 'failed' })], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query({ status: 'failed' })], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -148,7 +150,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query({ candidateCount: 3, approvedCount: 1 })], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query({ candidateCount: 3, approvedCount: 1 })], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -167,7 +169,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query({ candidateCount: 1 })],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'yearly',
@@ -213,7 +215,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
       },
       handlers
@@ -236,7 +238,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'weekly',
@@ -264,14 +266,14 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing: null },
       noopHandlers()
     );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(true);
 
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing: null },
       noopHandlers()
     );
     expect(container.firstElementChild!.classList.contains('workspace-enter')).toBe(false);
@@ -288,7 +290,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'weekly',
@@ -327,6 +329,7 @@ describe('renderWorkspace', () => {
         feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: '2026-08-10T11:30:00Z' },
         editing: null,
         reviewing: null,
+        billing: null,
       },
       handlers
     );
@@ -368,6 +371,7 @@ describe('renderWorkspace', () => {
         feed: { icsUrl: 'https://x/f/t.ics', rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
         editing: null,
         reviewing: null,
+        billing: null,
       },
       noopHandlers()
     );
@@ -381,7 +385,7 @@ describe('renderWorkspace', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null, billing: null },
       noopHandlers()
     );
     expect(container.textContent).toMatch(/no calendar yet/i);
@@ -392,7 +396,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -409,7 +413,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -422,7 +426,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -446,6 +450,7 @@ describe('renderWorkspace', () => {
         feed: null,
         editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
         reviewing: null,
+        billing: null,
       },
       handlers
     );
@@ -483,6 +488,7 @@ describe('renderWorkspace', () => {
           ],
         },
         reviewing: null,
+        billing: null,
       },
       handlers
     );
@@ -502,7 +508,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'weekly',
@@ -528,7 +534,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: null,
+        editing: null, billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'weekly',
@@ -551,7 +557,7 @@ describe('renderWorkspace', () => {
     const handlers = noopHandlers();
     renderWorkspace(
       container,
-      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null },
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing: null },
       handlers
     );
 
@@ -630,5 +636,37 @@ describe('renderWorkspace', () => {
 
     expect(container.textContent).toContain('Loading');
     expect(container.querySelectorAll('.admin-stat')).toHaveLength(0);
+  });
+
+  it('renders an upgrade action for a free-tier user with remaining quota', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    const billing = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
+      handlers
+    );
+
+    expect(container.textContent).toContain('1 free');
+    expect(container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')).not.toBeNull();
+    container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')!.click();
+    expect(handlers.onUpgrade).toHaveBeenCalled();
+  });
+
+  it('renders a manage action for a subscribed user', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    const billing = { freeLimit: 1, activeQueryCount: 2, pricePerExtraQuery: 0.5, subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    renderWorkspace(
+      container,
+      { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
+      handlers
+    );
+
+    expect(container.textContent).toContain('Subscribed');
+    expect(container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')).not.toBeNull();
+    container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')!.click();
+    expect(handlers.onManageBilling).toHaveBeenCalled();
   });
 });

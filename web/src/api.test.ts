@@ -14,6 +14,7 @@ import {
   getAdminStats,
   listAdminUsers,
   deleteAdminUser,
+  getBillingStatus,
   listAdminModels,
   addAdminModel,
   updateAdminModel,
@@ -243,6 +244,15 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
 
     await expect(deleteAdminUser('u1')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('getBillingStatus parses the billing status payload', async () => {
+    const body = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getBillingStatus()).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/status', { credentials: 'include' });
   });
 
   it('listAdminModels parses the model list', async () => {

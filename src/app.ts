@@ -9,6 +9,9 @@ import { registerAuthRoutes } from './auth/routes.js';
 import { registerQueryRoutes } from './queries/routes.js';
 import { registerFeedRoutes } from './feed/routes.js';
 import { registerAdminRoutes } from './admin/routes.js';
+import { registerBillingRoutes } from './billing/routes.js';
+import { registerBillingWebhook } from './billing/webhook.js';
+import type { BillingService } from './billing/billingService.js';
 import { createNoopModelRegistry } from './search/models.js';
 import type { ModelRegistry } from './search/models.js';
 import { createMetricsService } from './search/metrics.js';
@@ -21,6 +24,8 @@ export interface AppDeps {
   publicBaseUrl: string;
   frontendUrl: string;
   runQuery: (query: string) => Promise<ExtractionResult>;
+  billingService: BillingService;
+  webhookSecret?: string;
   // Model registry + metrics are required for the admin model/health
   // endpoints; defaulted to no-op variants when omitted so unit tests that
   // only exercise user/query flows don't need to provide them.
@@ -62,6 +67,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     runQuery: deps.runQuery,
     requireAuth,
     publicBaseUrl: deps.publicBaseUrl,
+    billingService: deps.billingService,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
   registerAdminRoutes(app, {
@@ -74,6 +80,12 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
       createNoopModelRegistry(),
     metrics: deps.metrics ?? createMetricsService(null),
   });
+  registerBillingRoutes(app, {
+    billingService: deps.billingService,
+    requireAuth,
+    publicBaseUrl: deps.publicBaseUrl,
+  });
+  registerBillingWebhook(app, { billingService: deps.billingService, webhookSecret: deps.webhookSecret });
 
   return app;
 }

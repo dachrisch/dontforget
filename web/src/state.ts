@@ -1,4 +1,4 @@
-import type { AdminModel, AdminSearch, AdminStats, AdminUser, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, BillingStatus, EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 
 export type EventDecision = 'none' | 'approve' | 'dismiss';
 
@@ -34,6 +34,7 @@ interface DashboardState {
   feed: FeedSummary | null;
   editing: EditingDraft | null;
   reviewing: ReviewingDraft | null;
+  billing: BillingStatus | null;
 }
 
 export interface AdminState {
@@ -53,7 +54,7 @@ export type WorkspaceState =
 
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
-  | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null }
+  | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null; billing?: BillingStatus | null }
   | { type: 'START_EDIT'; queryId: string }
   | { type: 'EDIT_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
   | { type: 'TOGGLE_EDIT_EVENT'; id: string }
@@ -88,7 +89,7 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         state.kind === 'dashboard' && state.reviewing && event.queries.some(q => q.id === state.reviewing!.queryId)
           ? state.reviewing
           : null;
-      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing, reviewing };
+      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing, reviewing, billing: event.billing ?? null };
     }
 
     case 'START_EDIT': {
