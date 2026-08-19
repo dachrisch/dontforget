@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/dachrisch/dontforget/compare/v0.14.1...v0.15.0) (2026-08-19)
+
+
+### Features
+
+* run searches asynchronously with per-query status cards and inline approval ([#100](https://github.com/dachrisch/dontforget/issues/100)) ([81eced1](https://github.com/dachrisch/dontforget/commit/81eced1814579d10388ff18c55215c26a3528d36))
+
 ## [0.14.1](https://github.com/dachrisch/dontforget/compare/v0.14.0...v0.14.1) (2026-08-19)
 
 
