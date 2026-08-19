@@ -45,6 +45,16 @@ export interface Dashboard {
   feed: FeedSummary | null;
 }
 
+export interface BillingStatus {
+  freeLimit: number;
+  activeQueryCount: number;
+  pricePerExtraQuery: number;
+  subscribed: boolean;
+  subscriptionStatus: string | null;
+  checkoutUrl: string;
+  portalUrl: string;
+}
+
 export interface CreateQueryResponse {
   queryId: string;
 }
