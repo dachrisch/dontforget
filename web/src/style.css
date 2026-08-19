@@ -40,6 +40,11 @@
 body {
   margin: 0;
   min-height: 100vh;
+  /* Without this, .masthead's top margin (its first child) collapses
+     through body and escapes above it, pushing body's own 100vh box
+     that far past the viewport bottom — forcing scroll on pages
+     (e.g. sign-in) whose actual content is shorter than one screen. */
+  display: flow-root;
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-body);
