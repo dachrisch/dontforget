@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/dachrisch/dontforget/compare/v0.15.0...v0.15.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* wrap query-card actions and enlarge feed-action tap targets on mobile ([#102](https://github.com/dachrisch/dontforget/issues/102)) ([5d89669](https://github.com/dachrisch/dontforget/commit/5d89669ea1f6c2251dc0a1c4893734f9bdafe914))
+
 ## [0.15.0](https://github.com/dachrisch/dontforget/compare/v0.14.1...v0.15.0) (2026-08-19)
 
 
