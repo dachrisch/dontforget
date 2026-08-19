@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/dachrisch/dontforget/compare/v0.13.1...v0.14.0) (2026-08-19)
+
+
+### Features
+
+* lead with big add-to-calendar buttons, hide the feed URL ([#96](https://github.com/dachrisch/dontforget/issues/96)) ([e74a804](https://github.com/dachrisch/dontforget/commit/e74a804efc350a089bfc98e13e166db8041cab74))
+
 ## [0.13.1](https://github.com/dachrisch/dontforget/compare/v0.13.0...v0.13.1) (2026-08-18)
 
 
