@@ -77,7 +77,10 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     }
   );
 
-  app.post<{ Params: { id: string }; Body: { eventIds: string[]; recurrenceInterval?: string } }>(
+  app.post<{
+    Params: { id: string };
+    Body: { eventIds: string[]; dismissEventIds?: string[]; recurrenceInterval?: string };
+  }>(
     '/api/queries/:id/approve',
     { preHandler: deps.requireAuth },
     async (request, reply) => {
@@ -91,7 +94,8 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         request.params.id,
         request.body?.eventIds ?? [],
         deps.publicBaseUrl,
-        interval
+        interval,
+        request.body?.dismissEventIds ?? []
       );
       if (!result) {
         return reply.code(403).send({ error: 'not your query' });

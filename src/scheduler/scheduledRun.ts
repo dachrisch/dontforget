@@ -11,7 +11,7 @@ export interface ScheduledRunDeps {
 }
 
 interface ExistingEventRow extends ExistingEventKey {
-  status: 'candidate' | 'approved';
+  status: 'candidate' | 'approved' | 'dismissed';
 }
 
 export async function runScheduledQuery(db: Db, query: DueQuery, deps: ScheduledRunDeps): Promise<void> {

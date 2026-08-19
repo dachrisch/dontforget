@@ -8,7 +8,8 @@ export async function approveEvents(
   queryId: string,
   eventIds: string[],
   publicBaseUrl: string,
-  recurrenceInterval?: RecurrenceInterval
+  recurrenceInterval?: RecurrenceInterval,
+  dismissEventIds: string[] = []
 ): Promise<{ icsUrl: string; rssUrl: string } | null> {
   const queryObjectId = toObjectId(queryId);
   if (!queryObjectId) {
@@ -37,6 +38,17 @@ export async function approveEvents(
         _id: { $in: eventObjectIds },
       },
       { $set: { status: 'approved' } }
+    );
+  }
+
+  const dismissObjectIds = dismissEventIds.map(toObjectId).filter((id): id is ObjectId => id !== null);
+  if (dismissObjectIds.length > 0) {
+    await db.collection('events').updateMany(
+      {
+        query_id: queryObjectId,
+        _id: { $in: dismissObjectIds },
+      },
+      { $set: { status: 'dismissed' } }
     );
   }
 

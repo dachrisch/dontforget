@@ -4,7 +4,7 @@ export interface CandidateEvent {
   startDate: string;
   endDate: string;
   sourceUrl: string;
-  status: 'candidate' | 'approved';
+  status: 'candidate' | 'approved' | 'dismissed';
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -60,5 +60,5 @@ export interface EventDetail {
   startDate: string;
   endDate: string;
   sourceUrl: string;
-  status: 'candidate' | 'approved';
+  status: 'candidate' | 'approved' | 'dismissed';
 }

@@ -80,4 +80,47 @@ describe('approveEvents', () => {
     const stored = await db.collection('events').findOne({ query_id: new ObjectId(queryId) });
     expect(stored!.status).toBe('approved');
   });
+
+  it('dismisses only the selected events, leaving others untouched', async () => {
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+      { label: 'Kirchweihdult (stale)', startDate: '2024-10-20', endDate: '2024-10-29', sourceUrl: 'https://eventbrite.com' },
+    ]);
+
+    const result = await approveEvents(db, userId, queryId, [], 'http://localhost:3000', undefined, [candidates[1].id]);
+
+    expect(result).not.toBeNull();
+    const statuses = await db
+      .collection('events')
+      .find({ query_id: new ObjectId(queryId) })
+      .toArray();
+    const byLabel = Object.fromEntries(statuses.map(r => [r.label as string, r.status as string]));
+    expect(byLabel['Frühjahrsdult']).toBe('candidate');
+    expect(byLabel['Kirchweihdult (stale)']).toBe('dismissed');
+  });
+
+  it('approves and dismisses different events in the same call', async () => {
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+      { label: 'Kirchweihdult (stale)', startDate: '2024-10-20', endDate: '2024-10-29', sourceUrl: 'https://eventbrite.com' },
+    ]);
+
+    await approveEvents(
+      db,
+      userId,
+      queryId,
+      [candidates[0].id],
+      'http://localhost:3000',
+      undefined,
+      [candidates[1].id]
+    );
+
+    const statuses = await db
+      .collection('events')
+      .find({ query_id: new ObjectId(queryId) })
+      .toArray();
+    const byLabel = Object.fromEntries(statuses.map(r => [r.label as string, r.status as string]));
+    expect(byLabel['Frühjahrsdult']).toBe('approved');
+    expect(byLabel['Kirchweihdult (stale)']).toBe('dismissed');
+  });
 });
