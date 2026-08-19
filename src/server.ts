@@ -36,11 +36,18 @@ async function main() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
+  // Whose emails get the admin role on sign-in (comma-separated). The admin
+  // UI is only reachable by those accounts — no admin UI to bootstrap itself.
+  const adminEmails = (process.env.ADMIN_EMAILS ?? '')
+    .split(',')
+    .map(email => email.trim().toLowerCase())
+    .filter(email => email.length > 0);
 
   const app = await buildApp({
     db,
     emailSender,
     publicBaseUrl,
+    adminEmails,
     // In production the backend serves the built frontend itself (below),
     // so the magic-link callback redirect stays same-origin ('/'). In dev
     // the frontend is a separate Vite server — redirect there instead, or

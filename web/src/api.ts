@@ -1,4 +1,4 @@
-import type { Dashboard, EventDetail, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminStats, AdminUser, Dashboard, EventDetail, Me, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -27,9 +27,12 @@ export async function requestMagicLink(email: string): Promise<void> {
   }
 }
 
-export async function checkSession(): Promise<boolean> {
+export async function getMe(): Promise<Me> {
   const response = await fetch('/api/me', { credentials: 'include' });
-  return response.ok;
+  if (!response.ok) {
+    return { authenticated: false, role: 'user' };
+  }
+  return response.json() as Promise<Me>;
 }
 
 export async function listQueries(): Promise<Dashboard> {
@@ -125,6 +128,26 @@ export async function rotateFeedToken(): Promise<{ icsUrl: string; rssUrl: strin
 
 export async function deleteQuery(queryId: string): Promise<void> {
   const response = await fetch(`/api/queries/${queryId}`, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, await response.text());
+  }
+}
+
+export async function getAdminStats(): Promise<AdminStats> {
+  const response = await fetch('/api/admin/stats', { credentials: 'include' });
+  return handle(response);
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const response = await fetch('/api/admin/users', { credentials: 'include' });
+  return handle(response);
+}
+
+export async function deleteAdminUser(userId: string): Promise<void> {
+  const response = await fetch(`/api/admin/users/${userId}`, {
     method: 'DELETE',
     credentials: 'include',
   });

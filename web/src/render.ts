@@ -1,4 +1,4 @@
-import type { WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft } from './state';
+import type { AdminState, WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft } from './state';
 import { RECURRENCE_INTERVALS } from './types';
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
 import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
@@ -20,6 +20,8 @@ export interface WorkspaceHandlers {
   onApproveReview: (queryId: string) => void;
   onCancelReview: () => void;
   onRetrySearch: (queryId: string) => void;
+  onCloseAdmin: () => void;
+  onDeleteAdminUser: (userId: string) => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -66,6 +68,8 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
       return renderEmpty(handlers);
     case 'dashboard':
       return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, handlers);
+    case 'admin':
+      return renderAdmin(state, handlers);
   }
 }
 
@@ -465,6 +469,84 @@ function renderDashboard(
       });
     }, LONGER_THAN_USUAL_DELAY_MS);
   }
+
+  return wrapper;
+}
+
+function renderAdmin(state: AdminState, handlers: WorkspaceHandlers): HTMLElement {
+  const wrapper = document.createElement('div');
+  const stats = state.stats;
+  const statsCards = stats
+    ? `
+    <div class="admin-stats">
+      <div class="admin-stat">
+        <span class="admin-stat-value">${stats.totalUsers}</span>
+        <span class="admin-stat-label">${t('admin.statsUsers')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${stats.totalQueries}</span>
+        <span class="admin-stat-label">${t('admin.statsQueries')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${stats.approvedEvents}</span>
+        <span class="admin-stat-label">${t('admin.statsApproved')}</span>
+      </div>
+      <div class="admin-stat">
+        <span class="admin-stat-value">${stats.activeUsers7d}</span>
+        <span class="admin-stat-label">${t('admin.statsActive')}</span>
+      </div>
+    </div>`
+    : `<p class="subtext">${t('admin.loading')}</p>`;
+
+  const userRows = state.users
+    .map(
+      user => `
+    <div class="admin-user-row" data-id="${user.id}">
+      <span class="ledger-label">${escapeHtml(user.email)}</span>
+      <span class="ledger-value">${escapeHtml(user.role === 'admin' ? t('admin.roleAdmin') : t('admin.roleUser'))}</span>
+      <span class="ledger-value">${user.queryCount}</span>
+      <button type="button" class="link-button link-button-danger" data-action="delete-user">${t('admin.deleteUser')}</button>
+    </div>`
+    )
+    .join('');
+
+  wrapper.innerHTML = `
+    <h1>${t('admin.title')}</h1>
+    ${statsCards}
+    <section class="admin-users" aria-label="${t('admin.users')}">
+      <div class="admin-user-row admin-user-head" aria-hidden="true">
+        <span class="ledger-label">${t('admin.email')}</span>
+        <span class="ledger-value">${t('admin.role')}</span>
+        <span class="ledger-value">${t('admin.queries')}</span>
+        <span></span>
+      </div>
+      ${userRows.length > 0 ? userRows : `<p class="subtext">${t('admin.noUsers')}</p>`}
+    </section>
+    <div class="dashboard-footer">
+      <button type="button" class="link-button" data-action="close-admin">${t('admin.back')}</button>
+      <button type="button" class="link-button" data-action="sign-out">${t('dashboard.signOut')}</button>
+    </div>
+  `;
+
+  wrapper.querySelectorAll<HTMLButtonElement>('button[data-action=delete-user]').forEach(button => {
+    button.addEventListener('click', () => {
+      if (button.dataset.confirmed !== 'true') {
+        button.dataset.confirmed = 'true';
+        button.textContent = t('admin.confirmDeleteUser');
+        return;
+      }
+      const id = button.closest<HTMLElement>('.admin-user-row')!.dataset.id!;
+      handlers.onDeleteAdminUser(id);
+    });
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=close-admin]')?.addEventListener('click', () => {
+    handlers.onCloseAdmin();
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=sign-out]')?.addEventListener('click', () => {
+    handlers.onSignOut();
+  });
 
   return wrapper;
 }

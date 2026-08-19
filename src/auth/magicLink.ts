@@ -5,16 +5,21 @@ import type { EmailSender } from '../email/EmailSender.js';
 const TOKEN_TTL_MS = 15 * 60 * 1000;
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
-interface UserRow {
+export type UserRole = 'admin' | 'user';
+
+export interface UserRow {
   _id: ObjectId;
   email: string;
+  role?: UserRole;
+  created_at?: Date;
 }
 
 export class MagicLinkService {
   constructor(
     private db: Db,
     private emailSender: EmailSender,
-    private baseUrl: string
+    private baseUrl: string,
+    private adminEmails: readonly string[] = []
   ) {}
 
   async requestLink(rawEmail: string): Promise<void> {
@@ -45,9 +50,18 @@ export class MagicLinkService {
   private async findOrCreateUserId(email: string): Promise<string> {
     const users: Collection<UserRow> = this.db.collection<UserRow>('users');
     try {
+      const update: { $setOnInsert: { email: string; created_at: Date }; $set?: { role: UserRole } } = {
+        $setOnInsert: { email, created_at: new Date() },
+      };
+      // The admin allowlist promotes on sign-in, so a fresh deployment only
+      // needs ADMIN_EMAILS in the environment — no admin bootstrapping UI,
+      // and existing admins stay promoted even if the env var later shrinks.
+      if (this.adminEmails.includes(email)) {
+        update.$set = { role: 'admin' };
+      }
       const result = await users.findOneAndUpdate(
         { email },
-        { $setOnInsert: { email } },
+        update,
         { upsert: true, returnDocument: 'after' }
       );
       return result!._id.toString();

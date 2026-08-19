@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   requestMagicLink,
-  checkSession,
+  getMe,
   submitQuery,
   approveEvents,
   listQueries,
@@ -11,6 +11,9 @@ import {
   runQuery,
   signOut,
   deleteAccount,
+  getAdminStats,
+  listAdminUsers,
+  deleteAdminUser,
   ApiError,
 } from './api';
 
@@ -31,12 +34,12 @@ describe('api client', () => {
     );
   });
 
-  it('checkSession returns true only on a 2xx response', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
-    expect(await checkSession()).toBe(true);
+  it('getMe returns the session role on a 2xx response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ authenticated: true, role: 'admin' }) }));
+    expect(await getMe()).toEqual({ authenticated: true, role: 'admin' });
 
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
-    expect(await checkSession()).toBe(false);
+    expect(await getMe()).toEqual({ authenticated: false, role: 'user' });
   });
 
   it('submitQuery parses the JSON body on success', async () => {
@@ -188,5 +191,39 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
 
     await expect(deleteQuery('q1')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('getAdminStats parses the stats payload', async () => {
+    const body = { totalUsers: 2, totalQueries: 5, approvedEvents: 3, candidateEvents: 1, activeUsers7d: 2 };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await getAdminStats()).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/stats', { credentials: 'include' });
+  });
+
+  it('listAdminUsers parses the user list', async () => {
+    const body = [{ id: 'u1', email: 'a@example.com', role: 'user', createdAt: null, queryCount: 1 }];
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
+
+    expect(await listAdminUsers()).toEqual(body);
+    expect(fetch).toHaveBeenCalledWith('/api/admin/users', { credentials: 'include' });
+  });
+
+  it('deleteAdminUser sends a DELETE and resolves on 2xx', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await deleteAdminUser('u1');
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/users/u1', {
+      method: 'DELETE',
+      credentials: 'include',
+    });
+  });
+
+  it('deleteAdminUser throws ApiError on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
+
+    await expect(deleteAdminUser('u1')).rejects.toBeInstanceOf(ApiError);
   });
 });
