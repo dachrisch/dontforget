@@ -36,7 +36,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   const magicLinkService = new MagicLinkService(deps.db, deps.emailSender, deps.publicBaseUrl);
   const sessionService = new SessionService(deps.db);
-  registerAuthRoutes(app, { magicLinkService, sessionService, frontendUrl: deps.frontendUrl });
+  registerAuthRoutes(app, { db: deps.db, magicLinkService, sessionService, frontendUrl: deps.frontendUrl });
 
   const requireAuth = createRequireAuth(sessionService);
   registerQueryRoutes(app, {

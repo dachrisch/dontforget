@@ -39,6 +39,8 @@ const EN = {
   'dashboard.rotateSubtext': 'Leaked or shared your calendar link by mistake? Rotating mints a new one and breaks the old link immediately.',
   'dashboard.noCalendar': 'No calendar yet — approve your first search results to mint your private feed link.',
   'dashboard.signOut': 'Sign out',
+  'dashboard.deleteAccount': 'Delete account',
+  'dashboard.confirmDeleteAccount': 'Really delete? This erases your account, saved searches, and calendar feed forever.',
   'dashboard.confirmRotate': 'Confirm rotate?',
   'queryCard.reruns': 'Re-runs',
   'queryCard.lastRun': 'Last run',
@@ -71,6 +73,7 @@ const EN = {
   'error.deleting': 'Something went wrong while deleting the query. Please try again.',
   'error.rotating': 'Something went wrong while rotating your feed URL. Please try again.',
   'error.signingOut': 'Something went wrong while signing out. Please try again.',
+  'error.deletingAccount': 'Something went wrong while deleting your account. Please try again.',
   'error.loadingApp': 'Something went wrong while loading dontforget. Please try again.',
 } as const;
 
@@ -113,6 +116,8 @@ const DE: Record<MessageKey, string> = {
   'dashboard.rotateSubtext': 'Deinen Kalender-Link verloren oder versehentlich geteilt? Beim Rotieren wird ein neuer erstellt und der alte sofort ungültig.',
   'dashboard.noCalendar': 'Noch kein Kalender — bestätige die erste Suche, um deinen privaten Feed-Link zu erstellen.',
   'dashboard.signOut': 'Abmelden',
+  'dashboard.deleteAccount': 'Konto löschen',
+  'dashboard.confirmDeleteAccount': 'Wirklich löschen? Das entfernt dein Konto, deine gespeicherten Suchanfragen und deinen Kalender-Feed für immer.',
   'dashboard.confirmRotate': 'Rotieren bestätigen?',
   'queryCard.reruns': 'Läufe',
   'queryCard.lastRun': 'Letzter Lauf',
@@ -145,6 +150,7 @@ const DE: Record<MessageKey, string> = {
   'error.deleting': 'Beim Löschen der Suchanfrage ist etwas schiefgegangen. Bitte versuch es erneut.',
   'error.rotating': 'Beim Rotieren deiner Feed-URL ist etwas schiefgegangen. Bitte versuch es erneut.',
   'error.signingOut': 'Beim Abmelden ist etwas schiefgegangen. Bitte versuch es erneut.',
+  'error.deletingAccount': 'Beim Löschen deines Kontos ist etwas schiefgegangen. Bitte versuch es erneut.',
   'error.loadingApp': 'Beim Laden von dontforget ist etwas schiefgegangen. Bitte versuch es erneut.',
 };
 

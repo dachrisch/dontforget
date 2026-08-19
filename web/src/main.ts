@@ -13,6 +13,7 @@ import {
   rotateFeedToken,
   runQuery,
   signOut,
+  deleteAccount,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
 import { detectLocale, setLocale, t, type MessageKey } from './i18n';
@@ -213,6 +214,12 @@ function paint() {
       signOut()
         .then(() => setState({ kind: 'signedOut' }))
         .catch(err => showError('error.signingOut', err));
+    },
+    onDeleteAccount: () => {
+      clearError();
+      deleteAccount()
+        .then(() => setState({ kind: 'signedOut' }))
+        .catch(err => showError('error.deletingAccount', err));
     },
   });
 }

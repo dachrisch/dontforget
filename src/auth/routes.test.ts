@@ -11,6 +11,7 @@ function fakeDb(): Db {
     findOne: vi.fn().mockResolvedValue({ _id: 'user-1' }),
     find: vi.fn().mockReturnValue({ toArray: () => Promise.resolve([]) }),
     deleteOne: vi.fn().mockResolvedValue({ deletedCount: 1 }),
+    deleteMany: vi.fn().mockResolvedValue({ deletedCount: 1 }),
   };
   return { collection: vi.fn().mockReturnValue(collection) } as unknown as Db;
 }
@@ -133,5 +134,47 @@ describe('auth routes', () => {
     };
     expect(collection('sessions').deleteOne).toHaveBeenCalledWith({ _id: 'session-1' });
     expect(response.headers['set-cookie']).toMatch(/df_session=;/);
+  });
+
+  it('DELETE /api/auth/account wipes the user data and clears the session cookie', async () => {
+    const db = fakeDb();
+    const app = await buildApp({
+      db,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/api/auth/account',
+      cookies: { df_session: 'session-1' },
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(response.headers['set-cookie']).toMatch(/df_session=;/);
+    const collection = db.collection as unknown as (name: string) => {
+      find: ReturnType<typeof vi.fn>;
+      deleteMany: ReturnType<typeof vi.fn>;
+    };
+    expect(collection('queries').find).toHaveBeenCalledWith({ user_id: 'user-1' }, { projection: { _id: 1 } });
+    expect(collection('queries').deleteMany).toHaveBeenCalledWith({ user_id: 'user-1' });
+    expect(collection('feed_tokens').deleteMany).toHaveBeenCalledWith({ user_id: 'user-1' });
+    expect(collection('magic_links').deleteMany).toHaveBeenCalledWith({ user_id: 'user-1' });
+    expect(collection('sessions').deleteMany).toHaveBeenCalledWith({ user_id: 'user-1' });
+  });
+
+  it('DELETE /api/auth/account requires a session', async () => {
+    const app = await buildApp({
+      db: fakeDb(),
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+      frontendUrl: 'http://localhost:5173',
+      runQuery: async () => ({ events: [], cadence: null }),
+    });
+
+    const response = await app.inject({ method: 'DELETE', url: '/api/auth/account' });
+    expect(response.statusCode).toBe(401);
   });
 });

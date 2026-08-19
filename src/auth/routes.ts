@@ -1,8 +1,11 @@
 import type { FastifyInstance } from 'fastify';
+import type { Db } from 'mongodb';
 import { MagicLinkService } from './magicLink.js';
 import { SessionService, createRequireAuth, SESSION_COOKIE } from './session.js';
+import { deleteAccount } from './account.js';
 
 export interface AuthRouteDeps {
+  db: Db;
   magicLinkService: MagicLinkService;
   sessionService: SessionService;
   frontendUrl: string;
@@ -52,6 +55,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthRouteDeps): v
     if (sessionId) {
       await deps.sessionService.deleteSession(sessionId);
     }
+    reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    return reply.code(204).send();
+  });
+
+  app.delete('/api/auth/account', { preHandler: requireAuth }, async (request, reply) => {
+    await deleteAccount(deps.db, request.userId!);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.code(204).send();
   });

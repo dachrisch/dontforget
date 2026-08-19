@@ -37,6 +37,12 @@ laptop — use `./scripts/spinup_test_db.sh` (prints the URL to export) and
 `dev-server.md` are the authoritative runbooks — read them before running
 tests or the dev servers.
 
+**In sandboxed/agent environments without access to `servyy-test.lxd` (no
+`lxc`, `zsh`, or Docker), backend tests cannot be run locally — do not
+attempt to spin up a Mongo substitute. Let them run on CI instead; verify
+backend changes with `npx tsc -p tsconfig.json --noEmit` and the frontend
+suite (`cd web && npm test`) before pushing.**
+
 - `vitest.config.ts` sets `fileParallelism: false`: every backend test file
   shares one database and wipes collections between cases. Do not re-enable
   parallelism.

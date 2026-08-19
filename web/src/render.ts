@@ -13,6 +13,7 @@ export interface WorkspaceHandlers {
   onDeleteQuery: (queryId: string) => void;
   onRotateFeedToken: () => void;
   onSignOut: () => void;
+  onDeleteAccount: () => void;
   onStartReview: (queryId: string) => void;
   onToggleReviewEvent: (id: string) => void;
   onSetReviewInterval: (interval: RecurrenceInterval) => void;
@@ -329,6 +330,7 @@ function renderDashboard(
       }
     </section>
     <div class="dashboard-footer">
+      <button type="button" class="link-button link-button-danger" data-action="delete-account">${t('dashboard.deleteAccount')}</button>
       <button type="button" class="link-button" data-action="sign-out">${t('dashboard.signOut')}</button>
     </div>
   `;
@@ -382,6 +384,16 @@ function renderDashboard(
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=sign-out]')?.addEventListener('click', () => {
     handlers.onSignOut();
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=delete-account]')?.addEventListener('click', event => {
+    const button = event.currentTarget as HTMLButtonElement;
+    if (button.dataset.confirmed !== 'true') {
+      button.dataset.confirmed = 'true';
+      button.textContent = t('dashboard.confirmDeleteAccount');
+      return;
+    }
+    handlers.onDeleteAccount();
   });
 
   wrapper.querySelectorAll<HTMLInputElement>('.query-card-editing .day-tile input[type=checkbox]').forEach(checkbox => {
