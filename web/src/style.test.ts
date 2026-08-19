@@ -44,6 +44,23 @@ describe('style.css', () => {
     expect(css).toMatch(/\.error-banner\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });
 
+  it('gives .link-button (Edit/Delete/Sign out) a touch target tall enough for WCAG 2.5.8, without shifting text position', () => {
+    // .link-button has no visible background/border, so real padding would
+    // be invisible anyway — but naive padding would also push neighboring
+    // text apart. An equal-and-opposite negative margin cancels that, so
+    // the fix must pair the two or it either does nothing (no padding) or
+    // shifts layout (unmatched padding/margin).
+    const rule = css.match(/\.link-button\s*\{([\s\S]*?)\}/)?.[1];
+    expect(rule).toBeDefined();
+    const padding = rule!.match(/padding:\s*([\d.]+)rem\s+0;/)?.[1];
+    const margin = rule!.match(/margin:\s*-([\d.]+)rem\s+0;/)?.[1];
+    expect(padding).toBeDefined();
+    expect(margin).toBe(padding);
+    // 12px font, ~13.6px line box measured in a real browser: padding alone
+    // must add enough on both edges to clear the 24px minimum.
+    expect(Number(padding) * 2 * 16 + 13.6).toBeGreaterThanOrEqual(24);
+  });
+
   it('ships the actual Latin-subset font file, not a stripped/wrong subset', () => {
     const fontPath = resolve(__dirname, '../public/fonts/playfair-display-700.woff2');
     const { size } = statSync(fontPath);
