@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/dachrisch/dontforget/compare/v0.18.0...v0.18.1) (2026-08-19)
+
+
+### Bug Fixes
+
+* stop body's 100vh box from overflowing the viewport on mobile ([#110](https://github.com/dachrisch/dontforget/issues/110)) ([2724db4](https://github.com/dachrisch/dontforget/commit/2724db46fe9369542510bb14664d44cd5cde8cc8))
+
 ## [0.18.0](https://github.com/dachrisch/dontforget/compare/v0.17.0...v0.18.0) (2026-08-19)
 
 
