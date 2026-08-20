@@ -8,6 +8,7 @@ export const PRICE_PER_EXTRA_QUERY_EUR = 0.5;
 export interface BillingStatus {
   freeLimit: number;
   activeQueryCount: number;
+  purchasedSlots: number;
   pricePerExtraQuery: number;
   subscribed: boolean;
   subscriptionStatus: string | null;
@@ -54,6 +55,7 @@ export class BillingService {
     return {
       freeLimit: FREE_QUERY_LIMIT,
       activeQueryCount: await countActiveQueries(this.db, userId),
+      purchasedSlots: await getPurchasedSlots(this.db, userId),
       pricePerExtraQuery: PRICE_PER_EXTRA_QUERY_EUR,
       subscribed: isSubscribed(user),
       subscriptionStatus: user.stripe_subscription_status ?? null,
@@ -62,14 +64,13 @@ export class BillingService {
     };
   }
 
-  async createCheckoutSession(userId: string, returnBaseUrl: string): Promise<{ url: string }> {
+  async createCheckoutSession(userId: string, returnBaseUrl: string, quantity = 1): Promise<{ url: string }> {
     const user = await this.requireUser(userId);
     const customerId = await this.getOrCreateCustomerId(user);
-    const quantity = Math.max(1, await countActiveQueries(this.db, userId));
     return this.gateway.createCheckoutSession({
       customerId,
       priceId: this.priceId,
-      quantity,
+      quantity: Math.max(1, quantity),
       successUrl: `${returnBaseUrl}/?checkout=success`,
       cancelUrl: returnBaseUrl,
     });
@@ -101,7 +102,13 @@ export class BillingService {
       return; // already processed — Stripe retries deliveries, skip the replay
     }
 
-    const object = event.data.object as { customer?: string; subscription?: string; subscription_status?: string; status?: string };
+    const object = event.data.object as {
+      customer?: string;
+      subscription?: string;
+      subscription_status?: string;
+      status?: string;
+      items?: { data?: Array<{ quantity?: number }> };
+    };
     const customerId = object.customer;
     if (!customerId) return;
 
@@ -109,22 +116,36 @@ export class BillingService {
     switch (event.type) {
       case 'checkout.session.completed':
         if (object.subscription) {
+          const quantity = await this.gateway.getSubscriptionQuantity(object.subscription);
           await update.updateOne(
             { stripe_customer_id: customerId },
-            { $set: { stripe_subscription_id: object.subscription, stripe_subscription_status: object.subscription_status ?? 'active' } }
+            {
+              $set: {
+                stripe_subscription_id: object.subscription,
+                stripe_subscription_status: object.subscription_status ?? 'active',
+                stripe_subscription_quantity: quantity,
+              },
+            }
           );
         }
         break;
-      case 'customer.subscription.updated':
+      case 'customer.subscription.updated': {
+        const quantity = object.items?.data?.[0]?.quantity;
         await update.updateOne(
           { stripe_customer_id: customerId },
-          { $set: { stripe_subscription_status: object.status ?? 'active' } }
+          {
+            $set: {
+              stripe_subscription_status: object.status ?? 'active',
+              ...(quantity !== undefined ? { stripe_subscription_quantity: quantity } : {}),
+            },
+          }
         );
         break;
+      }
       case 'customer.subscription.deleted':
         await update.updateOne(
           { stripe_customer_id: customerId },
-          { $unset: { stripe_subscription_id: '', stripe_subscription_status: '' } }
+          { $unset: { stripe_subscription_id: '', stripe_subscription_status: '', stripe_subscription_quantity: '' } }
         );
         break;
     }
