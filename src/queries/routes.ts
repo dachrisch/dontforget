@@ -2,6 +2,7 @@ import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import { ObjectId, type Db } from 'mongodb';
 import {
   completeSeriesExpansion,
+  claimSlotForQuery,
   createQuery,
   deleteQuery,
   getQueryEvents,
@@ -207,6 +208,13 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       }
       if (row.status === 'running') {
         return reply.code(409).send({ error: 'already running' });
+      }
+      if (row.status === 'blocked') {
+        const hasSlot = await hasFreeSlot(deps.db, request.userId!);
+        const claimed = hasSlot && (await claimSlotForQuery(deps.db, request.userId!, row._id));
+        if (!claimed) {
+          return reply.code(409).send({ error: 'no free credits', reason: 'no free credits — buy more or pause another query' });
+        }
       }
       await deps.db.collection('queries').updateOne({ _id: row._id }, { $set: { status: 'running' as const } });
       enqueueSearch(() =>
