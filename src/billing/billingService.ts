@@ -21,14 +21,25 @@ interface UserRow {
   stripe_customer_id?: string;
   stripe_subscription_id?: string;
   stripe_subscription_status?: string;
+  stripe_subscription_quantity?: number;
 }
 
 export function countActiveQueries(db: Db, userId: string): Promise<number> {
-  return db.collection('queries').countDocuments({ user_id: userId });
+  return db.collection('queries').countDocuments({ user_id: userId, active: { $ne: false } });
 }
 
 export function isOverFreeLimit(db: Db, userId: string): Promise<boolean> {
   return countActiveQueries(db, userId).then(count => count >= FREE_QUERY_LIMIT);
+}
+
+export async function getPurchasedSlots(db: Db, userId: string): Promise<number> {
+  const user = await db.collection<UserRow>('users').findOne({ _id: new ObjectId(userId) });
+  return user?.stripe_subscription_quantity ?? FREE_QUERY_LIMIT;
+}
+
+export async function hasFreeSlot(db: Db, userId: string): Promise<boolean> {
+  const [active, purchased] = await Promise.all([countActiveQueries(db, userId), getPurchasedSlots(db, userId)]);
+  return active < purchased;
 }
 
 export function isSubscribed(user: Pick<UserRow, 'stripe_subscription_status'>): boolean {
