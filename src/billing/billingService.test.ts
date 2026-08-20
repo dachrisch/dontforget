@@ -132,6 +132,36 @@ describe('BillingService', () => {
     expect(row?.stripe_subscription_quantity).toBe(3);
   });
 
+  it('processEvent on checkout.session.completed does not claim idempotency when getSubscriptionQuantity fails, so a retry can still complete the mirroring', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { stripe_customer_id: 'cus_test' } });
+    gateway.subscriptionQuantityErrors['sub_9'] = new Error('stripe rate limited');
+    const event = {
+      id: 'evt_5',
+      type: 'checkout.session.completed',
+      data: { object: { customer: 'cus_test', subscription: 'sub_9', subscription_status: 'active' } },
+    } as any;
+
+    await expect(service.processEvent(event)).rejects.toThrow('stripe rate limited');
+
+    const claimedAfterFailure = await db.collection('stripe_events').countDocuments({ _id: 'evt_5' } as any);
+    expect(claimedAfterFailure).toBe(0);
+
+    const rowAfterFailure = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(rowAfterFailure?.stripe_subscription_id).toBeUndefined();
+
+    // Stripe redelivers the same event once the transient failure clears.
+    delete gateway.subscriptionQuantityErrors['sub_9'];
+    gateway.subscriptionQuantities['sub_9'] = 3;
+    await service.processEvent(event);
+
+    const rowAfterRetry = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(rowAfterRetry?.stripe_subscription_id).toBe('sub_9');
+    expect(rowAfterRetry?.stripe_subscription_quantity).toBe(3);
+
+    const claimedAfterRetry = await db.collection('stripe_events').countDocuments({ _id: 'evt_5' } as any);
+    expect(claimedAfterRetry).toBe(1);
+  });
+
   it('processEvent on customer.subscription.updated mirrors quantity from the payload directly', async () => {
     await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
       $set: { stripe_customer_id: 'cus_test', stripe_subscription_id: 'sub_9' },

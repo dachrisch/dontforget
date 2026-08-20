@@ -96,11 +96,8 @@ export class BillingService {
   }
 
   async processEvent(event: Stripe.Event): Promise<void> {
-    try {
-      await this.db.collection('stripe_events').insertOne({ _id: event.id } as any);
-    } catch {
-      return; // already processed — Stripe retries deliveries, skip the replay
-    }
+    const alreadyProcessed = await this.db.collection('stripe_events').findOne({ _id: event.id } as any);
+    if (alreadyProcessed) return; // already processed — Stripe retries deliveries, skip the replay
 
     const object = event.data.object as {
       customer?: string;
@@ -110,44 +107,57 @@ export class BillingService {
       items?: { data?: Array<{ quantity?: number }> };
     };
     const customerId = object.customer;
-    if (!customerId) return;
-
-    const update = this.db.collection<UserRow>('users');
-    switch (event.type) {
-      case 'checkout.session.completed':
-        if (object.subscription) {
-          const quantity = await this.gateway.getSubscriptionQuantity(object.subscription);
+    if (customerId) {
+      const update = this.db.collection<UserRow>('users');
+      switch (event.type) {
+        case 'checkout.session.completed':
+          if (object.subscription) {
+            // getSubscriptionQuantity is a real Stripe API call and can fail transiently.
+            // The idempotency claim below only runs once this — and the update — succeed,
+            // so a failure here leaves the event unclaimed and Stripe's retry can complete it.
+            const quantity = await this.gateway.getSubscriptionQuantity(object.subscription);
+            await update.updateOne(
+              { stripe_customer_id: customerId },
+              {
+                $set: {
+                  stripe_subscription_id: object.subscription,
+                  stripe_subscription_status: object.subscription_status ?? 'active',
+                  stripe_subscription_quantity: quantity,
+                },
+              }
+            );
+          }
+          break;
+        case 'customer.subscription.updated': {
+          const quantity = object.items?.data?.[0]?.quantity;
           await update.updateOne(
             { stripe_customer_id: customerId },
             {
               $set: {
-                stripe_subscription_id: object.subscription,
-                stripe_subscription_status: object.subscription_status ?? 'active',
-                stripe_subscription_quantity: quantity,
+                stripe_subscription_status: object.status ?? 'active',
+                ...(quantity !== undefined ? { stripe_subscription_quantity: quantity } : {}),
               },
             }
           );
+          break;
         }
-        break;
-      case 'customer.subscription.updated': {
-        const quantity = object.items?.data?.[0]?.quantity;
-        await update.updateOne(
-          { stripe_customer_id: customerId },
-          {
-            $set: {
-              stripe_subscription_status: object.status ?? 'active',
-              ...(quantity !== undefined ? { stripe_subscription_quantity: quantity } : {}),
-            },
-          }
-        );
-        break;
+        case 'customer.subscription.deleted':
+          await update.updateOne(
+            { stripe_customer_id: customerId },
+            { $unset: { stripe_subscription_id: '', stripe_subscription_status: '', stripe_subscription_quantity: '' } }
+          );
+          break;
       }
-      case 'customer.subscription.deleted':
-        await update.updateOne(
-          { stripe_customer_id: customerId },
-          { $unset: { stripe_subscription_id: '', stripe_subscription_status: '', stripe_subscription_quantity: '' } }
-        );
-        break;
+    }
+
+    // Claim idempotency only after the work above has actually succeeded. All the
+    // updateOne calls above are idempotent (they set fields to freshly computed/read
+    // values), so safely re-running this whole method on a genuine Stripe retry is fine —
+    // what must never happen is marking an event processed before its work completed.
+    try {
+      await this.db.collection('stripe_events').insertOne({ _id: event.id } as any);
+    } catch {
+      // a concurrent delivery of the same event already claimed it — ignore.
     }
   }
 
