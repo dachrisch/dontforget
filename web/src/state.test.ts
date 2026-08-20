@@ -16,7 +16,7 @@ function query(id: string, status: QueryStatus = 'ready'): import('./types').Que
 }
 
 function dashboard(queries: import('./types').QuerySummary[]): WorkspaceState {
-  return { kind: 'dashboard', queries, feed: null, editing: null, reviewing: null, billing: null };
+  return { kind: 'dashboard', queries, feed: null, editing: null, reviewing: null };
 }
 
 describe('reducer', () => {
@@ -34,24 +34,12 @@ describe('reducer', () => {
     expect(next).toMatchObject({ kind: 'dashboard', editing: null, reviewing: null });
   });
 
-  it('carries the billing status through DASHBOARD_LOADED', () => {
-    const billing = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
-    const next = reducer({ kind: 'signedOut' }, {
-      type: 'DASHBOARD_LOADED',
-      queries: [query('q1')],
-      feed: null,
-      billing,
-    });
-    expect(next).toMatchObject({ billing });
-  });
-
   it('keeps an open review card across a dashboard refresh when its query still exists', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
     };
     const next = reducer(state, { type: 'DASHBOARD_LOADED', queries: [query('q1')], feed: null });
@@ -64,7 +52,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
     };
     const next = reducer(state, { type: 'DASHBOARD_LOADED', queries: [], feed: null });
@@ -91,7 +78,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     // A mix of all three statuses: only the candidate should survive into
@@ -116,7 +102,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     expect(reducer(state, { type: 'REVIEW_EVENTS_LOADED', queryId: 'q2', events: [] })).toBe(state);
@@ -128,7 +113,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: {
         queryId: 'q1',
         recurrenceInterval: 'weekly',
@@ -160,7 +144,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: {
         queryId: 'q1',
         recurrenceInterval: 'weekly',
@@ -179,7 +162,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] },
     };
     const next = reducer(state, { type: 'SET_REVIEW_INTERVAL', interval: 'monthly' });
@@ -192,7 +174,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     const next = reducer(state, { type: 'CANCEL_REVIEW' });
@@ -205,7 +186,6 @@ describe('reducer', () => {
       queries: [query('q1')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     const next = reducer(state, { type: 'REVIEW_APPROVED', queryId: 'q1' });
@@ -218,7 +198,6 @@ describe('reducer', () => {
       queries: [query('q1'), query('q2')],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     expect(reducer(state, { type: 'REVIEW_APPROVED', queryId: 'q2' })).toBe(state);
@@ -240,7 +219,6 @@ describe('reducer', () => {
       feed: null,
       editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
       reviewing: null,
-      billing: null,
     };
     // A mix of all three statuses: Edit is the "manage this query" view, so
     // both candidate and approved should survive; only dismissed is hidden.
@@ -267,7 +245,6 @@ describe('reducer', () => {
       feed: null,
       editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
       reviewing: null,
-      billing: null,
     };
     expect(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId: 'q2', events: [] })).toBe(state);
   });
@@ -287,7 +264,6 @@ describe('reducer', () => {
         ],
       },
       reviewing: null,
-      billing: null,
     };
     const afterFirstClick = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
     expect(afterFirstClick).toMatchObject({
@@ -307,10 +283,9 @@ describe('reducer', () => {
       feed: null,
       editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', events: [] },
       reviewing: null,
-      billing: null,
     };
     const next = reducer(state, { type: 'CANCEL_EDIT' });
-    expect(next).toEqual({ kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null, billing: null });
+    expect(next).toEqual({ kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null });
   });
 
   it('removes a deleted query from the dashboard', () => {
@@ -327,7 +302,6 @@ describe('reducer', () => {
       feed: null,
       editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [] },
       reviewing: null,
-      billing: null,
     };
     const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
     expect(next).toMatchObject({ kind: 'dashboard', editing: null });
@@ -339,7 +313,6 @@ describe('reducer', () => {
       queries: [],
       feed: null,
       editing: null,
-      billing: null,
       reviewing: { queryId: 'q1', recurrenceInterval: 'weekly', events: [] },
     };
     const next = reducer(state, { type: 'QUERY_DELETED', queryId: 'q1' });
