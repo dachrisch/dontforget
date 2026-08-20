@@ -226,7 +226,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!deleted) {
         return reply.code(403).send({ error: 'not your query' });
       }
-      await deps.billingService.syncQuantity(request.userId!);
+      await deps.billingService.releaseSlotOnDelete(request.userId!);
       return reply.code(204).send();
     }
   );
