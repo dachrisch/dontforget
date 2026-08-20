@@ -457,6 +457,60 @@ describe('query dashboard routes', () => {
     });
   });
 
+  describe('POST /api/queries/:id/reactivate', () => {
+    it('resumes a paused query when a slot is free — no agent run', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', [
+        { label: 'Fest', startDate: '2026-09-01', endDate: '2026-09-01', sourceUrl: 'u' },
+      ]);
+      await app.inject({ method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId) });
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+      expect(row?.status).toBe('ready'); // unchanged — it already had results
+    });
+
+    it('returns 409 when no slot is free', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      await app.inject({ method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId) });
+      await createQueryWithCandidates(db, userId, 'Something else', []); // takes the now-free slot
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+
+    it('rejects reactivating a blocked query — it never held a slot', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+
+    it('rejects reactivating an already-active query', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+  });
+
   it('POST rejects an invalid recurrence interval', async () => {
     const { app, sessionId } = await authenticatedUser(db);
     const response = await app.inject({

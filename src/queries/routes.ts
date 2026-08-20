@@ -178,6 +178,35 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     }
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/api/queries/:id/reactivate',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+      if (!queryObjectId) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      const row = await deps.db
+        .collection<{ _id: ObjectId; user_id: string; status?: QueryStatus; active?: boolean }>('queries')
+        .findOne({ _id: queryObjectId, user_id: request.userId! });
+      if (!row) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      if (row.status === 'blocked') {
+        return reply.code(409).send({ error: 'blocked queries use retry, not reactivate' });
+      }
+      if (row.active !== false) {
+        return reply.code(409).send({ error: 'query is already active' });
+      }
+      const hasSlot = await hasFreeSlot(deps.db, request.userId!);
+      const claimed = hasSlot && (await claimSlotForQuery(deps.db, request.userId!, row._id));
+      if (!claimed) {
+        return reply.code(409).send({ error: 'no free credits', reason: 'no free credits — buy more or pause another query' });
+      }
+      return reply.code(204).send();
+    }
+  );
+
   app.post(
     '/api/feed/rotate',
     { preHandler: deps.requireAuth },
