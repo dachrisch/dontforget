@@ -45,8 +45,19 @@ export async function getBillingStatus(): Promise<BillingStatus> {
   return handle(response);
 }
 
+// Checkout creates a Stripe object server-side, so the route is POST —
+// unlike startPortal below, a plain `window.location.href` navigation can't
+// send POST, so submit a real (invisible) form instead. enctype=text/plain
+// because the route has no body to parse and Fastify's default parsers only
+// cover application/json and text/plain — a form's normal default
+// (application/x-www-form-urlencoded) has no registered parser and 415s.
 export function startCheckout(): void {
-  window.location.href = '/api/billing/checkout';
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/api/billing/checkout';
+  form.enctype = 'text/plain';
+  document.body.appendChild(form);
+  form.submit();
 }
 
 export function startPortal(): void {
