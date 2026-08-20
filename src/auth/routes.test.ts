@@ -2,8 +2,6 @@ import { describe, it, expect, vi } from 'vitest';
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
 import { ObjectId, type Db } from 'mongodb';
-import { FakeBillingGateway } from '../billing/stripeGateway';
-import { BillingService } from '../billing/billingService';
 
 // A real, valid ObjectId string — the session/user mocks must return one so
 // requireAuth yields a usable userId and deleteAccount's ObjectId coercion
@@ -32,7 +30,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({
@@ -52,7 +49,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({ method: 'POST', url: '/api/auth/magic-link' });
@@ -67,7 +63,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const responses: Awaited<ReturnType<typeof app.inject>>[] = [];
@@ -88,7 +83,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({ method: 'GET', url: '/api/auth/callback' });
@@ -102,7 +96,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn(),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({ method: 'GET', url: '/api/auth/callback?token=any-token' });
@@ -118,7 +111,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({ method: 'GET', url: '/api/me' });
@@ -132,7 +124,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({
@@ -152,7 +143,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({
@@ -177,7 +167,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({
@@ -208,7 +197,6 @@ describe('auth routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: async () => ({ events: [], cadence: null }),
-      billingService: new BillingService({} as any, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await app.inject({ method: 'DELETE', url: '/api/auth/account' });

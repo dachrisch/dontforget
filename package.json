@@ -21,7 +21,6 @@
     "ics": "^3.7.2",
     "mongodb": "^7.0.0",
     "nodemailer": "^9.0.0",
-    "stripe": "^22.5.0",
     "undici": "^8.10.0"
   },
   "devDependencies": {
