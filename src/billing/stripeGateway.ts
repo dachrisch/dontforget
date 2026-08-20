@@ -101,6 +101,7 @@ export class FakeBillingGateway implements BillingGateway {
   public portalCalls: PortalParams[] = [];
   public quantityUpdates: QuantityUpdateParams[] = [];
   public subscriptionQuantities: Record<string, number> = {};
+  public subscriptionQuantityErrors: Record<string, Error> = {};
   public createdCustomers: string[] = [];
   public customerId = 'cus_test';
   public checkoutUrl = 'https://checkout.stripe.test/session';
@@ -128,6 +129,8 @@ export class FakeBillingGateway implements BillingGateway {
   }
 
   async getSubscriptionQuantity(subscriptionId: string): Promise<number> {
+    const error = this.subscriptionQuantityErrors[subscriptionId];
+    if (error) throw error;
     return this.subscriptionQuantities[subscriptionId] ?? 1;
   }
 
