@@ -42,7 +42,7 @@ export function isRecurrenceInterval(value: unknown): value is RecurrenceInterva
 // `running` means a search is in flight (the initial submit, or a retry) and
 // the query card shows a status until it lands as `ready` or `failed`. Older
 // queries predate the field and are treated as `ready`.
-export type QueryStatus = 'running' | 'ready' | 'failed';
+export type QueryStatus = 'running' | 'ready' | 'failed' | 'blocked';
 
 export interface QuerySummary {
   id: string;
@@ -53,6 +53,7 @@ export interface QuerySummary {
   approvedCount: number;
   candidateCount: number;
   status: QueryStatus;
+  active: boolean;
 }
 
 export interface FeedSummary {
