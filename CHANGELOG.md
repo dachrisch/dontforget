@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.2](https://github.com/dachrisch/dontforget/compare/v0.19.1...v0.19.2) (2026-08-20)
+
+
+### Bug Fixes
+
+* keep search poll from hijacking navigation to other pages ([#117](https://github.com/dachrisch/dontforget/issues/117)) ([369eb05](https://github.com/dachrisch/dontforget/commit/369eb05e8e83cf91283acb5d92e361134ea0010f))
+
 ## [0.19.1](https://github.com/dachrisch/dontforget/compare/v0.19.0...v0.19.1) (2026-08-20)
 
 
