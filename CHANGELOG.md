@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.3](https://github.com/dachrisch/dontforget/compare/v0.19.2...v0.19.3) (2026-08-20)
+
+
+### Bug Fixes
+
+* remove accidentally-released Stripe billing code ([#119](https://github.com/dachrisch/dontforget/issues/119)) ([946ff8a](https://github.com/dachrisch/dontforget/commit/946ff8ac78793a2246a213ade915d09598a4f73f))
+
 ## [0.19.2](https://github.com/dachrisch/dontforget/compare/v0.19.1...v0.19.2) (2026-08-20)
 
 
