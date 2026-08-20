@@ -23,6 +23,8 @@ function noopHandlers(): WorkspaceHandlers {
     onRetrySearch: vi.fn(),
     onCloseAdmin: vi.fn(),
     onDeleteAdminUser: vi.fn(),
+    onUpgrade: vi.fn(),
+    onManageBilling: vi.fn(),
     onSetAdminModel: vi.fn(),
     onAddAdminModel: vi.fn(),
   };
@@ -89,6 +91,7 @@ describe('German rendering', () => {
         ],
         feed: null,
         editing: null,
+        billing: null,
         reviewing: {
           queryId: 'q1',
           recurrenceInterval: 'yearly',
@@ -125,6 +128,7 @@ describe('German rendering', () => {
         ],
         feed: null,
         editing: null,
+        billing: null,
         reviewing: null,
       },
       noopHandlers()
@@ -147,6 +151,7 @@ describe('German rendering', () => {
         ],
         feed: null,
         editing: null,
+        billing: null,
         reviewing: null,
       },
       noopHandlers()
@@ -168,6 +173,7 @@ describe('German rendering', () => {
         ],
         feed: null,
         editing: null,
+        billing: null,
         reviewing: null,
       },
       noopHandlers()
@@ -191,6 +197,7 @@ describe('German rendering', () => {
         ],
         feed: null,
         editing: null,
+        billing: null,
         reviewing: null,
       },
       noopHandlers()

@@ -26,6 +26,7 @@ describe('runMigrations', () => {
       '002_queries_dashboard.ts',
       '003_events_dedup_index.ts',
       '004_models_metrics.ts',
+      '005_billing_users.ts',
     ]);
 
     const collections = await db.listCollections().toArray();
@@ -40,6 +41,7 @@ describe('runMigrations', () => {
         'models',
         'model_metrics',
         'search_metrics',
+        'stripe_events',
       ])
     );
 
@@ -55,6 +57,9 @@ describe('runMigrations', () => {
     expect(eventsIndexes.map(i => i.name)).toEqual(
       expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_status_1_label_1_start_date_1_end_date_1'])
     );
+
+    const usersIndexes = await db.collection('users').indexes();
+    expect(usersIndexes.map(i => i.name)).toEqual(expect.arrayContaining(['email_1', 'stripe_customer_id_1']));
 
     const secondRun = await runMigrations(db);
     expect(secondRun).toEqual([]);
