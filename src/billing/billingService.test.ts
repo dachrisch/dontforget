@@ -71,11 +71,18 @@ describe('BillingService', () => {
     expect(row?.stripe_customer_id).toBe('cus_test');
   });
 
-  it('checkout starts quantity at the active query count', async () => {
+  it('checkout defaults quantity to 1', async () => {
     await db.collection('queries').insertOne({ user_id: userId, query_text: 'a' });
-    await db.collection('queries').insertOne({ user_id: userId, query_text: 'b' });
     await service.createCheckoutSession(userId, 'http://localhost:3000');
-    expect(gateway.checkoutCalls[0].quantity).toBe(2);
+    expect(gateway.checkoutCalls[0].quantity).toBe(1);
+  });
+
+  it('checkout passes through a caller-chosen quantity, clamped to at least 1', async () => {
+    await service.createCheckoutSession(userId, 'http://localhost:3000', 5);
+    expect(gateway.checkoutCalls[0].quantity).toBe(5);
+
+    await service.createCheckoutSession(userId, 'http://localhost:3000', 0);
+    expect(gateway.checkoutCalls[1].quantity).toBe(1);
   });
 
   it('releaseSlotOnDelete is a no-op without a subscription', async () => {
@@ -113,6 +120,31 @@ describe('BillingService', () => {
     expect(row?.stripe_subscription_status).toBe('active');
   });
 
+  it('processEvent on checkout.session.completed also mirrors the subscription quantity', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { stripe_customer_id: 'cus_test' } });
+    gateway.subscriptionQuantities['sub_9'] = 3;
+    await service.processEvent({
+      id: 'evt_3',
+      type: 'checkout.session.completed',
+      data: { object: { customer: 'cus_test', subscription: 'sub_9', subscription_status: 'active' } },
+    } as any);
+    const row = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(row?.stripe_subscription_quantity).toBe(3);
+  });
+
+  it('processEvent on customer.subscription.updated mirrors quantity from the payload directly', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_customer_id: 'cus_test', stripe_subscription_id: 'sub_9' },
+    });
+    await service.processEvent({
+      id: 'evt_4',
+      type: 'customer.subscription.updated',
+      data: { object: { customer: 'cus_test', status: 'active', items: { data: [{ quantity: 4 }] } } },
+    } as any);
+    const row = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(row?.stripe_subscription_quantity).toBe(4);
+  });
+
   it('processEvent on customer.subscription.deleted clears the subscription', async () => {
     await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
       $set: { stripe_customer_id: 'cus_test', stripe_subscription_id: 'sub_9', stripe_subscription_status: 'active' },
@@ -141,6 +173,7 @@ describe('BillingService', () => {
     expect(free).toEqual({
       freeLimit: 1,
       activeQueryCount: 0,
+      purchasedSlots: 1,
       pricePerExtraQuery: 0.5,
       subscribed: false,
       subscriptionStatus: null,
