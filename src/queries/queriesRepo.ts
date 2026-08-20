@@ -54,7 +54,8 @@ export async function createQuery(
   db: Db,
   userId: string,
   queryText: string,
-  recurrenceInterval: RecurrenceInterval = DEFAULT_RECURRENCE_INTERVAL
+  recurrenceInterval: RecurrenceInterval = DEFAULT_RECURRENCE_INTERVAL,
+  active: boolean = true
 ): Promise<NewQuery> {
   const now = new Date();
   const queryResult = await db.collection('queries').insertOne({
@@ -66,7 +67,8 @@ export async function createQuery(
     // with even if the background search dies mid-run; completeQueryRun bumps
     // it once the run actually lands.
     last_run_at: now,
-    status: 'running' as const,
+    status: active ? ('running' as const) : ('blocked' as const),
+    active,
   });
   return {
     _id: queryResult.insertedId,

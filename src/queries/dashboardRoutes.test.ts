@@ -498,7 +498,7 @@ describe('query dashboard routes', () => {
     expect(response.statusCode).toBe(202);
   });
 
-  it('POST /api/queries returns 402 for a second query without a subscription', async () => {
+  it('POST /api/queries always creates the query, even at capacity', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db);
     await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
 
@@ -508,15 +508,18 @@ describe('query dashboard routes', () => {
       headers: authHeaders(sessionId),
       payload: { text: 'Auer Dult' },
     });
-    expect(response.statusCode).toBe(402);
-    expect(response.json().checkoutUrl).toBe('/api/billing/checkout');
+    expect(response.statusCode).toBe(202);
+
+    const row = await db.collection('queries').findOne({ user_id: userId, query_text: 'Auer Dult' });
+    expect(row?.status).toBe('blocked');
+    expect(row?.active).toBe(false);
   });
 
-  it('POST /api/queries allows a second query for a subscribed user and syncs quantity', async () => {
+  it('POST /api/queries allows a second query for a subscribed user with a free slot', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db);
     await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
     await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
-      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active' },
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 2 },
     });
 
     const response = await app.inject({
@@ -526,6 +529,9 @@ describe('query dashboard routes', () => {
       payload: { text: 'Auer Dult' },
     });
     expect(response.statusCode).toBe(202);
+    const row = await db.collection('queries').findOne({ user_id: userId, query_text: 'Auer Dult' });
+    expect(row?.status).toBe('running');
+    expect(row?.active).toBe(true);
   });
 
   it('DELETE syncs the subscription quantity down', async () => {
