@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { approveEvents } from '../queries/approveEvents';
 import { registerFeedRoutes } from './routes';
@@ -118,5 +119,23 @@ describe('feed routes', () => {
 
     const rssResponse = await app.inject({ method: 'GET', url: `/f/${token}.rss` });
     expect(rssResponse.body.indexOf('Frühjahrsdult')).toBeLessThan(rssResponse.body.indexOf('Jakobidult'));
+  });
+
+  it('excludes events from a deactivated query', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'p@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
+    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+    await db.collection('queries').updateOne({ _id: new ObjectId(queryId) }, { $set: { active: false } });
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
+    const response = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).not.toContain('Frühjahrsdult');
   });
 });
