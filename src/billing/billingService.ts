@@ -81,11 +81,13 @@ export class BillingService {
     return this.gateway.createPortalSession({ customerId, returnUrl });
   }
 
-  async syncQuantity(userId: string): Promise<void> {
+  async releaseSlotOnDelete(userId: string): Promise<void> {
     const user = await this.db.collection<UserRow>('users').findOne({ _id: new ObjectId(userId) });
     if (!user?.stripe_subscription_id) return;
-    const quantity = Math.max(1, await countActiveQueries(this.db, userId));
-    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity });
+    const current = user.stripe_subscription_quantity ?? FREE_QUERY_LIMIT;
+    const next = Math.max(1, current - 1);
+    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity: next });
+    await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: next } });
   }
 
   async verifyWebhook(payload: string, signature: string, secret: string): Promise<Stripe.Event> {

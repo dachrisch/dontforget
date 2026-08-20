@@ -78,22 +78,27 @@ describe('BillingService', () => {
     expect(gateway.checkoutCalls[0].quantity).toBe(2);
   });
 
-  it('syncQuantity is a no-op without a subscription', async () => {
-    await service.syncQuantity(userId);
+  it('releaseSlotOnDelete is a no-op without a subscription', async () => {
+    await service.releaseSlotOnDelete(userId);
     expect(gateway.quantityUpdates).toHaveLength(0);
   });
 
-  it('syncQuantity pushes the active count and clamps to 1', async () => {
-    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { stripe_subscription_id: 'sub_1' } });
-    await service.syncQuantity(userId);
-    expect(gateway.quantityUpdates).toEqual([{ subscriptionId: 'sub_1', quantity: 1 }]);
+  it('releaseSlotOnDelete decrements quantity by exactly one, clamped to 1', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_quantity: 5 },
+    });
+    await service.releaseSlotOnDelete(userId);
+    expect(gateway.quantityUpdates).toEqual([{ subscriptionId: 'sub_1', quantity: 4 }]);
+    const row = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(row?.stripe_subscription_quantity).toBe(4);
+  });
 
-    await db.collection('queries').insertOne({ user_id: userId, query_text: 'a' });
-    await service.syncQuantity(userId);
-    expect(gateway.quantityUpdates).toEqual([
-      { subscriptionId: 'sub_1', quantity: 1 },
-      { subscriptionId: 'sub_1', quantity: 1 },
-    ]);
+  it('releaseSlotOnDelete never drops below 1', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_quantity: 1 },
+    });
+    await service.releaseSlotOnDelete(userId);
+    expect(gateway.quantityUpdates).toEqual([{ subscriptionId: 'sub_1', quantity: 1 }]);
   });
 
   it('processEvent on checkout.session.completed stores the subscription as active', async () => {
