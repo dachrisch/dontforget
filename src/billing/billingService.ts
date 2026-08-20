@@ -88,8 +88,7 @@ export class BillingService {
     if (!user?.stripe_subscription_id) return;
     const current = user.stripe_subscription_quantity ?? FREE_QUERY_LIMIT;
     const next = Math.max(1, current - 1);
-    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity: next });
-    await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: next } });
+    await this.setSubscriptionQuantity(user, next);
   }
 
   async addSlots(userId: string, count: number): Promise<number> {
@@ -99,8 +98,7 @@ export class BillingService {
     }
     const current = user.stripe_subscription_quantity ?? FREE_QUERY_LIMIT;
     const next = current + count;
-    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity: next });
-    await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: next } });
+    await this.setSubscriptionQuantity(user, next);
     return next;
   }
 
@@ -185,5 +183,11 @@ export class BillingService {
     const user = await this.db.collection<UserRow>('users').findOne({ _id: new ObjectId(userId) });
     if (!user) throw new Error('user not found');
     return user;
+  }
+
+  // Callers must have already confirmed user.stripe_subscription_id is set.
+  private async setSubscriptionQuantity(user: UserRow, quantity: number): Promise<void> {
+    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id!, quantity });
+    await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: quantity } });
   }
 }
