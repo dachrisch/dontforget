@@ -124,6 +124,7 @@ describe('queries repo', () => {
         approvedCount: 0,
         candidateCount: 2,
         status: 'ready',
+        active: true,
       });
       expect(dashboard.queries[1].approvedCount).toBe(1);
       expect(dashboard.queries[1].candidateCount).toBe(0);

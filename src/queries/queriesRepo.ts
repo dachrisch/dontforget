@@ -28,6 +28,7 @@ interface QueryRow {
   created_at: Date;
   last_run_at?: Date | null;
   status?: QueryStatus;
+  active?: boolean;
 }
 
 // The shape `runInitialQuery` needs to kick off a background search for a
@@ -156,6 +157,7 @@ export async function listQueriesForUser(
     approvedCount: counts.get(row._id.toString())?.approved ?? 0,
     candidateCount: counts.get(row._id.toString())?.candidate ?? 0,
     status: row.status ?? 'ready',
+    active: row.active ?? true,
   }));
 
   const feed = await feedSummary(db, userId, publicBaseUrl);
@@ -203,6 +205,7 @@ export async function updateQuery(
     approvedCount: rowCounts.approved,
     candidateCount: rowCounts.candidate,
     status: result.status ?? 'ready',
+    active: result.active ?? true,
   };
 }
 
