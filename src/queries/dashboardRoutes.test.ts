@@ -399,6 +399,53 @@ describe('query dashboard routes', () => {
     });
   });
 
+  describe('POST /api/queries/:id/deactivate', () => {
+    it('requires auth', async () => {
+      const { app } = await authenticatedUser(db);
+      const response = await app.inject({ method: 'POST', url: '/api/queries/000000000000000000000000/deactivate' });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('pauses a ready query without touching billing', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(false);
+      expect(row?.status).toBe('ready'); // status untouched
+    });
+
+    it('rejects pausing a running query', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const response1 = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Oktoberfest' },
+      });
+      const { queryId } = response1.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+    });
+
+    it('returns 403 for a query the user does not own', async () => {
+      const { app, sessionId } = await authenticatedUser(db);
+      const { userId: otherUserId } = await authenticatedUser(db, 'other2@example.com');
+      const { queryId } = await createQueryWithCandidates(db, otherUserId, 'Not yours', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
   it('POST rejects an invalid recurrence interval', async () => {
     const { app, sessionId } = await authenticatedUser(db);
     const response = await app.inject({
