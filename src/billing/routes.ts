@@ -48,4 +48,24 @@ export function registerBillingRoutes(app: FastifyInstance, deps: BillingRouteDe
     { preHandler: deps.requireAuth },
     async request => deps.billingService.getStatus(request.userId!)
   );
+
+  app.post<{ Body: { count?: number } }>(
+    '/api/billing/add-slots',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const count = request.body?.count;
+      if (!Number.isInteger(count) || count! < 1) {
+        return reply.code(400).send({ error: 'count must be a positive integer' });
+      }
+      try {
+        const purchasedSlots = await deps.billingService.addSlots(request.userId!, count!);
+        return reply.send({ purchasedSlots });
+      } catch (err) {
+        if (err instanceof BillingUnavailableError) {
+          return reply.code(503).send({ error: 'billing unavailable' });
+        }
+        throw err;
+      }
+    }
+  );
 }
