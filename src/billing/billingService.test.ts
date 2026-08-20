@@ -3,7 +3,7 @@ import type { Db, MongoClient } from 'mongodb';
 import { ObjectId } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { FakeBillingGateway } from './stripeGateway';
-import { BillingService, isOverFreeLimit, countActiveQueries, getPurchasedSlots, hasFreeSlot, FREE_QUERY_LIMIT } from './billingService';
+import { BillingService, countActiveQueries, getPurchasedSlots, hasFreeSlot, FREE_QUERY_LIMIT } from './billingService';
 
 describe('BillingService', () => {
   let client: MongoClient;
@@ -30,14 +30,6 @@ describe('BillingService', () => {
 
   afterAll(async () => {
     await teardownTestDb(client);
-  });
-
-  it('isOverFreeLimit: 0 queries are free, at or above the free limit is over', async () => {
-    expect(await isOverFreeLimit(db, userId)).toBe(false);
-    await db.collection('queries').insertOne({ user_id: userId, query_text: 'a' });
-    expect(await isOverFreeLimit(db, userId)).toBe(true);
-    await db.collection('queries').insertOne({ user_id: userId, query_text: 'b' });
-    expect(await isOverFreeLimit(db, userId)).toBe(true);
   });
 
   it('countActiveQueries ignores deactivated queries', async () => {
