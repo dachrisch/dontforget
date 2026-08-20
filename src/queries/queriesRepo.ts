@@ -33,6 +33,7 @@ interface QueryRow {
   created_at: Date;
   last_run_at?: Date | null;
   status?: QueryStatus;
+  active?: boolean;
 }
 
 // The shape `runInitialQuery` needs to kick off a background search for a
@@ -274,6 +275,7 @@ export async function listQueriesForUser(
     candidateCount: counts.get(row._id.toString())?.candidate ?? 0,
     status: row.status ?? 'ready',
     series: seriesByQuery.get(row._id.toString()) ?? [],
+    active: row.active ?? true,
   }));
 
   const feed = await feedSummary(db, userId, publicBaseUrl);
@@ -323,6 +325,7 @@ export async function updateQuery(
     candidateCount: rowCounts.candidate,
     status: result.status ?? 'ready',
     series: seriesByQuery.get(result._id.toString()) ?? [],
+    active: result.active ?? true,
   };
 }
 
