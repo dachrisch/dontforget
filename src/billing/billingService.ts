@@ -1,6 +1,7 @@
 import { ObjectId, type Db } from 'mongodb';
 import type Stripe from 'stripe';
 import type { BillingGateway } from './stripeGateway.js';
+import { BillingUnavailableError } from './stripeGateway.js';
 
 export const FREE_QUERY_LIMIT = 1;
 export const PRICE_PER_EXTRA_QUERY_EUR = 0.5;
@@ -89,6 +90,18 @@ export class BillingService {
     const next = Math.max(1, current - 1);
     await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity: next });
     await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: next } });
+  }
+
+  async addSlots(userId: string, count: number): Promise<number> {
+    const user = await this.requireUser(userId);
+    if (!user.stripe_subscription_id) {
+      throw new BillingUnavailableError();
+    }
+    const current = user.stripe_subscription_quantity ?? FREE_QUERY_LIMIT;
+    const next = current + count;
+    await this.gateway.updateSubscriptionQuantity({ subscriptionId: user.stripe_subscription_id, quantity: next });
+    await this.db.collection('users').updateOne({ _id: user._id }, { $set: { stripe_subscription_quantity: next } });
+    return next;
   }
 
   async verifyWebhook(payload: string, signature: string, secret: string): Promise<Stripe.Event> {

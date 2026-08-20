@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
 import { ObjectId } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { FakeBillingGateway } from './stripeGateway';
+import { FakeBillingGateway, BillingUnavailableError } from './stripeGateway';
 import { BillingService, countActiveQueries, getPurchasedSlots, hasFreeSlot, FREE_QUERY_LIMIT } from './billingService';
 
 describe('BillingService', () => {
@@ -217,5 +217,20 @@ describe('BillingService', () => {
     const paid = await service.getStatus(userId);
     expect(paid.subscribed).toBe(true);
     expect(paid.subscriptionStatus).toBe('active');
+  });
+
+  it('addSlots increases quantity and mirrors it locally', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_quantity: 2 },
+    });
+    const next = await service.addSlots(userId, 3);
+    expect(next).toBe(5);
+    expect(gateway.quantityUpdates).toEqual([{ subscriptionId: 'sub_1', quantity: 5 }]);
+    const row = await db.collection('users').findOne({ _id: new ObjectId(userId) });
+    expect(row?.stripe_subscription_quantity).toBe(5);
+  });
+
+  it('addSlots throws BillingUnavailableError without an active subscription', async () => {
+    await expect(service.addSlots(userId, 1)).rejects.toBeInstanceOf(BillingUnavailableError);
   });
 });
