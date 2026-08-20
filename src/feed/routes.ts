@@ -193,3 +193,4 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     buildRss([...events, ...reviewRssEvents], `${deps.publicBaseUrl}/f/${token}`)
   );
 }
+}
