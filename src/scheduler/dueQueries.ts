@@ -18,7 +18,7 @@ interface QueryRow {
 }
 
 export async function findDueQueries(db: Db, now: Date): Promise<DueQuery[]> {
-  const rows = await db.collection<QueryRow>('queries').find().toArray();
+  const rows = await db.collection<QueryRow>('queries').find({ active: { $ne: false } }).toArray();
 
   return rows
     .filter(row => {
