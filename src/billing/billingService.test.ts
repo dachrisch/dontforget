@@ -3,7 +3,7 @@ import type { Db, MongoClient } from 'mongodb';
 import { ObjectId } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { FakeBillingGateway } from './stripeGateway';
-import { BillingService, isOverFreeLimit } from './billingService';
+import { BillingService, isOverFreeLimit, countActiveQueries, getPurchasedSlots, hasFreeSlot, FREE_QUERY_LIMIT } from './billingService';
 
 describe('BillingService', () => {
   let client: MongoClient;
@@ -38,6 +38,31 @@ describe('BillingService', () => {
     expect(await isOverFreeLimit(db, userId)).toBe(true);
     await db.collection('queries').insertOne({ user_id: userId, query_text: 'b' });
     expect(await isOverFreeLimit(db, userId)).toBe(true);
+  });
+
+  it('countActiveQueries ignores deactivated queries', async () => {
+    await db.collection('queries').insertOne({ user_id: userId, query_text: 'a', active: true });
+    await db.collection('queries').insertOne({ user_id: userId, query_text: 'b', active: false });
+    await db.collection('queries').insertOne({ user_id: userId, query_text: 'c' }); // legacy: no field
+    expect(await countActiveQueries(db, userId)).toBe(2);
+  });
+
+  it('getPurchasedSlots defaults to the free limit when never subscribed', async () => {
+    expect(await getPurchasedSlots(db, userId)).toBe(FREE_QUERY_LIMIT);
+  });
+
+  it('getPurchasedSlots reads the mirrored subscription quantity', async () => {
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { stripe_subscription_quantity: 5 } });
+    expect(await getPurchasedSlots(db, userId)).toBe(5);
+  });
+
+  it('hasFreeSlot compares active count against purchased slots', async () => {
+    expect(await hasFreeSlot(db, userId)).toBe(true); // 0 active < 1 free
+    await db.collection('queries').insertOne({ user_id: userId, query_text: 'a', active: true });
+    expect(await hasFreeSlot(db, userId)).toBe(false); // 1 active >= 1 free
+
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, { $set: { stripe_subscription_quantity: 3 } });
+    expect(await hasFreeSlot(db, userId)).toBe(true); // 1 active < 3 purchased
   });
 
   it('checkout creates and reuses one customer, starts at quantity 1, and persists the customer id', async () => {
