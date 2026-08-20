@@ -52,6 +52,15 @@ export type WorkspaceState =
   | DashboardState
   | AdminState;
 
+// The background dashboard poll must never yank the user off another page —
+// most importantly the admin panel — while a search is running. A dashboard
+// refresh is only allowed to land when the user is already on the dashboard,
+// or on the first-run empty workspace that a fresh query submit transitions
+// out of.
+export function canRefreshDashboard(state: WorkspaceState): boolean {
+  return state.kind === 'dashboard' || state.kind === 'empty';
+}
+
 export type WorkspaceEvent =
   | { type: 'MAGIC_LINK_SENT' }
   | { type: 'DASHBOARD_LOADED'; queries: QuerySummary[]; feed: FeedSummary | null; billing?: BillingStatus | null }

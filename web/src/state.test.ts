@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reducer, type WorkspaceState } from './state';
+import { canRefreshDashboard, reducer, type WorkspaceState } from './state';
 import type { EventDetail, QueryStatus } from './types';
 
 function query(id: string, status: QueryStatus = 'ready'): import('./types').QuerySummary {
@@ -383,5 +383,18 @@ describe('reducer', () => {
 
     const next = reducer(state, { type: 'ADMIN_USER_DELETED', id: 'u1' });
     expect(next).toMatchObject({ kind: 'admin', users: [{ id: 'u2' }] });
+  });
+});
+
+describe('canRefreshDashboard', () => {
+  it('allows a refresh only from the dashboard or the empty first-run workspace', () => {
+    expect(canRefreshDashboard(dashboard([]))).toBe(true);
+    expect(canRefreshDashboard({ kind: 'empty' })).toBe(true);
+  });
+
+  it('refuses to refresh while the user is on another page', () => {
+    expect(canRefreshDashboard({ kind: 'signedOut' })).toBe(false);
+    expect(canRefreshDashboard({ kind: 'linkSent' })).toBe(false);
+    expect(canRefreshDashboard({ kind: 'admin', stats: null, users: [], models: [], search: null })).toBe(false);
   });
 });

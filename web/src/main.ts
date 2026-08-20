@@ -1,5 +1,5 @@
 import './style.css';
-import { reducer, type WorkspaceState } from './state';
+import { canRefreshDashboard, reducer, type WorkspaceState } from './state';
 import { renderWorkspace } from './render';
 import {
   requestMagicLink,
@@ -159,9 +159,16 @@ function scheduleDashboardPoll(): void {
 }
 
 async function refreshDashboard(): Promise<void> {
+  // A search runs in the background and its poll must stay in the background
+  // too: if the user has since navigated away (e.g. into the admin panel),
+  // drop the refresh rather than dragging them back to the dashboard.
+  if (!canRefreshDashboard(state)) return;
   try {
     const previous = state.kind === 'dashboard' ? state.queries : [];
     const [data, billing] = await Promise.all([listQueries(), loadBilling()]);
+    // Re-check after the fetch resolves — the user may have navigated away
+    // while it was in flight, and the result is now stale for this page.
+    if (!canRefreshDashboard(state)) return;
     setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed, billing }));
     // A query that finished searching while we were watching opens its
     // review inline — the user just submitted it from here and is waiting
