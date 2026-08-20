@@ -58,7 +58,7 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
   // all events for queries owned by this user
   const queries = await deps.db
     .collection('queries')
-    .find({ user_id: tokenRow.user_id })
+    .find({ user_id: tokenRow.user_id, active: { $ne: false } })
     .toArray();
   const queryIds = queries.map(q => q._id);
   const eventRows = await deps.db
