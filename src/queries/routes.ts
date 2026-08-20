@@ -157,6 +157,27 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     }
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/api/queries/:id/deactivate',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+      if (!queryObjectId) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      const result = await deps.db.collection('queries').findOneAndUpdate(
+        { _id: queryObjectId, user_id: request.userId!, active: { $ne: false }, status: { $ne: 'running' } },
+        { $set: { active: false } }
+      );
+      if (!result) {
+        const exists = await deps.db.collection('queries').findOne({ _id: queryObjectId, user_id: request.userId! });
+        if (!exists) return reply.code(403).send({ error: 'not your query' });
+        return reply.code(409).send({ error: 'cannot pause a running search' });
+      }
+      return reply.code(204).send();
+    }
+  );
+
   app.post(
     '/api/feed/rotate',
     { preHandler: deps.requireAuth },
