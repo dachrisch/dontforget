@@ -420,7 +420,18 @@ describe('query dashboard routes', () => {
     });
 
     it('rejects pausing a running query', async () => {
-      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { insertedId } = await db.collection('users').insertOne({ email: 'stillrunning@example.com' });
+      const userId = insertedId.toString();
+      const sessionId = await new SessionService(db).createSession(userId);
+      const app = await buildApp({
+        db,
+        emailSender: new CapturingEmailSender(),
+        publicBaseUrl: 'http://localhost:3000',
+        frontendUrl: 'http://localhost:5173',
+        runQuery: vi.fn(() => new Promise(() => {})), // never resolves — query stays 'running'
+        billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
+      });
+
       const response1 = await app.inject({
         method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Oktoberfest' },
       });
