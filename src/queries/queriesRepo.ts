@@ -135,6 +135,22 @@ export async function markQueryFailed(db: Db, queryId: ObjectId): Promise<void> 
   await db.collection('queries').updateOne({ _id: queryId }, { $set: { status: 'failed' as const } });
 }
 
+// Single-document atomicity: prevents the SAME query being claimed twice by
+// a rapid double-click on retry/reactivate. Two DIFFERENT blocked/paused
+// queries racing for the last free slot can each pass an earlier
+// hasFreeSlot() check and both land here — this Mongo deployment is a
+// standalone instance without a replica set, so multi-document transactions
+// aren't available to close that window. Accepted: it's a soft billing
+// quota, not a security boundary, and self-corrects on the next status
+// fetch. See docs/superpowers/specs/2026-08-20-query-credits-design.md.
+export async function claimSlotForQuery(db: Db, userId: string, queryId: ObjectId): Promise<boolean> {
+  const result = await db.collection('queries').findOneAndUpdate(
+    { _id: queryId, user_id: userId, active: { $ne: true } },
+    { $set: { active: true } }
+  );
+  return result !== null;
+}
+
 export async function listQueriesForUser(
   db: Db,
   userId: string,

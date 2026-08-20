@@ -360,6 +360,45 @@ describe('query dashboard routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
+  describe('POST /api/queries/:id/run — blocked queries', () => {
+    it('claims a free slot and runs when one is available', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []); // occupies the one free slot
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+      await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+        $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 2 },
+      });
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/run`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(202);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+      expect(row?.status).toBe('running');
+    });
+
+    it('returns 409 when still no free slot', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/run`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(false);
+      expect(row?.status).toBe('blocked');
+    });
+  });
+
   it('POST rejects an invalid recurrence interval', async () => {
     const { app, sessionId } = await authenticatedUser(db);
     const response = await app.inject({
