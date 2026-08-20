@@ -14,11 +14,12 @@ import {
   getAdminStats,
   listAdminUsers,
   deleteAdminUser,
+  getBillingStatus,
+  startCheckout,
   listAdminModels,
   addAdminModel,
   updateAdminModel,
   getAdminSearch,
-  getBillingStatus,
   ApiError,
 } from './api';
 
@@ -244,6 +245,21 @@ describe('api client', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'nope' }));
 
     await expect(deleteAdminUser('u1')).rejects.toBeInstanceOf(ApiError);
+  });
+
+  it('startCheckout submits a real POST form, not a GET navigation', () => {
+    const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    startCheckout();
+
+    const form = document.querySelector('form');
+    expect(form?.getAttribute('method')).toBe('POST');
+    expect(form?.getAttribute('action')).toBe('/api/billing/checkout');
+    expect(form?.getAttribute('enctype')).toBe('text/plain');
+    expect(submitSpy).toHaveBeenCalledOnce();
+
+    submitSpy.mockRestore();
+    form?.remove();
   });
 
   it('listAdminModels parses the model list', async () => {
