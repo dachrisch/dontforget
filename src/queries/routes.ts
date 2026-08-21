@@ -133,13 +133,21 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       const row = await deps.db
-        .collection<{ _id: ObjectId; user_id: string; query_text: string; status?: QueryStatus }>('queries')
+        .collection<{ _id: ObjectId; user_id: string; query_text: string; status?: QueryStatus; active?: boolean }>('queries')
         .findOne({ _id: queryObjectId, user_id: request.userId! });
       if (!row) {
         return reply.code(403).send({ error: 'not your query' });
       }
       if (row.status === 'running') {
         return reply.code(409).send({ error: 'already running' });
+      }
+      // Retry (this route) and reactivate are separate, non-overlapping
+      // operations — retry must never double as resume. A paused ready/
+      // failed query (active === false, status !== 'blocked') has to go
+      // through reactivate first; only a blocked query (which never held a
+      // slot) claims one here.
+      if (row.active === false && row.status !== 'blocked') {
+        return reply.code(409).send({ error: 'query is paused', reason: 'resume this query first' });
       }
       if (row.status === 'blocked') {
         const hasSlot = await hasFreeSlot(deps.db, request.userId!);
@@ -226,7 +234,12 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!deleted) {
         return reply.code(403).send({ error: 'not your query' });
       }
-      await deps.billingService.releaseSlotOnDelete(request.userId!);
+      // A blocked or already-paused query never occupied a purchased slot,
+      // so deleting one must not release one either — mirrors "deactivating
+      // never touches billing".
+      if (deleted.active) {
+        await deps.billingService.releaseSlotOnDelete(request.userId!);
+      }
       return reply.code(204).send();
     }
   );

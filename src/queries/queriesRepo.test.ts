@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
-import { createQuery, completeQueryRun, listQueriesForUser, updateQuery, markQueryFailed } from './queriesRepo';
+import { createQuery, completeQueryRun, listQueriesForUser, updateQuery, markQueryFailed, deleteQuery } from './queriesRepo';
 import { approveEvents } from './approveEvents';
 
 describe('queries repo', () => {
@@ -210,6 +210,56 @@ describe('queries repo', () => {
       const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });
       const result = await updateQuery(db, insertedId.toString(), query.queryId, { text: 'hijack' });
       expect(result).toBeNull();
+    });
+  });
+
+  describe('deleteQuery', () => {
+    it('returns null for a nonexistent id', async () => {
+      expect(await deleteQuery(db, userId, new ObjectId().toString())).toBeNull();
+    });
+
+    it('returns null for a query the user does not own', async () => {
+      const query = await createQuery(db, userId, 'Mine');
+      const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });
+      expect(await deleteQuery(db, insertedId.toString(), query.queryId)).toBeNull();
+      // not actually deleted
+      expect(await db.collection('queries').countDocuments({ _id: query._id })).toBe(1);
+    });
+
+    it('reports active: true and removes the row plus its events for a normal active query', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      await completeQueryRun(db, query._id, [
+        { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+      ]);
+
+      const result = await deleteQuery(db, userId, query.queryId);
+
+      expect(result).toEqual({ active: true });
+      expect(await db.collection('queries').countDocuments({ _id: query._id })).toBe(0);
+      expect(await db.collection('events').countDocuments({ query_id: query._id })).toBe(0);
+    });
+
+    it('reports active: false for a blocked query — it never held a slot', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich', 'weekly', false);
+      const result = await deleteQuery(db, userId, query.queryId);
+      expect(result).toEqual({ active: false });
+    });
+
+    it('reports active: false for a paused query', async () => {
+      const query = await createQuery(db, userId, 'Auer Dult Munich');
+      await db.collection('queries').updateOne({ _id: query._id }, { $set: { active: false } });
+      const result = await deleteQuery(db, userId, query.queryId);
+      expect(result).toEqual({ active: false });
+    });
+
+    it('treats a legacy row with no active field as active', async () => {
+      const { insertedId } = await db.collection('queries').insertOne({
+        user_id: userId,
+        query_text: 'legacy',
+        created_at: new Date(),
+      });
+      const result = await deleteQuery(db, userId, insertedId.toString());
+      expect(result).toEqual({ active: true });
     });
   });
 });
