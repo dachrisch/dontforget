@@ -82,6 +82,15 @@ describe('api client', () => {
     });
   });
 
+  it('runQuery throws an ApiError exposing the response status on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409, text: async () => 'no free credits' }));
+
+    const err = await runQuery('q1').catch(e => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(409);
+  });
+
   it('listQueries parses the dashboard payload', async () => {
     const body = {
       queries: [{ id: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'monthly', lastRunAt: null, createdAt: '2026-08-10T00:00:00Z', approvedCount: 2, candidateCount: 0, status: 'ready' }],
@@ -283,6 +292,15 @@ describe('api client', () => {
     vi.stubGlobal('fetch', fetchMock);
     await reactivateQuery('q1');
     expect(fetchMock).toHaveBeenCalledWith('/api/queries/q1/reactivate', { method: 'POST', credentials: 'include' });
+  });
+
+  it('reactivateQuery throws an ApiError exposing the response status on a non-ok response', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 409 }));
+
+    const err = await reactivateQuery('q1').catch(e => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).status).toBe(409);
   });
 
   it('addSlots posts the count and parses the new total', async () => {

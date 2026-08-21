@@ -147,6 +147,7 @@ const EN = {
   'error.updatingSlots': 'Something went wrong while buying more credits. Please try again.',
   'error.pausing': 'Something went wrong while pausing the query. Please try again.',
   'error.resuming': 'Something went wrong while resuming the query. Please try again.',
+  'error.noFreeCredits': 'No free credits — buy more, or pause another query.',
 } as const;
 
 export type MessageKey = keyof typeof EN;
@@ -296,6 +297,7 @@ const DE: Record<MessageKey, string> = {
   'error.updatingSlots': 'Beim Kauf von zusätzlichem Guthaben ist etwas schiefgegangen. Bitte versuch es erneut.',
   'error.pausing': 'Beim Pausieren der Suchanfrage ist etwas schiefgegangen. Bitte versuch es erneut.',
   'error.resuming': 'Beim Fortsetzen der Suchanfrage ist etwas schiefgegangen. Bitte versuch es erneut.',
+  'error.noFreeCredits': 'Kein freies Guthaben — kauf mehr dazu oder pausiere eine andere Suchanfrage.',
 };
 
 const MESSAGES: Record<Locale, Record<MessageKey, string>> = { en: EN, de: DE };
