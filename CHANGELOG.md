@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.6](https://github.com/dachrisch/dontforget/compare/v0.19.5...v0.19.6) (2026-08-21)
+
+
+### Bug Fixes
+
+* give feed URLs a readable slug for calendar-name fallback ([#127](https://github.com/dachrisch/dontforget/issues/127)) ([0fe6715](https://github.com/dachrisch/dontforget/commit/0fe67151de4b2186d3c6491ae38837ebd33e1497))
+
 ## [0.19.5](https://github.com/dachrisch/dontforget/compare/v0.19.4...v0.19.5) (2026-08-21)
 
 
