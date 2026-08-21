@@ -191,7 +191,7 @@ describe('admin routes', () => {
     expect(response.statusCode).toBe(200);
     const models = response.json();
     expect(models).toHaveLength(2);
-    expect(models[0]).toMatchObject({ id: 'deepseek-v4-flash-free', role: 'default', enabled: true });
+    expect(models[0]).toMatchObject({ id: 'mimo-v2.5-free', role: 'default', enabled: true });
     expect(models[1]).toMatchObject({ id: 'big-pickle', role: 'backup', enabled: true });
     expect(models[0].calls).toBe(0);
     expect(models[0].successRate).toBeNull();
@@ -213,12 +213,12 @@ describe('admin routes', () => {
 
     const retire = await app.inject({
       method: 'PATCH',
-      url: '/api/admin/models/deepseek-v4-flash-free',
+      url: '/api/admin/models/mimo-v2.5-free',
       headers: authHeaders(sessionId),
       payload: { enabled: false },
     });
     expect(retire.statusCode).toBe(200);
-    expect(retire.json()).toMatchObject({ id: 'deepseek-v4-flash-free', enabled: false });
+    expect(retire.json()).toMatchObject({ id: 'mimo-v2.5-free', enabled: false });
 
     const models = (await app.inject({
       method: 'GET',

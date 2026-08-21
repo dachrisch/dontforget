@@ -33,7 +33,12 @@ const insecureDispatcher =
 // "error"`, e.g. a transient upstream 503 from the model provider — seen
 // live during this same verification).
 const POLL_INTERVAL_MS = 1000;
-const POLL_TIMEOUT_MS = 30_000;
+// Generous on purpose: agent-mode models on opencode routinely spend 60-90s
+// reasoning before their first text token (deepseek-v4-flash-free measured
+// ~92s prompt-to-finish on a real extraction prompt, 2026-08-20). A tight
+// timeout here doesn't fail fast — it abandons a session that opencode keeps
+// computing to completion, then burns another one on retry.
+const POLL_TIMEOUT_MS = 120_000;
 
 interface OpencodeMessage {
   type: 'user' | 'assistant';
@@ -126,15 +131,20 @@ function classifyError(err: unknown): string {
 // Left unspecified, opencode picks its own default model — confirmed live
 // 2026-08-10 to be "ling-3.0-tiny-free", which was persistently failing
 // with 503 "Endpoint is unavailable" (not the transient kind retries can
-// fix). Pin a specific free model that was confirmed working live at the
-// same time instead of relying on whatever opencode defaults to.
-const MODEL = { id: 'deepseek-v4-flash-free', providerID: 'opencode' };
+// fix). Pin a specific model explicitly instead of relying on whatever
+// opencode defaults to.
+//
+// Model choice is driven by a live perf test against opencode.lehel.xyz
+// (2026-08-21, full 11.4KB extraction prompt, 3 rounds each): mimo-v2.5-free
+// was the fastest responsive free model (median 22.3s), big-pickle second
+// (28.5s). deepseek-v4-flash-free was retired from the opencode catalog —
+// it used to take 76s+ of reasoning and was the reason responses stalled.
+const MODEL = { id: 'mimo-v2.5-free', providerID: 'opencode' };
 
 // Backup model tried only after MODEL exhausts every attempt above — a
-// distinct free model on the same "opencode" (OpenCode Zen) provider,
-// confirmed live 2026-08-17 to be active/enabled. Rate limits and outages
-// on MODEL are provider-side per-model, so a different model is likely
-// unaffected even when MODEL itself is down.
+// distinct free model on the same "opencode" (OpenCode Zen) provider.
+// Rate limits and outages on MODEL are provider-side per-model, so a
+// different model is likely unaffected even when MODEL itself is down.
 const FALLBACK_MODEL = { id: 'big-pickle', providerID: 'opencode' };
 
 const MODEL_TIERS = [MODEL, FALLBACK_MODEL];
