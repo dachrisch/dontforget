@@ -20,6 +20,9 @@ import {
   addAdminModel,
   updateAdminModel,
   getAdminSearch,
+  deactivateQuery,
+  reactivateQuery,
+  addSlots,
   ApiError,
 } from './api';
 
@@ -258,17 +261,50 @@ describe('api client', () => {
 
   it('startCheckout submits a real POST form, not a GET navigation', () => {
     const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
-
     startCheckout();
-
     const form = document.querySelector('form');
     expect(form?.getAttribute('method')).toBe('POST');
-    expect(form?.getAttribute('action')).toBe('/api/billing/checkout');
     expect(form?.getAttribute('enctype')).toBe('text/plain');
+    expect(form?.getAttribute('action')).toBe('/api/billing/checkout?quantity=1');
     expect(submitSpy).toHaveBeenCalledOnce();
-
     submitSpy.mockRestore();
     form?.remove();
+  });
+
+  it('startCheckout passes a chosen quantity through the form action', () => {
+    const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    startCheckout(4);
+    const form = document.querySelector('form');
+    expect(form?.getAttribute('action')).toBe('/api/billing/checkout?quantity=4');
+    submitSpy.mockRestore();
+    form?.remove();
+  });
+
+  it('deactivateQuery posts to the deactivate endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await deactivateQuery('q1');
+    expect(fetchMock).toHaveBeenCalledWith('/api/queries/q1/deactivate', { method: 'POST', credentials: 'include' });
+  });
+
+  it('reactivateQuery posts to the reactivate endpoint', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    await reactivateQuery('q1');
+    expect(fetchMock).toHaveBeenCalledWith('/api/queries/q1/reactivate', { method: 'POST', credentials: 'include' });
+  });
+
+  it('addSlots posts the count and parses the new total', async () => {
+    const body = { purchasedSlots: 4 };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(addSlots(2)).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/add-slots', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ count: 2 }),
+    });
   });
 
   it('listAdminModels parses the model list', async () => {
