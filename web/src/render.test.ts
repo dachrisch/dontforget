@@ -693,6 +693,58 @@ describe('renderWorkspace', () => {
     expect(card!.querySelector('[data-action=pause]')).toBeNull(); // never pausable
   });
 
+  it('buy-credits on a blocked card adds a slot to the existing subscription for a subscribed user, never starting a second one', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    const billing = {
+      freeLimit: 1, activeQueryCount: 2, purchasedSlots: 2, pricePerExtraQuery: 0.5,
+      subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+    };
+    renderWorkspace(container, {
+      kind: 'dashboard',
+      queries: [{
+        id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly',
+        lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+        approvedCount: 0, candidateCount: 0, status: 'blocked', active: false,
+      }],
+      feed: null, editing: null, reviewing: null, billing,
+    }, handlers);
+
+    container.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers.onBuyMoreSlots).toHaveBeenCalledWith(1);
+    expect(handlers.onUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('buy-credits on a blocked card starts a new checkout when not subscribed (including no billing status)', () => {
+    const blockedQuery = {
+      id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly' as const,
+      lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+      approvedCount: 0, candidateCount: 0, status: 'blocked' as const, active: false,
+    };
+
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [blockedQuery], feed: null, editing: null, reviewing: null, billing: null,
+    }, handlers);
+    container.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers.onUpgrade).toHaveBeenCalledWith(1);
+    expect(handlers.onBuyMoreSlots).not.toHaveBeenCalled();
+
+    const container2 = document.createElement('div');
+    const handlers2 = noopHandlers();
+    const unsubscribedBilling = {
+      freeLimit: 1, activeQueryCount: 1, purchasedSlots: 1, pricePerExtraQuery: 0.5,
+      subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+    };
+    renderWorkspace(container2, {
+      kind: 'dashboard', queries: [blockedQuery], feed: null, editing: null, reviewing: null, billing: unsubscribedBilling,
+    }, handlers2);
+    container2.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers2.onUpgrade).toHaveBeenCalledWith(1);
+    expect(handlers2.onBuyMoreSlots).not.toHaveBeenCalled();
+  });
+
   it('renders pause on a ready card and resume on a paused one', () => {
     const container = document.createElement('div');
     const readyQuery = {

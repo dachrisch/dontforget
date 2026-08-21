@@ -417,7 +417,15 @@ function renderDashboard(
 
   wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=buy-credits]').forEach(button => {
     button.addEventListener('click', () => {
-      handlers.onUpgrade(1);
+      // A subscribed user hitting capacity needs a slot added to their
+      // existing subscription, never a second one — same branch
+      // renderBillingRow already makes for the manage/buy-more vs. upgrade
+      // actions below.
+      if (billing?.subscribed) {
+        handlers.onBuyMoreSlots(1);
+      } else {
+        handlers.onUpgrade(1);
+      }
     });
   });
 
