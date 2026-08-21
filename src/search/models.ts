@@ -61,12 +61,13 @@ export function createNoopModelRegistry(): ModelRegistry {
   };
 }
 
-// Defaults mirror the historical hard-coded tiers in opencodeClient.ts — the
-// pinned free model that was confirmed working live, plus a distinct backup.
-// Seeded only when the registry is empty so an existing deployment keeps its
+// Defaults mirror the hard-coded tiers in opencodeClient.ts — the fastest
+// verified-working free model (mimo-v2.5-free, measured 22.3s median on a
+// full extraction prompt, 2026-08-21) plus a distinct free backup. Seeded
+// only when the registry is empty so an existing deployment keeps its
 // current choices.
 const DEFAULT_MODELS: Array<{ id: string; providerID: string; role: ModelRole }> = [
-  { id: 'deepseek-v4-flash-free', providerID: 'opencode', role: 'default' },
+  { id: 'mimo-v2.5-free', providerID: 'opencode', role: 'default' },
   { id: 'big-pickle', providerID: 'opencode', role: 'backup' },
 ];
 

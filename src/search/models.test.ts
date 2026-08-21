@@ -23,7 +23,7 @@ describe('model registry', () => {
     const registry = createModelRegistry({ db });
     const active = await registry.listActive();
     expect(active).toEqual([
-      { id: 'deepseek-v4-flash-free', providerID: 'opencode' },
+      { id: 'mimo-v2.5-free', providerID: 'opencode' },
       { id: 'big-pickle', providerID: 'opencode' },
     ]);
   });
@@ -33,16 +33,16 @@ describe('model registry', () => {
     // Promote the backup to default; the old default becomes a backup via
     // the update below (it keeps its role unless cleared).
     await registry.update('big-pickle', { role: 'default' });
-    await registry.update('deepseek-v4-flash-free', { role: 'backup' });
+    await registry.update('mimo-v2.5-free', { role: 'backup' });
     await registry.add({ id: 'tertiary', providerID: 'opencode' });
 
     const active = await registry.listActive();
-    expect(active.map(m => m.id)).toEqual(['big-pickle', 'deepseek-v4-flash-free', 'tertiary']);
+    expect(active.map(m => m.id)).toEqual(['big-pickle', 'mimo-v2.5-free', 'tertiary']);
   });
 
   it('excludes retired models from the active list', async () => {
     const registry = createModelRegistry({ db });
-    await registry.update('deepseek-v4-flash-free', { enabled: false });
+    await registry.update('mimo-v2.5-free', { enabled: false });
 
     const active = await registry.listActive();
     expect(active).toEqual([{ id: 'big-pickle', providerID: 'opencode' }]);

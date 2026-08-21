@@ -65,9 +65,9 @@ describe('extractDates', () => {
     );
     // opencode's own default model (picked when none is specified) is an
     // unreliable free tier prone to persistent 503s — confirmed live
-    // 2026-08-10. Pin a specific, verified-working free model explicitly.
+    // 2026-08-10. Pin a specific, verified-working model explicitly.
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      model: { id: 'deepseek-v4-flash-free', providerID: 'opencode' },
+      model: { id: 'mimo-v2.5-free', providerID: 'opencode' },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
