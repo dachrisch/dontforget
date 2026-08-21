@@ -742,6 +742,18 @@ h1, h2 {
   margin: 0;
 }
 
+/* A blocked query (created at capacity, never ran) reads as needing
+   attention, same treatment as a failed run. */
+.query-card-blocked {
+  border-color: var(--accent);
+}
+
+/* A paused query is still fully present, just not currently running —
+   muted rather than flagged. */
+.query-card-paused {
+  opacity: 0.7;
+}
+
 .query-card-status {
   display: flex;
   align-items: center;
@@ -760,6 +772,12 @@ h1, h2 {
 }
 
 .edit-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.billing-actions {
   display: flex;
   gap: 0.75rem;
   margin-top: 0.5rem;
