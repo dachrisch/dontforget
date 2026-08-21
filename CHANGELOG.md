@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.5](https://github.com/dachrisch/dontforget/compare/v0.19.4...v0.19.5) (2026-08-21)
+
+
+### Bug Fixes
+
+* add RFC 7986 NAME property to ICS feed for calendar name ([#125](https://github.com/dachrisch/dontforget/issues/125)) ([76cdb04](https://github.com/dachrisch/dontforget/commit/76cdb042a9e772908a3f55bffe5db0ab7ec1d04d))
+
 ## [0.19.4](https://github.com/dachrisch/dontforget/compare/v0.19.3...v0.19.4) (2026-08-21)
 
 
