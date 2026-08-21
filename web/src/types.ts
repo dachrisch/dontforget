@@ -79,6 +79,7 @@ export interface Dashboard {
 export interface BillingStatus {
   freeLimit: number;
   activeQueryCount: number;
+  purchasedSlots: number;
   pricePerExtraQuery: number;
   subscribed: boolean;
   subscriptionStatus: string | null;
