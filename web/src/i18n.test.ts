@@ -87,7 +87,7 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 1, status: 'ready' },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 1, status: 'ready', active: true },
         ],
         feed: null,
         editing: null,
@@ -124,7 +124,7 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'running' },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'running', active: true },
         ],
         feed: null,
         editing: null,
@@ -147,7 +147,7 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'failed' },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'failed', active: true },
         ],
         feed: null,
         editing: null,
@@ -169,7 +169,7 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1, status: 'ready' },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 2, candidateCount: 1, status: 'ready', active: true },
         ],
         feed: null,
         editing: null,
@@ -193,7 +193,7 @@ describe('German rendering', () => {
       {
         kind: 'dashboard',
         queries: [
-          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'ready' },
+          { id: 'q1', text: 'Auer Dult München', recurrenceInterval: 'quarterly', lastRunAt: null, createdAt: '2026-08-01T00:00:00Z', approvedCount: 0, candidateCount: 0, status: 'ready', active: true },
         ],
         feed: null,
         editing: null,
