@@ -9,6 +9,7 @@ import {
   type RecurrenceInterval,
 } from '../types.js';
 import { filterNewEvents } from '../scheduler/dedupeEvents.js';
+import { buildFeedUrls } from '../feed/feedUrl.js';
 
 interface EventRow {
   _id: ObjectId;
@@ -213,8 +214,7 @@ export async function feedSummary(
     return null;
   }
   return {
-    icsUrl: `${publicBaseUrl}/f/${tokenRow.token}.ics`,
-    rssUrl: `${publicBaseUrl}/f/${tokenRow.token}.rss`,
+    ...buildFeedUrls(publicBaseUrl, tokenRow.token),
     lastFetchedAt: tokenRow.last_fetched_at ? tokenRow.last_fetched_at.toISOString() : null,
   };
 }

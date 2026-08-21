@@ -9,6 +9,7 @@ import {
 } from './queriesRepo.js';
 import { approveEvents } from './approveEvents.js';
 import { rotateFeedToken } from '../feed/feedToken.js';
+import { buildFeedUrls } from '../feed/feedUrl.js';
 import { enqueueSearch } from './searchQueue.js';
 import { runInitialQuery } from './initialRun.js';
 import {
@@ -150,10 +151,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     { preHandler: deps.requireAuth },
     async request => {
       const token = await rotateFeedToken(deps.db, request.userId!);
-      return {
-        icsUrl: `${deps.publicBaseUrl}/f/${token}.ics`,
-        rssUrl: `${deps.publicBaseUrl}/f/${token}.rss`,
-      };
+      return buildFeedUrls(deps.publicBaseUrl, token);
     }
   );
 

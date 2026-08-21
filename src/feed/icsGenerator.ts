@@ -1,18 +1,19 @@
 import { createEvents, type EventAttributes } from 'ics';
 import type { CandidateEvent } from '../types.js';
-
-const CALENDAR_NAME = 'dontforget';
+import { CALENDAR_SLUG } from './feedUrl.js';
 
 export function buildIcs(events: CandidateEvent[]): string {
-  const { error, value } = createEvents(events.map(toIcsEvent), { calName: CALENDAR_NAME });
+  const { error, value } = createEvents(events.map(toIcsEvent), { calName: CALENDAR_SLUG });
   if (error || !value) {
     throw new Error(`failed to build ICS: ${error?.message ?? 'unknown error'}`);
   }
-  // The `ics` library only emits the legacy X-WR-CALNAME property. Some
-  // subscribers (notably Google Calendar's "add by URL" flow) don't reliably
-  // honor it, so we also add the RFC 7986 NAME property, which carries the
-  // same meaning under the current iCalendar standard.
-  return value.replace(/^X-WR-CALNAME:.*\r?\n/m, match => `${match}NAME:${CALENDAR_NAME}\r\n`);
+  // The `ics` library only emits the legacy X-WR-CALNAME property. We also
+  // add the RFC 7986 NAME property as a more broadly recognized alternative
+  // — but note neither is read by Google Calendar's "Add by URL" flow, which
+  // always falls back to the feed URL for the calendar's display name. The
+  // readable slug in that URL (see feedUrl.ts) exists to make that fallback
+  // legible rather than a bare token hash.
+  return value.replace(/^X-WR-CALNAME:.*\r?\n/m, match => `${match}NAME:${CALENDAR_SLUG}\r\n`);
 }
 
 function toIcsEvent(event: CandidateEvent): EventAttributes {

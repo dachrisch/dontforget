@@ -1,5 +1,6 @@
 import { ObjectId, type Db } from 'mongodb';
 import { getOrCreateFeedToken } from '../feed/feedToken.js';
+import { buildFeedUrls } from '../feed/feedUrl.js';
 import type { RecurrenceInterval } from '../types.js';
 
 export async function approveEvents(
@@ -37,10 +38,7 @@ export async function approveEvents(
   await setEventStatus(db, queryObjectId, dismissEventIds, 'dismissed');
 
   const token = await getOrCreateFeedToken(db, userId);
-  return {
-    icsUrl: `${publicBaseUrl}/f/${token}.ics`,
-    rssUrl: `${publicBaseUrl}/f/${token}.rss`,
-  };
+  return buildFeedUrls(publicBaseUrl, token);
 }
 
 async function setEventStatus(
