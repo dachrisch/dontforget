@@ -5,6 +5,10 @@ import { approveEvents } from '../queries/approveEvents';
 import { registerFeedRoutes } from './routes';
 import Fastify from 'fastify';
 
+function tokenFromIcsUrl(icsUrl: string): string {
+  return icsUrl.match(/\/f\/([^/]+)\//)![1];
+}
+
 describe('feed routes', () => {
   let client: MongoClient;
   let db: Db;
@@ -28,7 +32,7 @@ describe('feed routes', () => {
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
     ]);
     const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
-    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+    const token = tokenFromIcsUrl(icsUrl);
 
     const app = Fastify();
     registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
@@ -45,6 +49,37 @@ describe('feed routes', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  it('serves the readable slug-style URL that approveEvents actually returns, and still serves the legacy URL', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'slug@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { icsUrl, rssUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
+    const token = tokenFromIcsUrl(icsUrl);
+    expect(icsUrl).toBe(`http://x/f/${token}/dontforget.ics`);
+    expect(rssUrl).toBe(`http://x/f/${token}/dontforget.rss`);
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
+
+    const slugResponse = await app.inject({ method: 'GET', url: `/f/${token}/dontforget.ics` });
+    expect(slugResponse.statusCode).toBe(200);
+    expect(slugResponse.body).toContain('Frühjahrsdult');
+
+    // The slug text itself isn't validated — only the token and extension matter.
+    const otherSlug = await app.inject({ method: 'GET', url: `/f/${token}/anything.ics` });
+    expect(otherSlug.statusCode).toBe(200);
+
+    const badExt = await app.inject({ method: 'GET', url: `/f/${token}/dontforget.txt` });
+    expect(badExt.statusCode).toBe(404);
+
+    // Calendars already subscribed via the old bare-token URL keep working.
+    const legacyResponse = await app.inject({ method: 'GET', url: `/f/${token}.ics` });
+    expect(legacyResponse.statusCode).toBe(200);
+    expect(legacyResponse.body).toContain('Frühjahrsdult');
+  });
+
   it('builds the RSS channel link from the configured public base URL, not the request protocol', async () => {
     const { insertedId } = await db.collection('users').insertOne({ email: 'rss@example.com' });
     const userId = insertedId.toString();
@@ -52,7 +87,7 @@ describe('feed routes', () => {
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
     ]);
     const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'https://dontforget.lehel.xyz'))!;
-    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+    const token = tokenFromIcsUrl(icsUrl);
 
     const app = Fastify();
     registerFeedRoutes(app, { db, publicBaseUrl: 'https://dontforget.lehel.xyz' });
@@ -78,7 +113,7 @@ describe('feed routes', () => {
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
     ]);
     const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
-    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+    const token = tokenFromIcsUrl(icsUrl);
 
     const app = Fastify();
     registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
@@ -108,7 +143,7 @@ describe('feed routes', () => {
       candidates.map(c => c.id),
       'http://x'
     ))!;
-    const token = icsUrl.split('/f/')[1].replace('.ics', '');
+    const token = tokenFromIcsUrl(icsUrl);
 
     const app = Fastify();
     registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
