@@ -11,6 +11,8 @@ function noopHandlers(): WorkspaceHandlers {
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
+    onDeactivateQuery: vi.fn(),
+    onReactivateQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
     onDeleteAccount: vi.fn(),
@@ -24,6 +26,7 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteAdminUser: vi.fn(),
     onUpgrade: vi.fn(),
     onManageBilling: vi.fn(),
+    onBuyMoreSlots: vi.fn(),
     onSetAdminModel: vi.fn(),
     onAddAdminModel: vi.fn(),
   };
@@ -39,6 +42,7 @@ function query(overrides: Partial<QuerySummary> = {}): QuerySummary {
     approvedCount: 0,
     candidateCount: 0,
     status: 'ready',
+    active: true,
     ...overrides,
   };
 }
@@ -641,14 +645,14 @@ describe('renderWorkspace', () => {
   it('renders an upgrade action for a free-tier user with remaining quota', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
-    const billing = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const billing = { freeLimit: 1, activeQueryCount: 0, purchasedSlots: 1, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
     renderWorkspace(
       container,
       { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
       handlers
     );
 
-    expect(container.textContent).toContain('1 free');
+    expect(container.textContent).toContain('0 of 1 credits used');
     expect(container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')).not.toBeNull();
     container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')!.click();
     expect(handlers.onUpgrade).toHaveBeenCalled();
@@ -657,16 +661,69 @@ describe('renderWorkspace', () => {
   it('renders a manage action for a subscribed user', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
-    const billing = { freeLimit: 1, activeQueryCount: 2, pricePerExtraQuery: 0.5, subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const billing = { freeLimit: 1, activeQueryCount: 2, purchasedSlots: 3, pricePerExtraQuery: 0.5, subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
     renderWorkspace(
       container,
       { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
       handlers
     );
 
-    expect(container.textContent).toContain('Subscribed');
+    expect(container.textContent).toContain('2 of 3 credits used');
     expect(container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')).not.toBeNull();
     container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')!.click();
     expect(handlers.onManageBilling).toHaveBeenCalled();
+  });
+
+  it('renders a blocked query card with buy-credits and try-again actions', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, {
+      kind: 'dashboard',
+      queries: [{
+        id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly',
+        lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+        approvedCount: 0, candidateCount: 0, status: 'blocked', active: false,
+      }],
+      feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+
+    const card = container.querySelector('.query-card-blocked');
+    expect(card).not.toBeNull();
+    expect(card!.querySelector('[data-action=retry]')).not.toBeNull();
+    expect(card!.querySelector('[data-action=buy-credits]')).not.toBeNull();
+    expect(card!.querySelector('[data-action=pause]')).toBeNull(); // never pausable
+  });
+
+  it('renders pause on a ready card and resume on a paused one', () => {
+    const container = document.createElement('div');
+    const readyQuery = {
+      id: 'q1', text: 'Oktoberfest', recurrenceInterval: 'weekly' as const,
+      lastRunAt: '2026-08-20T00:00:00Z', createdAt: '2026-08-20T00:00:00Z',
+      approvedCount: 1, candidateCount: 0, status: 'ready' as const, active: true,
+    };
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [readyQuery], feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+    expect(container.querySelector('[data-action=pause]')).not.toBeNull();
+    expect(container.querySelector('[data-action=resume]')).toBeNull();
+
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [{ ...readyQuery, active: false }], feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+    expect(container.querySelector('[data-action=resume]')).not.toBeNull();
+    expect(container.querySelector('[data-action=pause]')).toBeNull();
+  });
+
+  it('billing row shows used-of-purchased and a buy-more stepper', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null,
+      billing: {
+        freeLimit: 1, activeQueryCount: 2, purchasedSlots: 3, pricePerExtraQuery: 0.5,
+        subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+      },
+    }, noopHandlers());
+    expect(container.querySelector('.billing-summary')!.textContent).toContain('2');
+    expect(container.querySelector('.billing-summary')!.textContent).toContain('3');
+    expect(container.querySelector('[data-action=buy-more]')).not.toBeNull();
   });
 });

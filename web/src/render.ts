@@ -11,6 +11,8 @@ export interface WorkspaceHandlers {
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
   onDeleteQuery: (queryId: string) => void;
+  onDeactivateQuery: (queryId: string) => void;
+  onReactivateQuery: (queryId: string) => void;
   onRotateFeedToken: () => void;
   onSignOut: () => void;
   onDeleteAccount: () => void;
@@ -22,8 +24,9 @@ export interface WorkspaceHandlers {
   onRetrySearch: (queryId: string) => void;
   onCloseAdmin: () => void;
   onDeleteAdminUser: (userId: string) => void;
-  onUpgrade: () => void;
+  onUpgrade: (quantity: number) => void;
   onManageBilling: () => void;
+  onBuyMoreSlots: (count: number) => void;
   onSetAdminModel: (id: string, patch: { enabled?: boolean; role?: 'default' | 'backup' | null }) => void;
   onAddAdminModel: (id: string, providerID: string) => void;
 }
@@ -211,13 +214,18 @@ function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string 
 
 function renderBillingRow(billing: BillingStatus | null, handlers: WorkspaceHandlers): string {
   if (!billing) return '';
+  const usage = t('billing.usage', { used: billing.activeQueryCount, purchased: billing.purchasedSlots });
+  const perQuery = t('billing.perQuery', { price: billing.pricePerExtraQuery });
   if (billing.subscribed) {
-    return `<p class="subtext">${t('billing.subscribed', { count: billing.activeQueryCount })}</p>
-      <button type="button" class="stamp-button stamp-button-quiet" data-action="manage-billing">${t('billing.manage')}</button>`;
+    return `
+      <p class="subtext">${usage} · ${perQuery}</p>
+      <div class="billing-actions">
+        <button type="button" class="stamp-button stamp-button-quiet" data-action="manage-billing">${t('billing.manage')}</button>
+        <button type="button" class="stamp-button" data-action="buy-more">${t('billing.buyMore')}</button>
+      </div>`;
   }
-  return `<p class="subtext">${t('billing.freeLimit', {
-    count: billing.freeLimit - billing.activeQueryCount,
-  })} · ${t('billing.perQuery', { price: billing.pricePerExtraQuery })}</p>
+  return `
+    <p class="subtext">${usage} · ${perQuery}</p>
     <button type="button" class="stamp-button stamp-button-quiet" data-action="upgrade">${t('billing.upgrade')}</button>`;
 }
 
@@ -395,6 +403,24 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=pause]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onDeactivateQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=resume]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onReactivateQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=buy-credits]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onUpgrade(1);
+    });
+  });
+
   wrapper.querySelectorAll<HTMLButtonElement>('.feed-summary button[data-action=rotate-feed]').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.confirmed !== 'true') {
@@ -421,7 +447,11 @@ function renderDashboard(
   });
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=upgrade]')?.addEventListener('click', () => {
-    handlers.onUpgrade();
+    handlers.onUpgrade(1);
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=buy-more]')?.addEventListener('click', () => {
+    handlers.onBuyMoreSlots(1);
   });
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')?.addEventListener('click', () => {
@@ -694,6 +724,25 @@ function renderQueryCard(query: QuerySummary): string {
     `;
   }
 
+  if (query.status === 'blocked') {
+    return `
+      <article class="query-card query-card-blocked" data-id="${query.id}">
+        <div class="query-card-head">
+          <span class="query-card-text">${escapeHtml(query.text)}</span>
+          <div class="query-card-actions">
+            <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
+            <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
+          </div>
+        </div>
+        <p class="subtext">${t('queryCard.blocked')}</p>
+        <div class="edit-actions">
+          <button class="stamp-button stamp-button-quiet" type="button" data-action="retry">${t('queryCard.retry')}</button>
+          <button class="stamp-button" type="button" data-action="buy-credits">${t('queryCard.buyCredits')}</button>
+        </div>
+      </article>
+    `;
+  }
+
   if (query.status === 'failed') {
     return `
       <article class="query-card query-card-failed" data-id="${query.id}">
@@ -716,16 +765,21 @@ function renderQueryCard(query: QuerySummary): string {
   const reviewAction = query.candidateCount > 0
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
+  const pauseResumeAction = query.active
+    ? `<button type="button" class="link-button" data-action="pause">${t('queryCard.pause')}</button>`
+    : `<button type="button" class="link-button" data-action="resume">${t('queryCard.resume')}</button>`;
   return `
-    <article class="query-card" data-id="${query.id}">
+    <article class="query-card ${query.active ? '' : 'query-card-paused'}" data-id="${query.id}">
       <div class="query-card-head">
         <span class="query-card-text">${escapeHtml(query.text)}</span>
         <div class="query-card-actions">
           ${reviewAction}
+          ${pauseResumeAction}
           <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
           <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
         </div>
       </div>
+      ${!query.active ? `<p class="subtext">${t('queryCard.paused')}</p>` : ''}
       <div class="ledger-row">
         <span class="ledger-label">${t('queryCard.reruns')}</span>
         <span class="ledger-value">${intervalLabel(query.recurrenceInterval)}</span>
