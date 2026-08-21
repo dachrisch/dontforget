@@ -301,7 +301,18 @@ function paint() {
       clearError();
       runQuery(queryId)
         .then(() => refreshDashboard())
-        .catch(err => showError('error.searching', err));
+        .catch(err => {
+          // A 409 here means the slot-claim gate rejected the retry (out of
+          // free credits, or — reachable only over the API today — the
+          // query is paused and needs a resume first). Either way, the
+          // generic "something went wrong searching" message is actively
+          // misleading, so show the credits-specific one instead.
+          if (err instanceof ApiError && err.status === 409) {
+            showError('error.noFreeCredits', err);
+          } else {
+            showError('error.searching', err);
+          }
+        });
     },
     onStartEdit: queryId => {
       clearError();
@@ -400,7 +411,15 @@ function paint() {
       clearError();
       reactivateQuery(queryId)
         .then(() => refreshDashboard())
-        .catch(err => showError('error.resuming', err));
+        .catch(err => {
+          // A 409 here means no free slot was available to resume into —
+          // show the credits-specific message rather than a generic one.
+          if (err instanceof ApiError && err.status === 409) {
+            showError('error.noFreeCredits', err);
+          } else {
+            showError('error.resuming', err);
+          }
+        });
     },
     onRotateFeedToken: () => {
       clearError();
