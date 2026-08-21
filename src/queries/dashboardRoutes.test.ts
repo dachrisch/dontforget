@@ -9,6 +9,7 @@ import { approveEvents } from './approveEvents';
 import { flushSearches } from './searchQueue';
 import { FakeBillingGateway } from '../billing/stripeGateway';
 import { BillingService } from '../billing/billingService';
+import type { ExtractionResult } from '../types';
 
 async function authenticatedUser(db: Db, email = 'u@example.com') {
   const { insertedId } = await db.collection('users').insertOne({ email });
@@ -428,7 +429,7 @@ describe('query dashboard routes', () => {
         emailSender: new CapturingEmailSender(),
         publicBaseUrl: 'http://localhost:3000',
         frontendUrl: 'http://localhost:5173',
-        runQuery: vi.fn(() => new Promise(() => {})), // never resolves — query stays 'running'
+        runQuery: vi.fn((): Promise<ExtractionResult> => new Promise(() => {})), // never resolves — query stays 'running'
         billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
       });
 
