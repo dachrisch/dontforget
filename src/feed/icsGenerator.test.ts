@@ -15,4 +15,11 @@ describe('buildIcs', () => {
     expect((ics.match(/BEGIN:VEVENT/g) ?? []).length).toBe(2);
     expect(ics).toContain('SUMMARY:Frühjahrsdult');
   });
+
+  it('sets both the legacy and RFC 7986 calendar name properties', () => {
+    const ics = buildIcs([]);
+
+    expect(ics).toContain('X-WR-CALNAME:dontforget');
+    expect(ics).toMatch(/^NAME:dontforget$/m);
+  });
 });
