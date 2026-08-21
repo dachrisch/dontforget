@@ -12,6 +12,7 @@ function query(id: string, status: QueryStatus = 'ready'): import('./types').Que
     approvedCount: 0,
     candidateCount: 0,
     status,
+    active: true,
   };
 }
 
@@ -35,7 +36,7 @@ describe('reducer', () => {
   });
 
   it('carries the billing status through DASHBOARD_LOADED', () => {
-    const billing = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const billing = { freeLimit: 1, activeQueryCount: 0, purchasedSlots: 1, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
     const next = reducer({ kind: 'signedOut' }, {
       type: 'DASHBOARD_LOADED',
       queries: [query('q1')],

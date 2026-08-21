@@ -12,6 +12,8 @@ function noopHandlers(): WorkspaceHandlers {
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
+    onDeactivateQuery: vi.fn(),
+    onReactivateQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
     onDeleteAccount: vi.fn(),
@@ -25,6 +27,7 @@ function noopHandlers(): WorkspaceHandlers {
     onDeleteAdminUser: vi.fn(),
     onUpgrade: vi.fn(),
     onManageBilling: vi.fn(),
+    onBuyMoreSlots: vi.fn(),
     onSetAdminModel: vi.fn(),
     onAddAdminModel: vi.fn(),
   };
