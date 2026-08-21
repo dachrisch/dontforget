@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.4](https://github.com/dachrisch/dontforget/compare/v0.19.3...v0.19.4) (2026-08-21)
+
+
+### Bug Fixes
+
+* raise opencode poll timeout to 120s and switch model tiers ([#121](https://github.com/dachrisch/dontforget/issues/121)) ([03145dd](https://github.com/dachrisch/dontforget/commit/03145dda35077ba649793bb171ead51ecd0a4744))
+
 ## [0.19.3](https://github.com/dachrisch/dontforget/compare/v0.19.2...v0.19.3) (2026-08-20)
 
 
