@@ -78,10 +78,14 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     status: 'approved',
   }));
 
+  // Event labels routinely carry umlauts ("Frühjahrsdult"), so the charset has
+  // to be explicit: Google Calendar parses the feed during the subscribe step
+  // and rejects the whole subscription — "Oops, we couldn't add this calendar"
+  // — if it decodes the body as anything but UTF-8.
   if (ext === 'ics') {
-    reply.header('Content-Type', 'text/calendar');
+    reply.header('Content-Type', 'text/calendar; charset=utf-8');
     return reply.send(buildIcs(events));
   }
-  reply.header('Content-Type', 'application/rss+xml');
+  reply.header('Content-Type', 'application/rss+xml; charset=utf-8');
   return reply.send(buildRss(events, `${deps.publicBaseUrl}/f/${token}`));
 }
