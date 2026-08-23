@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.7](https://github.com/dachrisch/dontforget/compare/v0.19.6...v0.19.7) (2026-08-23)
+
+
+### Bug Fixes
+
+* declare charset=utf-8 on ICS and RSS feed responses ([#130](https://github.com/dachrisch/dontforget/issues/130)) ([9651e58](https://github.com/dachrisch/dontforget/commit/9651e58c20301fedb2f26bbe822da5291b916059))
+
 ## [0.19.6](https://github.com/dachrisch/dontforget/compare/v0.19.5...v0.19.6) (2026-08-21)
 
 
