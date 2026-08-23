@@ -49,6 +49,36 @@ describe('feed routes', () => {
     expect(missing.statusCode).toBe(404);
   });
 
+  // Google Calendar's subscribe step fetches the feed and parses it before it
+  // will accept the subscription. Without an explicit charset a parser is free
+  // to fall back to something other than UTF-8, and every label with an umlaut
+  // ("Frühjahrsdult") then decodes as mojibake or fails outright — which Google
+  // reports to the user as "Oops, we couldn't add this calendar". Known-good
+  // public feeds (gov.uk, Google's own holiday ICS) all send the charset.
+  it('declares charset=utf-8 on both feed formats so non-ASCII labels survive', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'charset@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Umsonst und draußen Festival', startDate: '2026-08-21', endDate: '2026-08-24', sourceUrl: 'https://example.org' },
+    ]);
+    const { icsUrl } = (await approveEvents(db, userId, queryId, [candidates[0].id], 'http://x'))!;
+    const token = tokenFromIcsUrl(icsUrl);
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
+
+    for (const url of [`/f/${token}.ics`, `/f/${token}/dontforget.ics`]) {
+      const response = await app.inject({ method: 'GET', url });
+      expect(response.statusCode).toBe(200);
+      expect(response.headers['content-type']).toBe('text/calendar; charset=utf-8');
+      expect(response.body).toContain('draußen');
+    }
+
+    const rssResponse = await app.inject({ method: 'GET', url: `/f/${token}.rss` });
+    expect(rssResponse.statusCode).toBe(200);
+    expect(rssResponse.headers['content-type']).toBe('application/rss+xml; charset=utf-8');
+  });
+
   it('serves the readable slug-style URL that approveEvents actually returns, and still serves the legacy URL', async () => {
     const { insertedId } = await db.collection('users').insertOne({ email: 'slug@example.com' });
     const userId = insertedId.toString();
