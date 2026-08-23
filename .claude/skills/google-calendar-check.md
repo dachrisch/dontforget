@@ -7,6 +7,8 @@ description: Use when "Add to Google Calendar" isn't working for dontforget feed
 
 ## Overview
 
+> **STATUS — root-caused and fixed 2026-08-23.** `webcal://` resolves to plain `http://`, dontforget's Traefik router listened only on `websecure`, so every calendar client got a 404 from Traefik before reaching the app. Fixed with an HTTP→HTTPS redirect router; confirmed by Google's own importer completing a scheduled fetch at 10:42:46Z the same day. **If "add to calendar" breaks again, this is a regression check first, an investigation second** — jump to step 2 and the Known Findings Log rather than re-running the whole checklist. Steps 3–6 exist mainly to record what was already eliminated.
+
 dontforget offers three "add to calendar" buttons (`web/src/render.ts`): Google Calendar (`calendar.google.com/calendar/r?cid=webcal://...`), Apple Calendar (`webcal://` direct), Outlook (`outlook.live.com/calendar/.../addfromweb?url=...`). Google Calendar's "Add by URL" flow has been unreliable for dontforget's feeds in testing — this skill is the diagnostic checklist and the record of what's already been ruled out, so a future session doesn't redo the same multi-hour investigation from scratch.
 
 **Symptom:** clicking "Add to Google Calendar" (or pasting the feed URL into Google Calendar Settings → Add calendar → From URL) does not result in the calendar appearing under "Other calendars" in Google Calendar. In desktop/automated browser testing this fails *silently* — no error shown, dialog just closes. On a real mobile device, Google Calendar does surface a visible toast: **"Oops, we couldn't add this calendar. Please try again in a few minutes."** (seen 2026-08-23) — meaning a request attempt does happen and fails, it's just invisible in the desktop flow.
@@ -35,12 +37,24 @@ As of 2026-08-22 this has always been clean — not the cause.
 
 ### 2. Check production server logs for an actual fetch attempt
 
-```bash
-ssh lehel.xyz "docker logs dontforget.web --since <ISO8601> 2>&1 | grep 'url\":\"/f/'"
-```
-Every logged `/f/*` line is `{"req":{"method":...,"url":...,"remoteAddress":...}}` followed by a `{"res":{"statusCode":...}}` line with the same `reqId`. `remoteAddress` is almost always `172.18.0.1` (Traefik's internal docker-network IP, since Traefik proxies to the app container) — **not useful for identifying the real external caller**; don't try to reverse-DNS it.
+**Start with Traefik, not the app.** This single command is what cracked the original investigation and should be the first thing run for any future report — it is the *only* place Google's importer is observable at all:
 
-**Known gap (not yet done as of 2026-08-23):** this only checks the **app container's** logs. Traefik's own access logs (`docker logs traefik.traefik`, JSON format, see `container` repo's `traefik/traefik.yaml`) log independently and would show a request that Traefik itself rejected *before* it ever reached the app (which would explain zero app-level evidence despite the visible mobile error toast). Check Traefik's logs next time, not just the app's — this is the most promising unexplored lead as of this writing.
+```bash
+ssh lehel.xyz 'docker logs traefik.traefik 2>&1 | grep -i "Calendar-Importer"'
+```
+
+Omit `--since` on the first pass: the full retained history reveals the poll *cadence* and whether a subscription exists at all, which a narrow window hides. Read `RequestScheme`, `entryPointName`, `DownstreamStatus` and `OriginStatus` on each line — `OriginStatus: 0` means Traefik answered by itself and the app never saw the request. See the Known Findings Log for how this played out.
+
+Then check the app container for requests that actually made it through:
+
+```bash
+ssh lehel.xyz "docker logs dontforget.web --since <ISO8601>Z 2>&1 | grep 'url\":\"/f/'"
+```
+Every logged `/f/*` line is `{"req":{"method":...,"url":...,"remoteAddress":...}}` followed by a `{"res":{"statusCode":...}}` line with the same `reqId`. `remoteAddress` is usually `172.18.0.1` (Traefik's internal docker-network IP, since Traefik proxies to the app container) — **not useful for identifying the real external caller**; don't try to reverse-DNS it. But not always: a real importer fetch has been seen arriving with its true `66.249.x.x` address intact, so a non-`172.18.0.1` value here is a genuine signal worth reading, not noise.
+
+**Why the ordering matters (this gap cost the original investigation ~two days):** checking only the app container's logs shows nothing when Traefik rejects a request *before* forwarding it — which looked exactly like "Google never even tried." Traefik logs independently (JSON, see `container` repo's `traefik/traefik.yaml`) and is the only witness to that class of failure. Never conclude "no fetch attempt" from app logs alone.
+
+**Traefik logs 4xx/5xx only.** So this asymmetry holds: a *failing* importer fetch appears in Traefik and not the app; a *succeeding* one appears in the app and not Traefik. Neither log alone tells the whole story — always read both before drawing a conclusion.
 
 ### 3. Check the fail2ban / Loki-based blocklist (servy production host only)
 
@@ -66,6 +80,13 @@ https://search.google.com/search-console/security-issues?resource_id=sc-domain:l
 https://search.google.com/search-console/manual-actions?resource_id=sc-domain:lehel.xyz
 ```
 Both clean (no issues) as of 2026-08-22 — rules out a domain-wide Google penalty/flag as the cause. URL Inspection on a specific `/f/<token>/...` URL will show "unknown to Google" — this is **expected, not diagnostic**: it's an unguessable per-user token nothing links to, so Googlebot's organic web crawler (Search Console) has no way to discover it. Search indexing and Calendar's feed-subscribe fetcher are different Google subsystems; don't over-read organic-crawl absence as proof of anything about Calendar specifically.
+
+**Don't bother scripting this — Search Console is a dead end for Calendar problems (checked 2026-08-23).** A CLI was installed (`npm i -g @gscdump/cli`, plus `@duckdb/duckdb-wasm` which it imports but declares only as an *optional* peer dep, so it crashes with `ERR_MODULE_NOT_FOUND` without it) specifically to dig further here. It cannot help, for two structural reasons confirmed against the official discovery doc (`https://searchconsole.googleapis.com/$discovery/rest?version=v1`):
+
+1. The whole API surface is `searchanalytics.query`, `sites.*`, `sitemaps.*`, `urlInspection.index.inspect`, `urlTestingTools.mobileFriendlyTest.run`. **Manual actions and security issues — the two things this step checks — are UI-only and exposed by no API**, so no CLI can automate step 4 at all.
+2. `Google-Calendar-Importer` is not Googlebot's indexing crawler. Search Console reports exclusively on the indexing pipeline, so importer fetches never appear there no matter which endpoint you query.
+
+Use Traefik's access log (step 2) instead — it is the only place Calendar-importer traffic is observable, and it is what actually solved this.
 
 ### 5. Use a control feed to isolate account/browser vs. domain-specific
 
@@ -104,9 +125,58 @@ curl -s -o /dev/null -w "%{http_code}\n" "https://dontforget.lehel.xyz/f/<token>
 curl -s -o /dev/null -w "%{http_code}\n" "http://dontforget.lehel.xyz/f/<token>.ics"   # 404
 ```
 
-**This is a real, fixable infra bug — not a Google-side limitation.** The fix (not yet applied as of 2026-08-23) is adding a `bumbleflies`-style HTTP→HTTPS redirect router to `dontforget/docker-compose.yml`. **Non-trivial catch:** `ansible/testing`'s `dontforget_traefik_{entrypoint,tls}` overrides already force the *main* router onto plain `web` with `tls=false` on `servyy-test.lxd` (no real Let's Encrypt resolver there) — a naively-hardcoded second `-http` router would collide with the main router on test (same entrypoint, same Host rule, undefined priority resolution → possible redirect loop). The fix must account for this before deploying, and must go through the test-first workflow (`servyy-test.lxd`) per this project's infra policy, not straight to production.
+**This is a real, fixable infra bug — not a Google-side limitation.** Fixed via a `bumbleflies`-style HTTP→HTTPS redirect router added to `dontforget/docker-compose.yml` (`container` repo, `fix/dontforget-webcal-http-redirect` branch, deployed 2026-08-23). **Non-trivial catch handled:** `ansible/testing`'s `dontforget_traefik_{entrypoint,tls}` overrides already force the *main* router onto plain `web` with `tls=false` on `servyy-test.lxd` (no real Let's Encrypt resolver there) — a naively-hardcoded second `-http` router would have collided with the main router on test. Solved with a new `TRAEFIK_HTTP_REDIRECT_HOST` var (`.env.j2`) that's only populated with the real host when TLS is enabled; on test it's empty, so the redirect router's rule matches nothing (harmless no-op) instead of colliding. Tested clean on `servyy-test.lxd` first, then deployed to production.
+
+**Post-fix verification (2026-08-23, same day):**
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" "https://dontforget.lehel.xyz/f/<token>/dontforget.ics"  # 200
+curl -s -o /dev/null -w "%{http_code}\n" "http://dontforget.lehel.xyz/f/<token>/dontforget.ics"    # 302 -> https, was 404
+```
+Traefik logs show **zero** 4xx/5xx for dontforget since the fix deployed (use `--since <ISO8601>Z` with an explicit `Z` — omitting it gets interpreted in server-local time, not UTC, and silently pulls in stale pre-fix entries).
+
+**2026-08-23, FIX CONFIRMED END-TO-END.** Dumping the *full* retained importer history (not just a recent window) is what settled it:
+
+```bash
+ssh lehel.xyz 'docker logs traefik.traefik 2>&1 | grep -i "Calendar-Importer"'
+```
+
+31 requests, `2026-08-18T21:03:44Z` → `2026-08-23T08:40:45Z`, across two feed tokens — **every one of them `RequestScheme: http`, `entryPointName: web`, `DownstreamStatus: 404`, `OriginStatus: 0`**, on a stable per-token cadence of roughly 5–6 hours.
+
+That history overturns the working assumption this skill was built on:
+
+> **The subscriptions were live the whole time.** Google only polls feeds it holds an active subscription for, and it had been polling faithfully since at least 2026-08-18. The *subscribe* step never failed — every subsequent *content fetch* did. The calendar was registered on Google's side and simply never received a byte, which is why it presented as "the add didn't work."
+
+Then the transport fix landed, and the next scheduled poll went through:
+
+| Time (UTC) | Event |
+|---|---|
+| 08:40:45 | last pre-fix importer poll → **404** (Traefik) |
+| 09:39:18 | `dontforget.web` recreated — redirect router goes live |
+| 10:42:46 | importer `66.249.89.237` GETs `/f/<token>.ics` → **reaches the app container** |
+
+The 10:42:46 hit lands exactly on that token's established `:42` cadence (previous polls 06:42, 01:42, 20:42), so it is Google's own scheduler, not a manual test. Verified with the importer's own UA:
+
+```bash
+curl -sL -o /dev/null -A "Google-Calendar-Importer" \
+  -w "%{http_code} after %{num_redirects} redirect(s), %{size_download} bytes\n" \
+  "http://dontforget.lehel.xyz/f/<token>.ics"    # 200 after 1 redirect(s)
+```
+
+**Trap for the next session — after the fix, success is invisible in Traefik's log.** `traefik.yaml` only logs 4xx/5xx, so a working importer fetch leaves *no* Traefik entry at all. Absence of Calendar-Importer lines post-fix is the success signal, not a sign the importer stopped coming. Confirm the positive case in the **app** container instead, where the importer shows up with its real IP rather than Traefik's `172.18.0.1`:
+
+```bash
+ssh lehel.xyz 'docker logs dontforget.web --since <ISO8601>Z 2>&1 | grep "/f/"'
+# look for "remoteAddress":"66.249.x.x"  — that's the real importer;
+# 172.18.0.1 entries are proxied browser/curl traffic
+```
+
+Remaining variable is purely Google-side: subscription-completion + UI propagation latency into "Other calendars" is not observable from the server and not controllable. Transport is proven; if a calendar still reads empty a day later, re-check the app log for 66.249.x.x hits before suspecting anything infrastructural again.
 
 ## Common Mistakes
+
+**❌ Assuming "the calendar never appeared" means the subscribe request failed**
+- It didn't. Google had held active subscriptions for two tokens since 2026-08-18 and was polling them every ~5–6 hours the entire time the feature looked broken — 31 consecutive 404s. *Subscribe* succeeded; every *content fetch* failed, so the calendar existed on Google's side but stayed empty, which is indistinguishable from "add failed" in the UI.
+- Practical consequence: a steady poll cadence in Traefik's log is proof a subscription exists, and it means **re-adding the calendar is not the fix and generates no new information**. Fix the fetch and the existing subscription heals itself on its next scheduled poll — no user action needed.
 
 **❌ Trusting a `type` action into the Google Calendar URL field without verifying**
 - This environment's browser automation intermittently fails to actually deliver typed text into the "URL of calendar" field — the field stays empty/placeholder, the "Add calendar" button stays disabled, and clicking it is a no-op. Once, mistyped keystrokes even leaked through as Google Calendar keyboard shortcuts (navigated to an event-creation page) instead of landing in the field.
