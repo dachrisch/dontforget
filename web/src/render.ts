@@ -183,6 +183,13 @@ function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string 
       ${CALENDAR_PROVIDERS.map(provider => {
         const name = t(provider.labelKey);
         const labelText = t('calendarAdd.aria', { name });
+        if (provider.kind === 'modal') {
+          return `
+          <button type="button" class="feed-add-button" data-action="add-google-calendar" data-ics-url="${escapeHtml(url)}" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
+            <img class="feed-add-brand" src="${provider.icon}" alt="" aria-hidden="true" />
+            ${escapeHtml(name)}
+          </button>`;
+        }
         return `
         <a class="feed-add-button" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
           <img class="feed-add-brand" src="${provider.icon}" alt="" aria-hidden="true" />
@@ -220,28 +227,32 @@ function webcalUrl(url: string): string {
   return url.replace(/^https?:\/\//i, 'webcal://');
 }
 
-// Google's "add calendar" flow accepts the subscription URL in `cid`.
-function googleCalendarUrl(icsUrl: string): string {
-  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl(icsUrl))}`;
-}
-
 // Outlook's add-from-web page subscribes to the URL in `url`. `.live.com`
 // covers personal accounts; `outlook.office.com` is for work/school.
 function outlookCalendarUrl(icsUrl: string): string {
   return `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(webcalUrl(icsUrl))}`;
 }
 
+// Google Calendar's manual "Add from URL" page — the only supported way to
+// subscribe to an external ICS feed there. The Calendar API has no subscribe
+// method, and the `cid=` deeplink has proven unreliable (see
+// .claude/skills/google-calendar-check.md). Its "From URL" field only accepts
+// http/https, so the user pastes the plain feed URL, not the webcal alias.
+const GOOGLE_ADD_BY_URL = 'https://calendar.google.com/calendar/r/settings/addbyurl';
+
 // Apple Calendar has no deep link to subscribe programmatically — pointing
 // at the `webcal://` URL opens its "Add subscription" confirmation, so that
-// URL is used verbatim.
-const CALENDAR_PROVIDERS: Array<{
-  icon: string;
-  labelKey: MessageKey;
-  href: (url: string) => string;
-}> = [
-  { icon: '/icons/google-calendar.svg', labelKey: 'calendarAdd.google', href: googleCalendarUrl },
-  { icon: '/icons/apple-calendar.svg', labelKey: 'calendarAdd.apple', href: webcalUrl },
-  { icon: '/icons/outlook.svg', labelKey: 'calendarAdd.outlook', href: outlookCalendarUrl },
+// URL is used verbatim. Google Calendar gets no deeplink at all: its button
+// opens a modal that walks the user through the manual add-by-URL flow
+// instead.
+type CalendarProvider =
+  | { icon: string; labelKey: MessageKey; kind: 'link'; href: (url: string) => string }
+  | { icon: string; labelKey: MessageKey; kind: 'modal' };
+
+const CALENDAR_PROVIDERS: CalendarProvider[] = [
+  { icon: '/icons/google-calendar.svg', labelKey: 'calendarAdd.google', kind: 'modal' },
+  { icon: '/icons/apple-calendar.svg', labelKey: 'calendarAdd.apple', kind: 'link', href: webcalUrl },
+  { icon: '/icons/outlook.svg', labelKey: 'calendarAdd.outlook', kind: 'link', href: outlookCalendarUrl },
 ];
 
 function wireCopyButtons(root: HTMLElement): void {
@@ -262,6 +273,78 @@ function wireCopyButtons(root: HTMLElement): void {
       }
     });
   });
+}
+
+// Google is the one calendar app with no one-click subscribe. The modal
+// guides the user through the manual "Add from URL" flow: copy the feed URL,
+// open Google's add-by-URL page, paste. The primary action does the first
+// two at once, so the paste is the only manual step left.
+function openGoogleCalendarModal(icsUrl: string): void {
+  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+  const overlay = document.createElement('div');
+  overlay.className = 'google-modal-overlay';
+
+  const dialog = document.createElement('div');
+  dialog.className = 'google-modal';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-labelledby', 'google-modal-title');
+  dialog.tabIndex = -1;
+  dialog.innerHTML = `
+    <div class="google-modal-head">
+      <img class="feed-add-brand" src="/icons/google-calendar.svg" alt="" aria-hidden="true" />
+      <h2 class="google-modal-title" id="google-modal-title">${t('googleModal.title')}</h2>
+      <button type="button" class="google-modal-close" aria-label="${t('googleModal.close')}">×</button>
+    </div>
+    <p class="subtext">${t('googleModal.intro')}</p>
+    <ol class="google-modal-steps">
+      <li>${t('googleModal.step1')}</li>
+      <li>${t('googleModal.step2')}</li>
+      <li>${t('googleModal.step3')}</li>
+    </ol>
+    <div class="edit-actions">
+      <button type="button" class="stamp-button" data-action="google-open">${t('googleModal.action')}</button>
+      <button type="button" class="stamp-button stamp-button-quiet" data-action="google-done">${t('googleModal.done')}</button>
+    </div>
+    <p class="google-modal-url">${escapeHtml(icsUrl)}</p>
+  `;
+  overlay.appendChild(dialog);
+
+  function close(): void {
+    overlay.remove();
+    document.removeEventListener('keydown', onKeyDown);
+    trigger?.focus();
+  }
+
+  function onKeyDown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') close();
+  }
+
+  dialog.querySelector<HTMLButtonElement>('.google-modal-close')!.addEventListener('click', close);
+  dialog.querySelector<HTMLButtonElement>('[data-action=google-done]')!.addEventListener('click', close);
+  dialog.querySelector<HTMLButtonElement>('[data-action=google-open]')!.addEventListener('click', event => {
+    const button = event.currentTarget as HTMLButtonElement;
+    // Open the tab synchronously in the click gesture — a `window.open`
+    // after an `await` can be treated as a non-user-initiated popup and
+    // blocked. The clipboard write happens alongside, in the background.
+    window.open(GOOGLE_ADD_BY_URL, '_blank', 'noopener');
+    navigator.clipboard?.writeText(icsUrl)
+      .then(() => {
+        button.textContent = t('googleModal.copied');
+      })
+      .catch(() => {
+        // Clipboard unavailable — the URL is printed below the buttons.
+      });
+  });
+
+  overlay.addEventListener('click', event => {
+    if (event.target === overlay) close();
+  });
+  document.addEventListener('keydown', onKeyDown);
+
+  document.body.appendChild(overlay);
+  dialog.focus();
 }
 
 const INTERVAL_LABEL_KEYS: Record<RecurrenceInterval, MessageKey> = {
@@ -347,6 +430,13 @@ function renderDashboard(
     handlers.onSubmitQuery(text);
   });
   wireCopyButtons(wrapper);
+
+  wrapper.querySelectorAll<HTMLButtonElement>('button[data-action=add-google-calendar]').forEach(button => {
+    button.addEventListener('click', () => {
+      const icsUrl = button.dataset.icsUrl;
+      if (icsUrl) openGoogleCalendarModal(icsUrl);
+    });
+  });
 
   wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=edit]').forEach(button => {
     button.addEventListener('click', () => {

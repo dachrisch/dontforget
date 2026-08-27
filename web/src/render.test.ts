@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderWorkspace, type WorkspaceHandlers } from './render';
 import type { QuerySummary } from './types';
 
@@ -345,10 +345,11 @@ describe('renderWorkspace', () => {
     expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
     expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
 
-    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.feed-add-button');
-    expect(addButtons[0].getAttribute('href')).toBe(
-      `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
-    );
+    const addButtons = container.querySelectorAll<HTMLElement>('.feed-add-button');
+    // Google Calendar has no one-click subscribe, so its button opens a
+    // guide modal instead of pointing at a deeplink.
+    expect(addButtons[0].tagName).toBe('BUTTON');
+    expect(addButtons[0].getAttribute('data-action')).toBe('add-google-calendar');
     expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
     expect(addButtons[2].getAttribute('href')).toBe(
       `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
@@ -375,6 +376,80 @@ describe('renderWorkspace', () => {
     const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
     copyButton.click();
     expect(copyButton.querySelector('.icon-check')).not.toBeNull();
+  });
+
+  describe('Google Calendar add-by-URL modal', () => {
+    const ICS_URL = 'https://x/f/t.ics';
+
+    function renderDashboard(): HTMLElement {
+      const container = document.createElement('div');
+      renderWorkspace(
+        container,
+        {
+          kind: 'dashboard',
+          queries: [],
+          feed: { icsUrl: ICS_URL, rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
+          editing: null,
+          reviewing: null,
+        },
+        noopHandlers()
+      );
+      return container;
+    }
+
+    afterEach(() => {
+      document.body.querySelectorAll('.google-modal-overlay').forEach(el => el.remove());
+      vi.restoreAllMocks();
+      if ('clipboard' in navigator) {
+        delete (navigator as unknown as Record<string, unknown>).clipboard;
+      }
+    });
+
+    it('opens the guide modal from the Google Calendar button', () => {
+      const container = renderDashboard();
+      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
+
+      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
+      expect(modal).not.toBeNull();
+      expect(modal.getAttribute('role')).toBe('dialog');
+      expect(modal.getAttribute('aria-modal')).toBe('true');
+      expect(modal.textContent).toContain('Add to Google Calendar');
+      expect(modal.textContent).toContain(ICS_URL);
+    });
+
+    it('copies the feed URL and opens the add-by-URL page from the primary action', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+
+      const container = renderDashboard();
+      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
+      const openButton = document.body.querySelector<HTMLButtonElement>('.google-modal [data-action=google-open]')!;
+      openButton.click();
+      await new Promise(resolve => setTimeout(resolve, 0));
+
+      expect(writeText).toHaveBeenCalledWith(ICS_URL);
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://calendar.google.com/calendar/r/settings/addbyurl',
+        '_blank',
+        'noopener'
+      );
+      expect(openButton.textContent).toContain('Link copied');
+    });
+
+    it('closes the modal via its close button', () => {
+      const container = renderDashboard();
+      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
+      document.body.querySelector<HTMLButtonElement>('.google-modal-close')!.click();
+      expect(document.body.querySelector('.google-modal')).toBeNull();
+    });
+
+    it('closes the modal on Escape', () => {
+      const container = renderDashboard();
+      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
+      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      expect(document.body.querySelector('.google-modal')).toBeNull();
+    });
   });
 
   it('shows a hint instead of feed links until the user has approved something', () => {
