@@ -277,8 +277,9 @@ function wireCopyButtons(root: HTMLElement): void {
 
 // Google is the one calendar app with no one-click subscribe. The modal
 // guides the user through the manual "Add from URL" flow: copy the feed URL,
-// open Google's add-by-URL page, paste. The primary action does the first
-// two at once, so the paste is the only manual step left.
+// open Google's add-by-URL page, paste. Copy and open are separate steps —
+// the copy may surface a browser permission prompt, which would be lost if
+// the tab opened first.
 function openGoogleCalendarModal(icsUrl: string): void {
   const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
@@ -304,9 +305,11 @@ function openGoogleCalendarModal(icsUrl: string): void {
       <li>${t('googleModal.step3')}</li>
     </ol>
     <div class="edit-actions">
-      <button type="button" class="stamp-button" data-action="google-open">${t('googleModal.action')}</button>
+      <button type="button" class="stamp-button" data-action="google-copy">${t('googleModal.copy')}</button>
+      <button type="button" class="stamp-button" data-action="google-open" disabled>${t('googleModal.open')}</button>
       <button type="button" class="stamp-button stamp-button-quiet" data-action="google-done">${t('googleModal.done')}</button>
     </div>
+    <p class="subtext google-modal-copy-hint" hidden>${t('googleModal.copyHint')}</p>
     <p class="google-modal-url">${escapeHtml(icsUrl)}</p>
   `;
   overlay.appendChild(dialog);
@@ -321,22 +324,36 @@ function openGoogleCalendarModal(icsUrl: string): void {
     if (event.key === 'Escape') close();
   }
 
+  const copyButton = dialog.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
+  const openButton = dialog.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
+  const copyHint = dialog.querySelector<HTMLElement>('.google-modal-copy-hint')!;
+
+  // Copy and open are deliberately separate steps: the copy can trigger a
+  // browser permission prompt, and the user needs to stay on this page to
+  // answer it — opening the tab first would hide it. The open button stays
+  // disabled until a copy attempt has happened (success or not), so it is
+  // always a fresh user gesture that can't be popup-blocked.
+  copyButton.addEventListener('click', async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(icsUrl);
+        copyButton.textContent = t('googleModal.copied');
+      } else {
+        copyHint.hidden = false;
+      }
+    } catch {
+      copyHint.hidden = false;
+    }
+    openButton.disabled = false;
+    openButton.focus();
+  });
+
+  openButton.addEventListener('click', () => {
+    window.open(GOOGLE_ADD_BY_URL, '_blank', 'noopener');
+  });
+
   dialog.querySelector<HTMLButtonElement>('.google-modal-close')!.addEventListener('click', close);
   dialog.querySelector<HTMLButtonElement>('[data-action=google-done]')!.addEventListener('click', close);
-  dialog.querySelector<HTMLButtonElement>('[data-action=google-open]')!.addEventListener('click', event => {
-    const button = event.currentTarget as HTMLButtonElement;
-    // Open the tab synchronously in the click gesture — a `window.open`
-    // after an `await` can be treated as a non-user-initiated popup and
-    // blocked. The clipboard write happens alongside, in the background.
-    window.open(GOOGLE_ADD_BY_URL, '_blank', 'noopener');
-    navigator.clipboard?.writeText(icsUrl)
-      .then(() => {
-        button.textContent = t('googleModal.copied');
-      })
-      .catch(() => {
-        // Clipboard unavailable — the URL is printed below the buttons.
-      });
-  });
 
   overlay.addEventListener('click', event => {
     if (event.target === overlay) close();

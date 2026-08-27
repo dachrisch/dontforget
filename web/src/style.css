@@ -343,6 +343,11 @@ h1, h2 {
   transform: scale(0.97);
 }
 
+.stamp-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .ornament {
   font-size: 1.5rem;
   color: var(--accent);
@@ -856,4 +861,9 @@ h1, h2 {
   font-size: 0.75rem;
   color: var(--ink-muted);
   overflow-wrap: anywhere;
+}
+
+.google-modal-copy-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
 }
