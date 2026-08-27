@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.1](https://github.com/dachrisch/dontforget/compare/v0.20.0...v0.20.1) (2026-08-27)
+
+
+### Bug Fixes
+
+* **web:** copy Google Calendar link before opening add-by-URL tab ([e8f8961](https://github.com/dachrisch/dontforget/commit/e8f8961d9383f23633b26338f53f77747d8506bf))
+* **web:** copy Google Calendar link before opening add-by-URL tab ([2a0dae1](https://github.com/dachrisch/dontforget/commit/2a0dae1db8702239f1b8acf03151741fc7d023d9))
+
 ## [0.20.0](https://github.com/dachrisch/dontforget/compare/v0.19.9...v0.20.0) (2026-08-27)
 
 
