@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.0](https://github.com/dachrisch/dontforget/compare/v0.19.9...v0.20.0) (2026-08-27)
+
+
+### Features
+
+* **web:** guide Google Calendar add via modal instead of unreliable cid deeplink ([4c1c07a](https://github.com/dachrisch/dontforget/commit/4c1c07a5064243ba796b54bb6351868fe63b0c6e))
+
+
+### Bug Fixes
+
+* **web:** guide Google Calendar add via modal instead of unreliable cid deeplink ([e88c707](https://github.com/dachrisch/dontforget/commit/e88c707000f6ec30e8bdf64bc2bf53a4bda067da))
+
 ## [0.19.9](https://github.com/dachrisch/dontforget/compare/v0.19.8...v0.19.9) (2026-08-27)
 
 
