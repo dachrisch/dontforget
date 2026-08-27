@@ -89,4 +89,3 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
   reply.header('Content-Type', 'application/rss+xml; charset=utf-8');
   return reply.send(buildRss(events, `${deps.publicBaseUrl}/f/${token}`));
 }
-}
