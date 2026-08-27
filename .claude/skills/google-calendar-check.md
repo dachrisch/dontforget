@@ -9,7 +9,7 @@ description: Use when "Add to Google Calendar" isn't working for dontforget feed
 
 > **STATUS — root-caused and fixed 2026-08-23.** `webcal://` resolves to plain `http://`, dontforget's Traefik router listened only on `websecure`, so every calendar client got a 404 from Traefik before reaching the app. Fixed with an HTTP→HTTPS redirect router; confirmed by Google's own importer completing a scheduled fetch at 10:42:46Z the same day. **If "add to calendar" breaks again, this is a regression check first, an investigation second** — jump to step 2 and the Known Findings Log rather than re-running the whole checklist. Steps 3–6 exist mainly to record what was already eliminated.
 
-dontforget offers three "add to calendar" buttons (`web/src/render.ts`): Google Calendar (no deeplink — its button opens a guide modal: Google's Calendar API has no method to subscribe to an external ICS URL, and the `cid=` deeplink proved unreliable, so the modal walks the user through the manual Settings → Add calendar → From URL flow and copies their feed URL), Apple Calendar (`webcal://` direct), Outlook (`outlook.live.com/calendar/.../addfromweb?url=...`). Google Calendar's "Add by URL" flow has been unreliable for dontforget's feeds in testing — this skill is the diagnostic checklist and the record of what's already been ruled out, so a future session doesn't redo the same multi-hour investigation from scratch.
+dontforget offers three "add to calendar" buttons (`web/src/render.ts`): Google Calendar (`calendar.google.com/calendar/r?cid=webcal://...`), Apple Calendar (`webcal://` direct), Outlook (`outlook.live.com/calendar/.../addfromweb?url=...`). Google Calendar's "Add by URL" flow has been unreliable for dontforget's feeds in testing — this skill is the diagnostic checklist and the record of what's already been ruled out, so a future session doesn't redo the same multi-hour investigation from scratch.
 
 **Symptom:** clicking "Add to Google Calendar" (or pasting the feed URL into Google Calendar Settings → Add calendar → From URL) does not result in the calendar appearing under "Other calendars" in Google Calendar. In desktop/automated browser testing this fails *silently* — no error shown, dialog just closes. On a real mobile device, Google Calendar does surface a visible toast: **"Oops, we couldn't add this calendar. Please try again in a few minutes."** (seen 2026-08-23) — meaning a request attempt does happen and fails, it's just invisible in the desktop flow.
 
@@ -98,7 +98,7 @@ Tested combinations (all failed identically as of 2026-08-22/23, control feed su
 - 2 different Google accounts (`christian.daehn@gmail.com`, `dachrischx@gmail.com`)
 - Legacy flat URL shape (`/f/<token>.ics`) vs. current nested shape (`/f/<token>/dontforget.ics`) — both routes are served in parallel by `src/feed/routes.ts`, see commit `0fe6715`/PR #127
 - A brand-new never-submitted token vs. an older token with real prior fetch history
-- The app's own "Add to Google Calendar" button (now a guide modal for the manual Settings → From URL flow; previously a `cid=webcal://` deep link) vs. Google's native Settings → Add calendar → From URL form
+- The app's own "Add to Google Calendar" button (`cid=webcal://` deep link) vs. Google's native Settings → Add calendar → From URL form
 - Retried on a second calendar day (2026-08-23) — identical failure, so it is not a same-day transient issue
 
 ## Known Findings Log
@@ -171,8 +171,6 @@ ssh lehel.xyz 'docker logs dontforget.web --since <ISO8601>Z 2>&1 | grep "/f/"'
 ```
 
 Remaining variable is purely Google-side: subscription-completion + UI propagation latency into "Other calendars" is not observable from the server and not controllable. Transport is proven; if a calendar still reads empty a day later, re-check the app log for 66.249.x.x hits before suspecting anything infrastructural again.
-
-**2026-08-27 — PRODUCT DECISION: drop the one-click Google deeplink.** Confirmed constraint: Google's Calendar API has no method to subscribe a user to an external ICS URL (`CalendarList.insert` only takes a Google-hosted calendar ID; "Add by URL" is UI-only), and the `cid=` deeplink's success is inconsistent. The Google button no longer opens `calendar.google.com/calendar/r?cid=...`; it opens an in-app modal (`web/src/render.ts` → `openGoogleCalendarModal`) that copies the user's feed URL to the clipboard, opens `https://calendar.google.com/calendar/r/settings/addbyurl` in a new tab, and lists the paste steps. Apple/Outlook keep their one-click `webcal://` links. This is a UX change, not a transport fix — the 2026-08-23 webcal→https Traefik fix above remains the operative infrastructure requirement for any client resolving `webcal://` to plain HTTP.
 
 ## Common Mistakes
 
