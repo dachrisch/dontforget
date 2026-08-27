@@ -399,6 +399,7 @@ describe('renderWorkspace', () => {
           feed: { icsUrl: ICS_URL, rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
           editing: null,
           reviewing: null,
+          billing: null,
         },
         noopHandlers()
       );
@@ -425,64 +426,24 @@ describe('renderWorkspace', () => {
       expect(modal.textContent).toContain(ICS_URL);
     });
 
-    it('copies the link first, then enables opening Google Calendar', async () => {
+    it('copies the feed URL and opens the add-by-URL page from the primary action', async () => {
       const writeText = vi.fn().mockResolvedValue(undefined);
       Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
       const container = renderDashboard();
       container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
-      const copyButton = modal.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
-      const openButton = modal.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-
-      // The tab may only open after a copy attempt — it starts disabled.
-      expect(openButton.disabled).toBe(true);
-      copyButton.click();
+      const openButton = document.body.querySelector<HTMLButtonElement>('.google-modal [data-action=google-open]')!;
+      openButton.click();
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(writeText).toHaveBeenCalledWith(ICS_URL);
-      expect(copyButton.textContent).toContain('Link copied');
-      expect(openButton.disabled).toBe(false);
-    });
-
-    it('opens the add-by-URL page from the second step', () => {
-      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const openButton = document.body.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-      openButton.disabled = false;
-      openButton.click();
-
       expect(openSpy).toHaveBeenCalledWith(
         'https://calendar.google.com/calendar/r/settings/addbyurl',
         '_blank',
         'noopener'
       );
-    });
-
-    it('shows a manual-copy hint and still allows opening when the clipboard is unavailable', () => {
-      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
-      const copyButton = modal.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
-      const openButton = modal.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-      const hint = modal.querySelector<HTMLElement>('.google-modal-copy-hint')!;
-
-      expect(hint.hidden).toBe(true);
-      copyButton.click();
-      expect(hint.hidden).toBe(false);
-      expect(copyButton.textContent).toBe('Copy link');
-      expect(openButton.disabled).toBe(false);
-
-      openButton.click();
-      expect(openSpy).toHaveBeenCalledWith(
-        'https://calendar.google.com/calendar/r/settings/addbyurl',
-        '_blank',
-        'noopener'
-      );
+      expect(openButton.textContent).toContain('Link copied');
     });
 
     it('closes the modal via its close button', () => {
