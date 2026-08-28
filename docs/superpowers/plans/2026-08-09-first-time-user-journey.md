@@ -46,7 +46,7 @@ Read this before Task 6 — it's the actual, verified contract for the two exter
 
 ### opencode
 
-- Base URL: `https://opencode.lehel.xyz` (prod) / `https://opencode.servyy-test.lxd` (test).
+- Base URL: `https://code.lehel.xyz` (prod) / `https://opencode.servyy-test.lxd` (test).
 - Every call needs `X-Api-Key: <key>`. The key lives in the `servyy-container` repo at `ansible/plays/vars/secrets.yml` (`opencode.api_key`, git-crypt encrypted) and is mirrored to Vaultwarden as `opencode api key (<host>)`. **Never commit this key into the `dontforget` repo** — it's supplied to this app at runtime as the `OPENCODE_API_KEY` env var.
 - Confirmed-allowed surface for this key (container repo, `history/2026-08-08_opencode-api-key-forwardauth.md` + its design spec): `POST /api/session` (create a session) and everything under `/api/session/{id}/...` — `message`, `prompt`, `event`, `wait`, `context`, `history`, `interrupt`, `compact`, `agent`, `model`, `permission`, `question`. Verified live against production with curl on 2026-08-08 (`POST /api/session` + correct key → 200, returns a session).
 - **Blocked for this key, do not call:** bare `GET /api/session` (list all) and `GET /api/session/active` — both 401 even with a valid key. Only create-then-act-within-the-session-you-got-back is allowed.
@@ -268,7 +268,7 @@ volumes:
 DATABASE_URL=mongodb://localhost:27017/dontforget
 PUBLIC_BASE_URL=http://localhost:3000
 SEARXNG_BASE_URL=https://search.lehel.xyz
-OPENCODE_BASE_URL=https://opencode.lehel.xyz
+OPENCODE_BASE_URL=https://code.lehel.xyz
 OPENCODE_API_KEY=changeme
 SMTP_HOST=
 SMTP_PORT=587
@@ -984,14 +984,14 @@ git commit -m "feat: add magic-link auth routes and wire dependencies through bu
 With the real key (from Vaultwarden, or decrypted `secrets.yml` — never paste it into this repo):
 
 ```bash
-curl -s -X POST https://opencode.lehel.xyz/api/session \
+curl -s -X POST https://code.lehel.xyz/api/session \
   -H "X-Api-Key: $OPENCODE_API_KEY" -H "Content-Type: application/json" -d '{}'
 ```
 
 Note the exact field holding the new session's id (this plan assumes `id`, matching opencode's documented `ses_...` id format from the ForwardAuth history doc). Then:
 
 ```bash
-curl -s -X POST https://opencode.lehel.xyz/api/session/<id>/message \
+curl -s -X POST https://code.lehel.xyz/api/session/<id>/message \
   -H "X-Api-Key: $OPENCODE_API_KEY" -H "Content-Type: application/json" \
   -d '{"parts":[{"type":"text","text":"Reply with exactly: {\"ok\":true}"}]}'
 ```
@@ -1068,7 +1068,7 @@ describe('extractDates', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const events = await extractDates(
-      'https://opencode.lehel.xyz',
+      'https://code.lehel.xyz',
       'test-key',
       'Auer Dult Munich',
       [{ title: 'Auer Dult', url: 'https://auerdult.de', content: 'Spring dates' }]
@@ -1076,12 +1076,12 @@ describe('extractDates', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://opencode.lehel.xyz/api/session',
+      'https://code.lehel.xyz/api/session',
       expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://opencode.lehel.xyz/api/session/ses_123/message',
+      'https://code.lehel.xyz/api/session/ses_123/message',
       expect.objectContaining({ method: 'POST' })
     );
     expect(events).toEqual([
@@ -2819,7 +2819,7 @@ Append:
    link is printed to the backend's console instead of emailed. Copy the printed
    `/api/auth/callback?token=...` URL into the browser to sign in.
 6. Type a query (e.g. "Auer Dult Munich") and submit. This calls the real `search.lehel.xyz` and
-   `opencode.lehel.xyz` — no mocking in dev/prod, only in tests.
+   `code.lehel.xyz` — no mocking in dev/prod, only in tests.
 ```
 
 - [ ] **Step 5: Manual verification (this task's test — there is no automated end-to-end test in this plan)**

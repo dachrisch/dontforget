@@ -25,4 +25,4 @@ a quick project-context summary.
    link is printed to the backend's console instead of emailed. Copy the printed
    `/api/auth/callback?token=...` URL into the browser to sign in.
 6. Type a query (e.g. "Auer Dult Munich") and submit. This calls the real `search.lehel.xyz` and
-   `opencode.lehel.xyz` — no mocking in dev/prod, only in tests.
+   `code.lehel.xyz` — no mocking in dev/prod, only in tests.

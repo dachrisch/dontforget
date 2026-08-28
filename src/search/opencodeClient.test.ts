@@ -52,7 +52,7 @@ describe('extractDates', () => {
       );
 
     const result = await extractDates(
-      'https://opencode.lehel.xyz',
+      'https://code.lehel.xyz',
       'test-key',
       'Auer Dult Munich',
       [{ title: 'Auer Dult', url: 'https://auerdult.de', content: 'Spring dates' }]
@@ -60,7 +60,7 @@ describe('extractDates', () => {
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
-      'https://opencode.lehel.xyz/api/session',
+      'https://code.lehel.xyz/api/session',
       expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
     // opencode's own default model (picked when none is specified) is an
@@ -71,7 +71,7 @@ describe('extractDates', () => {
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      'https://opencode.lehel.xyz/api/session/ses_123/prompt',
+      'https://code.lehel.xyz/api/session/ses_123/prompt',
       expect.objectContaining({ method: 'POST' })
     );
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
@@ -79,7 +79,7 @@ describe('extractDates', () => {
     expect(promptBody.prompt.text).toMatch(/cadence/);
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      'https://opencode.lehel.xyz/api/session/ses_123/message',
+      'https://code.lehel.xyz/api/session/ses_123/message',
       expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
     expect(result).toEqual({
@@ -107,7 +107,7 @@ describe('extractDates', () => {
       );
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'Auer Dult Munich', [
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'Auer Dult Munich', [
       { title: 'Jakobidult', url: 'https://muenchen.de', content: 'Summer dates' },
     ]);
     await vi.advanceTimersByTimeAsync(1000);
@@ -153,13 +153,13 @@ describe('extractDates', () => {
       );
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
     await vi.runAllTimersAsync();
     const result = await promise;
 
     vi.useRealTimers();
     expect(fetchMock).toHaveBeenCalledTimes(6);
-    expect(fetchMock).toHaveBeenNthCalledWith(4, 'https://opencode.lehel.xyz/api/session', expect.anything());
+    expect(fetchMock).toHaveBeenNthCalledWith(4, 'https://code.lehel.xyz/api/session', expect.anything());
     expect(result).toEqual({
       events: [
         { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-04-11', sourceUrl: 'https://auerdult.de' },
@@ -178,7 +178,7 @@ describe('extractDates', () => {
         )
       );
 
-    const result = await extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const result = await extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
     expect(result).toEqual({
       events: [{ label: 'Mystery Fest', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'https://a.example' }],
       cadence: null,
@@ -198,7 +198,7 @@ describe('extractDates', () => {
       .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
 
     await vi.advanceTimersByTimeAsync(999);
     expect(fetchMock).toHaveBeenCalledTimes(3); // still waiting out attempt 1's 1s backoff
@@ -230,7 +230,7 @@ describe('extractDates', () => {
       .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
     await vi.runAllTimersAsync();
     const result = await promise;
 
@@ -251,7 +251,7 @@ describe('extractDates', () => {
     }
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', []);
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
     const assertion = expect(promise).rejects.toThrow('Endpoint is unavailable');
     await vi.runAllTimersAsync();
     await assertion;
@@ -277,7 +277,7 @@ describe('extractDates', () => {
       .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
     vi.useFakeTimers();
 
-    const promise = extractDates('https://opencode.lehel.xyz', 'test-key', 'query', [], { models, metrics });
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', [], { models, metrics });
     await vi.runAllTimersAsync();
     await promise;
     vi.useRealTimers();

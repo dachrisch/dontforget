@@ -35,11 +35,11 @@ export DATABASE_URL="mongodb://<IP-printed-above>:27019/dontforget"
 export PUBLIC_BASE_URL="http://localhost:3000"
 export SEARXNG_BASE_URL="https://search.lehel.xyz"
 export SEARXNG_TOKEN="<container repo's ansible/plays/vars/secrets.yml, vault_searxng_brave_token>"
-export OPENCODE_BASE_URL="https://opencode.lehel.xyz"
+export OPENCODE_BASE_URL="https://code.lehel.xyz"
 export OPENCODE_API_KEY="<container repo's ansible/plays/vars/secrets.yml, opencode.api_key>"
 ```
 
-Both `SEARXNG_TOKEN` and `OPENCODE_API_KEY` are required to run a query end-to-end (searches call the real `search.lehel.xyz` and `opencode.lehel.xyz` — nothing is mocked outside tests). Without them, sign-in and the empty workspace still work; submitting a query will fail (or worse, silently return zero candidates — see Common Mistakes). Both values live in the `container` repo's `ansible/plays/vars/secrets.yml` (git-crypt encrypted, but plaintext on disk once unlocked).
+Both `SEARXNG_TOKEN` and `OPENCODE_API_KEY` are required to run a query end-to-end (searches call the real `search.lehel.xyz` and `code.lehel.xyz` — nothing is mocked outside tests). Without them, sign-in and the empty workspace still work; submitting a query will fail (or worse, silently return zero candidates — see Common Mistakes). Both values live in the `container` repo's `ansible/plays/vars/secrets.yml` (git-crypt encrypted, but plaintext on disk once unlocked).
 
 Leave `SMTP_HOST` unset — see step 4.
 
@@ -86,7 +86,7 @@ Vite prints its own URL (typically `http://localhost:5173`) — open that, not p
 export DATABASE_URL="mongodb://$(lxc list servyy-test --format json | jq -r '.[0].state.network.eth0.addresses[] | select(.family=="inet") | .address' | head -n 1):27019/dontforget"
 export PUBLIC_BASE_URL="http://localhost:3000"
 export SEARXNG_BASE_URL="https://search.lehel.xyz"
-export OPENCODE_BASE_URL="https://opencode.lehel.xyz"
+export OPENCODE_BASE_URL="https://code.lehel.xyz"
 export OPENCODE_API_KEY="<real key>"
 
 npm ci && cd web && npm ci && cd ..

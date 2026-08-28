@@ -6,7 +6,7 @@ import type { MetricsService } from './metrics.js';
 // servyy-test's opencode instance is only reachable at an internal-only
 // `.lxd` hostname (Traefik's Let's Encrypt resolver can't issue a real cert
 // for a private domain, so it falls back to self-signed there). Production
-// (opencode.lehel.xyz) always has a real cert and must never skip
+// (code.lehel.xyz) always has a real cert and must never skip
 // verification — this is opt-in per-deployment via an env var set only in
 // the servyy-test Ansible template, not a blanket NODE_TLS_REJECT_UNAUTHORIZED
 // toggle that would also weaken unrelated TLS connections (Mongo, SMTP...).
@@ -21,7 +21,7 @@ import type { MetricsService } from './metrics.js';
 const insecureDispatcher =
   process.env.OPENCODE_ALLOW_INSECURE_TLS === 'true' ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
 
-// Contract confirmed live against opencode.lehel.xyz on 2026-08-09 — the
+// Contract confirmed live against code.lehel.xyz on 2026-08-09 — the
 // plan's original guess (single POST .../message returning parts[] inline)
 // was wrong on every point. The real shape:
 //   POST /api/session            -> {"data": {"id": "ses_...", ...}}
@@ -134,7 +134,7 @@ function classifyError(err: unknown): string {
 // fix). Pin a specific model explicitly instead of relying on whatever
 // opencode defaults to.
 //
-// Model choice is driven by a live perf test against opencode.lehel.xyz
+// Model choice is driven by a live perf test against code.lehel.xyz
 // (2026-08-21, full 11.4KB extraction prompt, 3 rounds each): mimo-v2.5-free
 // was the fastest responsive free model (median 22.3s), big-pickle second
 // (28.5s). deepseek-v4-flash-free was retired from the opencode catalog —
