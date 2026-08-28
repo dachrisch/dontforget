@@ -47,7 +47,7 @@ jobs:
       env_vars: >-
         -e NODE_ENV=production
         -e DATABASE_URL=mongodb://host.docker.internal:27017/dontforget-image-test
-        -e SEARXNG_BASE_URL=https://search.lehel.xyz
+        -e SEARXNG_BASE_URL=https://ci-dummy.invalid
         -e SEARXNG_TOKEN=ci-dummy
-        -e OPENCODE_BASE_URL=https://code.lehel.xyz
+        -e OPENCODE_BASE_URL=https://ci-dummy.invalid
         -e OPENCODE_API_KEY=ci-dummy
