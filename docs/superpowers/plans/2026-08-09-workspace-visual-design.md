@@ -1053,7 +1053,7 @@ export DATABASE_URL="mongodb://<IP-from-step-1>:27019/dontforget"
 export PUBLIC_BASE_URL="http://localhost:3000"
 export SEARXNG_BASE_URL="https://search.lehel.xyz"
 export SEARXNG_TOKEN="<from container repo's ansible/plays/vars/secrets.yml, vault_searxng_brave_token>"
-export OPENCODE_BASE_URL="https://opencode.lehel.xyz"
+export OPENCODE_BASE_URL="https://code.lehel.xyz"
 export OPENCODE_API_KEY="<from container repo's ansible/plays/vars/secrets.yml, opencode.api_key>"
 npm run dev
 ```

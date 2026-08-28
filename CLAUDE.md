@@ -19,7 +19,7 @@ Both already deployed in the `servyy-container` infra repo (sibling repo,
 not a dependency of this codebase at build time):
 
 - **searxng** — `https://search.lehel.xyz` — web search
-- **opencode** — `https://opencode.lehel.xyz` — session-scoped date
+- **opencode** — `https://code.lehel.xyz` — session-scoped date
   extraction only, via the `X-Api-Key` ForwardAuth gate (infra repo:
   `history/2026-08-08_opencode-api-key-forwardauth.md`). Never given
   autonomous search access — see design doc §4 for why.

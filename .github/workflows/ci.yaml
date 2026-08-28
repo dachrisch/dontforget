@@ -46,7 +46,7 @@ jobs:
         -e DATABASE_URL=mongodb://host.docker.internal:27017/dontforget-image-test
         -e SEARXNG_BASE_URL=https://search.lehel.xyz
         -e SEARXNG_TOKEN=ci-dummy
-        -e OPENCODE_BASE_URL=https://opencode.lehel.xyz
+        -e OPENCODE_BASE_URL=https://code.lehel.xyz
         -e OPENCODE_API_KEY=ci-dummy
 
   image-push:
