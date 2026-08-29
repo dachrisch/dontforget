@@ -23,8 +23,8 @@ describe('model registry', () => {
     const registry = createModelRegistry({ db });
     const active = await registry.listActive();
     expect(active).toEqual([
-      { id: 'mimo-v2.5-free', providerID: 'opencode' },
-      { id: 'big-pickle', providerID: 'opencode' },
+      { id: 'qwen3.7-flash', providerID: 'bailian-payg' },
+      { id: 'antigravity-gemini-3-flash', providerID: 'google' },
     ]);
   });
 
@@ -32,20 +32,20 @@ describe('model registry', () => {
     const registry = createModelRegistry({ db });
     // Promote the backup to default; the old default becomes a backup via
     // the update below (it keeps its role unless cleared).
-    await registry.update('big-pickle', { role: 'default' });
-    await registry.update('mimo-v2.5-free', { role: 'backup' });
+    await registry.update('antigravity-gemini-3-flash', { role: 'default' });
+    await registry.update('qwen3.7-flash', { role: 'backup' });
     await registry.add({ id: 'tertiary', providerID: 'opencode' });
 
     const active = await registry.listActive();
-    expect(active.map(m => m.id)).toEqual(['big-pickle', 'mimo-v2.5-free', 'tertiary']);
+    expect(active.map(m => m.id)).toEqual(['antigravity-gemini-3-flash', 'qwen3.7-flash', 'tertiary']);
   });
 
   it('excludes retired models from the active list', async () => {
     const registry = createModelRegistry({ db });
-    await registry.update('mimo-v2.5-free', { enabled: false });
+    await registry.update('qwen3.7-flash', { enabled: false });
 
     const active = await registry.listActive();
-    expect(active).toEqual([{ id: 'big-pickle', providerID: 'opencode' }]);
+    expect(active).toEqual([{ id: 'antigravity-gemini-3-flash', providerID: 'google' }]);
   });
 
   it('rejects adding a duplicate model id', async () => {

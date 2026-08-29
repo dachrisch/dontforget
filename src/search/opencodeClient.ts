@@ -128,24 +128,23 @@ function classifyError(err: unknown): string {
   return 'other';
 }
 
-// Left unspecified, opencode picks its own default model — confirmed live
-// 2026-08-10 to be "ling-3.0-tiny-free", which was persistently failing
-// with 503 "Endpoint is unavailable" (not the transient kind retries can
-// fix). Pin a specific model explicitly instead of relying on whatever
-// opencode defaults to.
+// opencode's model catalog changed (2026-08-29): the free models
+// mimo-v2.5-free and big-pickle were removed entirely, and the providers
+// were renamed — the Qwen models now live under "bailian-payg" (Alibaba
+// DashScope, pay-as-you-go) and the Anthropic/Gemini models under "google"
+// (Antigravity). Pin explicit model ids that still exist; relying on
+// opencode's own default ("ling-3.0-tiny-free" historically) is unreliable.
 //
-// Model choice is driven by a live perf test against code.lehel.xyz
-// (2026-08-21, full 11.4KB extraction prompt, 3 rounds each): mimo-v2.5-free
-// was the fastest responsive free model (median 22.3s), big-pickle second
-// (28.5s). deepseek-v4-flash-free was retired from the opencode catalog —
-// it used to take 76s+ of reasoning and was the reason responses stalled.
-const MODEL = { id: 'mimo-v2.5-free', providerID: 'opencode' };
+// Primary is the fastest responsive model available; the fallback is on a
+// different provider so a provider-side outage/rate limit on the primary
+// fails over rather than giving up. Both verified present in the
+// code.lehel.xyz catalog as of 2026-08-29.
+const MODEL = { id: 'qwen3.7-flash', providerID: 'bailian-payg' };
 
 // Backup model tried only after MODEL exhausts every attempt above — a
-// distinct free model on the same "opencode" (OpenCode Zen) provider.
-// Rate limits and outages on MODEL are provider-side per-model, so a
-// different model is likely unaffected even when MODEL itself is down.
-const FALLBACK_MODEL = { id: 'big-pickle', providerID: 'opencode' };
+// distinct model on a different provider (google/Antigravity) so a
+// bailian-payg outage or rate limit doesn't take extraction down.
+const FALLBACK_MODEL = { id: 'antigravity-gemini-3-flash', providerID: 'google' };
 
 const MODEL_TIERS = [MODEL, FALLBACK_MODEL];
 

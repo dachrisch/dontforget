@@ -61,14 +61,15 @@ export function createNoopModelRegistry(): ModelRegistry {
   };
 }
 
-// Defaults mirror the hard-coded tiers in opencodeClient.ts — the fastest
-// verified-working free model (mimo-v2.5-free, measured 22.3s median on a
-// full extraction prompt, 2026-08-21) plus a distinct free backup. Seeded
-// only when the registry is empty so an existing deployment keeps its
-// current choices.
+// Defaults mirror the hard-coded tiers in opencodeClient.ts. As of
+// 2026-08-29 opencode's free models were retired and the catalog now exposes
+// "bailian-payg" (Qwen, pay-as-you-go) and "google" (Antigravity) models;
+// these are the verified-working picks. Seeded only when the registry is
+// empty so an existing deployment keeps its current choices (and is migrated
+// to these by 005_swap_dead_models).
 const DEFAULT_MODELS: Array<{ id: string; providerID: string; role: ModelRole }> = [
-  { id: 'mimo-v2.5-free', providerID: 'opencode', role: 'default' },
-  { id: 'big-pickle', providerID: 'opencode', role: 'backup' },
+  { id: 'qwen3.7-flash', providerID: 'bailian-payg', role: 'default' },
+  { id: 'antigravity-gemini-3-flash', providerID: 'google', role: 'backup' },
 ];
 
 export function createModelRegistry(deps: ModelRegistryDeps): ModelRegistry {

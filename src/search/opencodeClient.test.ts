@@ -63,11 +63,10 @@ describe('extractDates', () => {
       'https://code.lehel.xyz/api/session',
       expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
-    // opencode's own default model (picked when none is specified) is an
-    // unreliable free tier prone to persistent 503s — confirmed live
-    // 2026-08-10. Pin a specific, verified-working model explicitly.
+    // Pin a specific, still-listed model (qwen3.7-flash on bailian-payg)
+    // rather than relying on whatever opencode defaults to.
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      model: { id: 'mimo-v2.5-free', providerID: 'opencode' },
+      model: { id: 'qwen3.7-flash', providerID: 'bailian-payg' },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
@@ -237,7 +236,7 @@ describe('extractDates', () => {
     vi.useRealTimers();
     expect(fetchMock).toHaveBeenCalledTimes(12);
     expect(JSON.parse(fetchMock.mock.calls[9][1].body)).toEqual({
-      model: { id: 'big-pickle', providerID: 'opencode' },
+      model: { id: 'antigravity-gemini-3-flash', providerID: 'google' },
     });
     expect(result).toEqual({ events: [], cadence: null });
   });
