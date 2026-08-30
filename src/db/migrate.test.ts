@@ -26,6 +26,7 @@ describe('runMigrations', () => {
       '002_queries_dashboard.ts',
       '003_events_dedup_index.ts',
       '004_models_metrics.ts',
+      '005_swap_dead_models.ts',
     ]);
 
     const collections = await db.listCollections().toArray();

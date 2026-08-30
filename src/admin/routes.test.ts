@@ -191,8 +191,8 @@ describe('admin routes', () => {
     expect(response.statusCode).toBe(200);
     const models = response.json();
     expect(models).toHaveLength(2);
-    expect(models[0]).toMatchObject({ id: 'mimo-v2.5-free', role: 'default', enabled: true });
-    expect(models[1]).toMatchObject({ id: 'big-pickle', role: 'backup', enabled: true });
+    expect(models[0]).toMatchObject({ id: 'qwen3.7-flash', role: 'default', enabled: true });
+    expect(models[1]).toMatchObject({ id: 'antigravity-gemini-3-flash', role: 'backup', enabled: true });
     expect(models[0].calls).toBe(0);
     expect(models[0].successRate).toBeNull();
   });
@@ -204,28 +204,28 @@ describe('admin routes', () => {
     // Promote the backup to default, then retire the old default.
     const promote = await app.inject({
       method: 'PATCH',
-      url: '/api/admin/models/big-pickle',
+      url: '/api/admin/models/antigravity-gemini-3-flash',
       headers: authHeaders(sessionId),
       payload: { role: 'default' },
     });
     expect(promote.statusCode).toBe(200);
-    expect(promote.json()).toMatchObject({ id: 'big-pickle', role: 'default' });
+    expect(promote.json()).toMatchObject({ id: 'antigravity-gemini-3-flash', role: 'default' });
 
     const retire = await app.inject({
       method: 'PATCH',
-      url: '/api/admin/models/mimo-v2.5-free',
+      url: '/api/admin/models/qwen3.7-flash',
       headers: authHeaders(sessionId),
       payload: { enabled: false },
     });
     expect(retire.statusCode).toBe(200);
-    expect(retire.json()).toMatchObject({ id: 'mimo-v2.5-free', enabled: false });
+    expect(retire.json()).toMatchObject({ id: 'qwen3.7-flash', enabled: false });
 
     const models = (await app.inject({
       method: 'GET',
       url: '/api/admin/models',
       headers: authHeaders(sessionId),
     })).json();
-    const defaultModel = models.find((m: { id: string }) => m.id === 'big-pickle');
+    const defaultModel = models.find((m: { id: string }) => m.id === 'antigravity-gemini-3-flash');
     expect(defaultModel.role).toBe('default');
   });
 
