@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.2](https://github.com/dachrisch/dontforget/compare/v0.20.1...v0.20.2) (2026-08-30)
+
+
+### Bug Fixes
+
+* **deps:** update dependency tsx to v4.23.13 ([#144](https://github.com/dachrisch/dontforget/issues/144)) ([3b4c6c3](https://github.com/dachrisch/dontforget/commit/3b4c6c3e2171208a49a2991dca386e74af64d9a5))
+
 ## [0.20.1](https://github.com/dachrisch/dontforget/compare/v0.20.0...v0.20.1) (2026-08-27)
 
 
