@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.3](https://github.com/dachrisch/dontforget/compare/v0.20.2...v0.20.3) (2026-08-30)
+
+
+### Bug Fixes
+
+* repoint opencode models after catalog retirement ([356838e](https://github.com/dachrisch/dontforget/commit/356838e83b5a16a7a6633e6d6bfbc62eacf87100))
+
 ## [0.20.2](https://github.com/dachrisch/dontforget/compare/v0.20.1...v0.20.2) (2026-08-30)
 
 
