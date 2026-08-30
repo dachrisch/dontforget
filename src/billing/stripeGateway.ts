@@ -25,6 +25,7 @@ export interface BillingGateway {
   createCheckoutSession(params: CheckoutParams): Promise<{ url: string }>;
   createPortalSession(params: PortalParams): Promise<{ url: string }>;
   updateSubscriptionQuantity(params: QuantityUpdateParams): Promise<void>;
+  getSubscriptionQuantity(subscriptionId: string): Promise<number>;
   verifyWebhookSignature(params: { payload: string; signature: string; secret: string }): Promise<Stripe.Event>;
 }
 
@@ -67,6 +68,13 @@ export class StripeBillingGateway implements BillingGateway {
     await this.stripe.subscriptionItems.update(item.id, { quantity: params.quantity });
   }
 
+  async getSubscriptionQuantity(subscriptionId: string): Promise<number> {
+    const subscription = await this.stripe.subscriptions.retrieve(subscriptionId);
+    const item = subscription.items.data[0];
+    if (!item) throw new Error('subscription has no items');
+    return item.quantity ?? 1;
+  }
+
   async verifyWebhookSignature(params: { payload: string; signature: string; secret: string }): Promise<Stripe.Event> {
     return this.stripe.webhooks.constructEvent(params.payload, params.signature, params.secret);
   }
@@ -82,6 +90,7 @@ export class NullBillingGateway implements BillingGateway {
   createCheckoutSession(): Promise<{ url: string }> { return Promise.resolve(this.unavailable()); }
   createPortalSession(): Promise<{ url: string }> { return Promise.resolve(this.unavailable()); }
   updateSubscriptionQuantity(): Promise<void> { return Promise.resolve(this.unavailable()); }
+  getSubscriptionQuantity(): Promise<number> { return Promise.resolve(this.unavailable()); }
   verifyWebhookSignature(): Promise<Stripe.Event> { return Promise.resolve(this.unavailable()); }
 }
 
@@ -91,6 +100,8 @@ export class FakeBillingGateway implements BillingGateway {
   public checkoutCalls: CheckoutParams[] = [];
   public portalCalls: PortalParams[] = [];
   public quantityUpdates: QuantityUpdateParams[] = [];
+  public subscriptionQuantities: Record<string, number> = {};
+  public subscriptionQuantityErrors: Record<string, Error> = {};
   public createdCustomers: string[] = [];
   public customerId = 'cus_test';
   public checkoutUrl = 'https://checkout.stripe.test/session';
@@ -115,6 +126,12 @@ export class FakeBillingGateway implements BillingGateway {
 
   async updateSubscriptionQuantity(params: QuantityUpdateParams): Promise<void> {
     this.quantityUpdates.push(params);
+  }
+
+  async getSubscriptionQuantity(subscriptionId: string): Promise<number> {
+    const error = this.subscriptionQuantityErrors[subscriptionId];
+    if (error) throw error;
+    return this.subscriptionQuantities[subscriptionId] ?? 1;
   }
 
   async verifyWebhookSignature(): Promise<Stripe.Event> {

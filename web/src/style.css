@@ -747,6 +747,18 @@ h1, h2 {
   margin: 0;
 }
 
+/* A blocked query (created at capacity, never ran) reads as needing
+   attention, same treatment as a failed run. */
+.query-card-blocked {
+  border-color: var(--accent);
+}
+
+/* A paused query is still fully present, just not currently running —
+   muted rather than flagged. */
+.query-card-paused {
+  opacity: 0.7;
+}
+
 .query-card-status {
   display: flex;
   align-items: center;
@@ -765,6 +777,12 @@ h1, h2 {
 }
 
 .edit-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.billing-actions {
   display: flex;
   gap: 0.75rem;
   margin-top: 0.5rem;
@@ -795,75 +813,3 @@ h1, h2 {
   gap: 1.25rem;
 }
 
-.google-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.45);
-}
-
-.google-modal {
-  width: 100%;
-  max-width: 420px;
-  max-height: 90vh;
-  overflow-y: auto;
-  background: var(--paper);
-  color: var(--ink);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  padding: 1.25rem 1.5rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-  outline: none;
-}
-
-.google-modal-head {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.75rem;
-}
-
-.google-modal-title {
-  flex: 1;
-  font-size: 1.1rem;
-  margin: 0;
-}
-
-.google-modal-close {
-  background: none;
-  border: none;
-  padding: 0 0.25rem;
-  color: var(--ink-muted);
-  font-size: 1.4rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.google-modal-close:hover {
-  color: var(--accent);
-}
-
-.google-modal-steps {
-  margin: 0.75rem 0 1.25rem;
-  padding-left: 1.25rem;
-  display: grid;
-  gap: 0.4rem;
-  font-size: 0.9rem;
-}
-
-.google-modal-url {
-  margin: 0.75rem 0 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.75rem;
-  color: var(--ink-muted);
-  overflow-wrap: anywhere;
-}
-
-.google-modal-copy-hint {
-  margin: 0.5rem 0 0;
-  font-size: 0.8rem;
-}

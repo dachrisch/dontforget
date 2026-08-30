@@ -11,6 +11,8 @@ export interface WorkspaceHandlers {
   onCancelEdit: () => void;
   onSaveEdit: (queryId: string, patch: { text: string; recurrenceInterval: RecurrenceInterval }) => void;
   onDeleteQuery: (queryId: string) => void;
+  onDeactivateQuery: (queryId: string) => void;
+  onReactivateQuery: (queryId: string) => void;
   onRotateFeedToken: () => void;
   onSignOut: () => void;
   onDeleteAccount: () => void;
@@ -22,10 +24,11 @@ export interface WorkspaceHandlers {
   onRetrySearch: (queryId: string) => void;
   onCloseAdmin: () => void;
   onDeleteAdminUser: (userId: string) => void;
+  onUpgrade: (quantity: number) => void;
+  onManageBilling: () => void;
+  onBuyMoreSlots: (count: number) => void;
   onSetAdminModel: (id: string, patch: { enabled?: boolean; role?: 'default' | 'backup' | null }) => void;
   onAddAdminModel: (id: string, providerID: string) => void;
-  onUpgrade: () => void;
-  onManageBilling: () => void;
 }
 
 const lastRenderedKind = new WeakMap<HTMLElement, WorkspaceState['kind']>();
@@ -185,13 +188,6 @@ function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string 
       ${CALENDAR_PROVIDERS.map(provider => {
         const name = t(provider.labelKey);
         const labelText = t('calendarAdd.aria', { name });
-        if (provider.kind === 'modal') {
-          return `
-          <button type="button" class="feed-add-button" data-action="add-google-calendar" data-ics-url="${escapeHtml(url)}" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
-            <img class="feed-add-brand" src="${provider.icon}" alt="" aria-hidden="true" />
-            ${escapeHtml(name)}
-          </button>`;
-        }
         return `
         <a class="feed-add-button" href="${escapeHtml(provider.href(url))}" target="_blank" rel="noopener" title="${escapeHtml(labelText)}" aria-label="${escapeHtml(labelText)}">
           <img class="feed-add-brand" src="${provider.icon}" alt="" aria-hidden="true" />
@@ -218,13 +214,18 @@ function renderFeedRow(label: string, url: string, kind: 'ics' | 'rss'): string 
 
 function renderBillingRow(billing: BillingStatus | null, handlers: WorkspaceHandlers): string {
   if (!billing) return '';
+  const usage = t('billing.usage', { used: billing.activeQueryCount, purchased: billing.purchasedSlots });
+  const perQuery = t('billing.perQuery', { price: billing.pricePerExtraQuery });
   if (billing.subscribed) {
-    return `<p class="subtext">${t('billing.subscribed', { count: billing.activeQueryCount })}</p>
-      <button type="button" class="stamp-button stamp-button-quiet" data-action="manage-billing">${t('billing.manage')}</button>`;
+    return `
+      <p class="subtext">${usage} · ${perQuery}</p>
+      <div class="billing-actions">
+        <button type="button" class="stamp-button stamp-button-quiet" data-action="manage-billing">${t('billing.manage')}</button>
+        <button type="button" class="stamp-button" data-action="buy-more">${t('billing.buyMore')}</button>
+      </div>`;
   }
-  return `<p class="subtext">${t('billing.freeLimit', {
-    count: billing.freeLimit - billing.activeQueryCount,
-  })} · ${t('billing.perQuery', { price: billing.pricePerExtraQuery })}</p>
+  return `
+    <p class="subtext">${usage} · ${perQuery}</p>
     <button type="button" class="stamp-button stamp-button-quiet" data-action="upgrade">${t('billing.upgrade')}</button>`;
 }
 
@@ -241,32 +242,28 @@ function webcalUrl(url: string): string {
   return url.replace(/^https?:\/\//i, 'webcal://');
 }
 
+// Google's "add calendar" flow accepts the subscription URL in `cid`.
+function googleCalendarUrl(icsUrl: string): string {
+  return `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcalUrl(icsUrl))}`;
+}
+
 // Outlook's add-from-web page subscribes to the URL in `url`. `.live.com`
 // covers personal accounts; `outlook.office.com` is for work/school.
 function outlookCalendarUrl(icsUrl: string): string {
   return `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent(webcalUrl(icsUrl))}`;
 }
 
-// Google Calendar's manual "Add from URL" page — the only supported way to
-// subscribe to an external ICS feed there. The Calendar API has no subscribe
-// method, and the `cid=` deeplink has proven unreliable (see
-// .claude/skills/google-calendar-check.md). Its "From URL" field only accepts
-// http/https, so the user pastes the plain feed URL, not the webcal alias.
-const GOOGLE_ADD_BY_URL = 'https://calendar.google.com/calendar/r/settings/addbyurl';
-
 // Apple Calendar has no deep link to subscribe programmatically — pointing
 // at the `webcal://` URL opens its "Add subscription" confirmation, so that
-// URL is used verbatim. Google Calendar gets no deeplink at all: its button
-// opens a modal that walks the user through the manual add-by-URL flow
-// instead.
-type CalendarProvider =
-  | { icon: string; labelKey: MessageKey; kind: 'link'; href: (url: string) => string }
-  | { icon: string; labelKey: MessageKey; kind: 'modal' };
-
-const CALENDAR_PROVIDERS: CalendarProvider[] = [
-  { icon: '/icons/google-calendar.svg', labelKey: 'calendarAdd.google', kind: 'modal' },
-  { icon: '/icons/apple-calendar.svg', labelKey: 'calendarAdd.apple', kind: 'link', href: webcalUrl },
-  { icon: '/icons/outlook.svg', labelKey: 'calendarAdd.outlook', kind: 'link', href: outlookCalendarUrl },
+// URL is used verbatim.
+const CALENDAR_PROVIDERS: Array<{
+  icon: string;
+  labelKey: MessageKey;
+  href: (url: string) => string;
+}> = [
+  { icon: '/icons/google-calendar.svg', labelKey: 'calendarAdd.google', href: googleCalendarUrl },
+  { icon: '/icons/apple-calendar.svg', labelKey: 'calendarAdd.apple', href: webcalUrl },
+  { icon: '/icons/outlook.svg', labelKey: 'calendarAdd.outlook', href: outlookCalendarUrl },
 ];
 
 function wireCopyButtons(root: HTMLElement): void {
@@ -287,95 +284,6 @@ function wireCopyButtons(root: HTMLElement): void {
       }
     });
   });
-}
-
-// Google is the one calendar app with no one-click subscribe. The modal
-// guides the user through the manual "Add from URL" flow: copy the feed URL,
-// open Google's add-by-URL page, paste. Copy and open are separate steps —
-// the copy may surface a browser permission prompt, which would be lost if
-// the tab opened first.
-function openGoogleCalendarModal(icsUrl: string): void {
-  const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
-  const overlay = document.createElement('div');
-  overlay.className = 'google-modal-overlay';
-
-  const dialog = document.createElement('div');
-  dialog.className = 'google-modal';
-  dialog.setAttribute('role', 'dialog');
-  dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-labelledby', 'google-modal-title');
-  dialog.tabIndex = -1;
-  dialog.innerHTML = `
-    <div class="google-modal-head">
-      <img class="feed-add-brand" src="/icons/google-calendar.svg" alt="" aria-hidden="true" />
-      <h2 class="google-modal-title" id="google-modal-title">${t('googleModal.title')}</h2>
-      <button type="button" class="google-modal-close" aria-label="${t('googleModal.close')}">×</button>
-    </div>
-    <p class="subtext">${t('googleModal.intro')}</p>
-    <ol class="google-modal-steps">
-      <li>${t('googleModal.step1')}</li>
-      <li>${t('googleModal.step2')}</li>
-      <li>${t('googleModal.step3')}</li>
-    </ol>
-    <div class="edit-actions">
-      <button type="button" class="stamp-button" data-action="google-copy">${t('googleModal.copy')}</button>
-      <button type="button" class="stamp-button" data-action="google-open" disabled>${t('googleModal.open')}</button>
-      <button type="button" class="stamp-button stamp-button-quiet" data-action="google-done">${t('googleModal.done')}</button>
-    </div>
-    <p class="subtext google-modal-copy-hint" hidden>${t('googleModal.copyHint')}</p>
-    <p class="google-modal-url">${escapeHtml(icsUrl)}</p>
-  `;
-  overlay.appendChild(dialog);
-
-  function close(): void {
-    overlay.remove();
-    document.removeEventListener('keydown', onKeyDown);
-    trigger?.focus();
-  }
-
-  function onKeyDown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') close();
-  }
-
-  const copyButton = dialog.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
-  const openButton = dialog.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-  const copyHint = dialog.querySelector<HTMLElement>('.google-modal-copy-hint')!;
-
-  // Copy and open are deliberately separate steps: the copy can trigger a
-  // browser permission prompt, and the user needs to stay on this page to
-  // answer it — opening the tab first would hide it. The open button stays
-  // disabled until a copy attempt has happened (success or not), so it is
-  // always a fresh user gesture that can't be popup-blocked.
-  copyButton.addEventListener('click', async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(icsUrl);
-        copyButton.textContent = t('googleModal.copied');
-      } else {
-        copyHint.hidden = false;
-      }
-    } catch {
-      copyHint.hidden = false;
-    }
-    openButton.disabled = false;
-    openButton.focus();
-  });
-
-  openButton.addEventListener('click', () => {
-    window.open(GOOGLE_ADD_BY_URL, '_blank', 'noopener');
-  });
-
-  dialog.querySelector<HTMLButtonElement>('.google-modal-close')!.addEventListener('click', close);
-  dialog.querySelector<HTMLButtonElement>('[data-action=google-done]')!.addEventListener('click', close);
-
-  overlay.addEventListener('click', event => {
-    if (event.target === overlay) close();
-  });
-  document.addEventListener('keydown', onKeyDown);
-
-  document.body.appendChild(overlay);
-  dialog.focus();
 }
 
 const INTERVAL_LABEL_KEYS: Record<RecurrenceInterval, MessageKey> = {
@@ -466,13 +374,6 @@ function renderDashboard(
   });
   wireCopyButtons(wrapper);
 
-  wrapper.querySelectorAll<HTMLButtonElement>('button[data-action=add-google-calendar]').forEach(button => {
-    button.addEventListener('click', () => {
-      const icsUrl = button.dataset.icsUrl;
-      if (icsUrl) openGoogleCalendarModal(icsUrl);
-    });
-  });
-
   wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=edit]').forEach(button => {
     button.addEventListener('click', () => {
       handlers.onStartEdit(button.closest<HTMLElement>('.query-card')!.dataset.id!);
@@ -502,6 +403,32 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=pause]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onDeactivateQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=resume]').forEach(button => {
+    button.addEventListener('click', () => {
+      handlers.onReactivateQuery(button.closest<HTMLElement>('.query-card')!.dataset.id!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=buy-credits]').forEach(button => {
+    button.addEventListener('click', () => {
+      // A subscribed user hitting capacity needs a slot added to their
+      // existing subscription, never a second one — same branch
+      // renderBillingRow already makes for the manage/buy-more vs. upgrade
+      // actions below.
+      if (billing?.subscribed) {
+        handlers.onBuyMoreSlots(1);
+      } else {
+        handlers.onUpgrade(1);
+      }
+    });
+  });
+
   wrapper.querySelectorAll<HTMLButtonElement>('.feed-summary button[data-action=rotate-feed]').forEach(button => {
     button.addEventListener('click', () => {
       if (button.dataset.confirmed !== 'true') {
@@ -528,7 +455,11 @@ function renderDashboard(
   });
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=upgrade]')?.addEventListener('click', () => {
-    handlers.onUpgrade();
+    handlers.onUpgrade(1);
+  });
+
+  wrapper.querySelector<HTMLButtonElement>('button[data-action=buy-more]')?.addEventListener('click', () => {
+    handlers.onBuyMoreSlots(1);
   });
 
   wrapper.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')?.addEventListener('click', () => {
@@ -801,6 +732,25 @@ function renderQueryCard(query: QuerySummary): string {
     `;
   }
 
+  if (query.status === 'blocked') {
+    return `
+      <article class="query-card query-card-blocked" data-id="${query.id}">
+        <div class="query-card-head">
+          <span class="query-card-text">${escapeHtml(query.text)}</span>
+          <div class="query-card-actions">
+            <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
+            <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
+          </div>
+        </div>
+        <p class="subtext">${t('queryCard.blocked')}</p>
+        <div class="edit-actions">
+          <button class="stamp-button stamp-button-quiet" type="button" data-action="retry">${t('queryCard.retry')}</button>
+          <button class="stamp-button" type="button" data-action="buy-credits">${t('queryCard.buyCredits')}</button>
+        </div>
+      </article>
+    `;
+  }
+
   if (query.status === 'failed') {
     return `
       <article class="query-card query-card-failed" data-id="${query.id}">
@@ -823,16 +773,21 @@ function renderQueryCard(query: QuerySummary): string {
   const reviewAction = query.candidateCount > 0
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
+  const pauseResumeAction = query.active
+    ? `<button type="button" class="link-button" data-action="pause">${t('queryCard.pause')}</button>`
+    : `<button type="button" class="link-button" data-action="resume">${t('queryCard.resume')}</button>`;
   return `
-    <article class="query-card" data-id="${query.id}">
+    <article class="query-card ${query.active ? '' : 'query-card-paused'}" data-id="${query.id}">
       <div class="query-card-head">
         <span class="query-card-text">${escapeHtml(query.text)}</span>
         <div class="query-card-actions">
           ${reviewAction}
+          ${pauseResumeAction}
           <button type="button" class="link-button" data-action="edit">${t('queryCard.edit')}</button>
           <button type="button" class="link-button link-button-danger" data-action="delete">${t('queryCard.delete')}</button>
         </div>
       </div>
+      ${!query.active ? `<p class="subtext">${t('queryCard.paused')}</p>` : ''}
       <div class="ledger-row">
         <span class="ledger-label">${t('queryCard.reruns')}</span>
         <span class="ledger-value">${intervalLabel(query.recurrenceInterval)}</span>

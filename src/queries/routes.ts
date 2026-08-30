@@ -1,6 +1,7 @@
 import type { FastifyInstance, preHandlerHookHandler } from 'fastify';
 import { ObjectId, type Db } from 'mongodb';
 import {
+  claimSlotForQuery,
   createQuery,
   deleteQuery,
   getQueryEvents,
@@ -18,7 +19,7 @@ import {
   type ExtractionResult,
   type QueryStatus,
 } from '../types.js';
-import { isOverFreeLimit, isSubscribed, type BillingService } from '../billing/billingService.js';
+import { hasFreeSlot, type BillingService } from '../billing/billingService.js';
 
 export interface QueryRouteDeps {
   db: Db;
@@ -41,23 +42,13 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (interval !== undefined && !isRecurrenceInterval(interval)) {
         return reply.code(400).send({ error: 'invalid recurrenceInterval' });
       }
-      // Hard free-tier gate: a user with no active subscription who already
-      // holds the free quota gets 402 before the query is created (and long
-      // before any search runs), so searxng/opencode is never burned on a
-      // query that cannot be created.
-      const user = await deps.db
-        .collection<{ _id: ObjectId; stripe_subscription_status?: string }>('users')
-        .findOne({ _id: new ObjectId(request.userId!) });
-      if (user && (await isOverFreeLimit(deps.db, request.userId!)) && !isSubscribed(user)) {
-        return reply.code(402).send({ error: 'free query limit reached', checkoutUrl: '/api/billing/checkout' });
+      // Searching is free — the query is always saved. Whether it actually
+      // runs (and occupies a paid slot) depends on capacity right now.
+      const active = await hasFreeSlot(deps.db, request.userId!);
+      const query = await createQuery(deps.db, request.userId!, text, interval ?? DEFAULT_RECURRENCE_INTERVAL, active);
+      if (active) {
+        enqueueSearch(() => runInitialQuery(deps.db, query, { runQuery: deps.runQuery, applyCadence: interval === undefined }));
       }
-      // The search runs in the background (searxng + opencode can take a
-      // minute or more), so the request only creates the query row and
-      // returns. The dashboard shows the running card and picks up the
-      // results on its next poll.
-      const query = await createQuery(deps.db, request.userId!, text, interval ?? DEFAULT_RECURRENCE_INTERVAL);
-      await deps.billingService.syncQuantity(request.userId!);
-      enqueueSearch(() => runInitialQuery(deps.db, query, { runQuery: deps.runQuery, applyCadence: interval === undefined }));
       return reply.code(202).send({ queryId: query.queryId });
     }
   );
@@ -143,7 +134,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       const row = await deps.db
-        .collection<{ _id: ObjectId; user_id: string; query_text: string; status?: QueryStatus }>('queries')
+        .collection<{ _id: ObjectId; user_id: string; query_text: string; status?: QueryStatus; active?: boolean }>('queries')
         .findOne({ _id: queryObjectId, user_id: request.userId! });
       if (!row) {
         return reply.code(403).send({ error: 'not your query' });
@@ -151,11 +142,76 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (row.status === 'running') {
         return reply.code(409).send({ error: 'already running' });
       }
+      // Retry (this route) and reactivate are separate, non-overlapping
+      // operations — retry must never double as resume. A paused ready/
+      // failed query (active === false, status !== 'blocked') has to go
+      // through reactivate first; only a blocked query (which never held a
+      // slot) claims one here.
+      if (row.active === false && row.status !== 'blocked') {
+        return reply.code(409).send({ error: 'query is paused', reason: 'resume this query first' });
+      }
+      if (row.status === 'blocked') {
+        const hasSlot = await hasFreeSlot(deps.db, request.userId!);
+        const claimed = hasSlot && (await claimSlotForQuery(deps.db, request.userId!, row._id));
+        if (!claimed) {
+          return reply.code(409).send({ error: 'no free credits', reason: 'no free credits — buy more or pause another query' });
+        }
+      }
       await deps.db.collection('queries').updateOne({ _id: row._id }, { $set: { status: 'running' as const } });
       enqueueSearch(() =>
         runInitialQuery(deps.db, { _id: row._id, query_text: row.query_text }, { runQuery: deps.runQuery, applyCadence: false })
       );
       return reply.code(202).send({ queryId: row._id.toString() });
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/queries/:id/deactivate',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+      if (!queryObjectId) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      const result = await deps.db.collection('queries').findOneAndUpdate(
+        { _id: queryObjectId, user_id: request.userId!, active: { $ne: false }, status: { $ne: 'running' } },
+        { $set: { active: false } }
+      );
+      if (!result) {
+        const exists = await deps.db.collection('queries').findOne({ _id: queryObjectId, user_id: request.userId! });
+        if (!exists) return reply.code(403).send({ error: 'not your query' });
+        return reply.code(409).send({ error: 'cannot pause a running search' });
+      }
+      return reply.code(204).send();
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/queries/:id/reactivate',
+    { preHandler: deps.requireAuth },
+    async (request, reply) => {
+      const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+      if (!queryObjectId) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      const row = await deps.db
+        .collection<{ _id: ObjectId; user_id: string; status?: QueryStatus; active?: boolean }>('queries')
+        .findOne({ _id: queryObjectId, user_id: request.userId! });
+      if (!row) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      if (row.status === 'blocked') {
+        return reply.code(409).send({ error: 'blocked queries use retry, not reactivate' });
+      }
+      if (row.active !== false) {
+        return reply.code(409).send({ error: 'query is already active' });
+      }
+      const hasSlot = await hasFreeSlot(deps.db, request.userId!);
+      const claimed = hasSlot && (await claimSlotForQuery(deps.db, request.userId!, row._id));
+      if (!claimed) {
+        return reply.code(409).send({ error: 'no free credits', reason: 'no free credits — buy more or pause another query' });
+      }
+      return reply.code(204).send();
     }
   );
 
@@ -176,7 +232,12 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!deleted) {
         return reply.code(403).send({ error: 'not your query' });
       }
-      await deps.billingService.syncQuantity(request.userId!);
+      // A blocked or already-paused query never occupied a purchased slot,
+      // so deleting one must not release one either — mirrors "deactivating
+      // never touches billing".
+      if (deleted.active) {
+        await deps.billingService.releaseSlotOnDelete(request.userId!);
+      }
       return reply.code(204).send();
     }
   );

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderWorkspace, type WorkspaceHandlers } from './render';
 import type { QuerySummary } from './types';
 
@@ -11,6 +11,8 @@ function noopHandlers(): WorkspaceHandlers {
     onCancelEdit: vi.fn(),
     onSaveEdit: vi.fn(),
     onDeleteQuery: vi.fn(),
+    onDeactivateQuery: vi.fn(),
+    onReactivateQuery: vi.fn(),
     onRotateFeedToken: vi.fn(),
     onSignOut: vi.fn(),
     onDeleteAccount: vi.fn(),
@@ -22,10 +24,11 @@ function noopHandlers(): WorkspaceHandlers {
     onRetrySearch: vi.fn(),
     onCloseAdmin: vi.fn(),
     onDeleteAdminUser: vi.fn(),
-    onSetAdminModel: vi.fn(),
-    onAddAdminModel: vi.fn(),
     onUpgrade: vi.fn(),
     onManageBilling: vi.fn(),
+    onBuyMoreSlots: vi.fn(),
+    onSetAdminModel: vi.fn(),
+    onAddAdminModel: vi.fn(),
   };
 }
 
@@ -39,6 +42,7 @@ function query(overrides: Partial<QuerySummary> = {}): QuerySummary {
     approvedCount: 0,
     candidateCount: 0,
     status: 'ready',
+    active: true,
     ...overrides,
   };
 }
@@ -348,11 +352,10 @@ describe('renderWorkspace', () => {
     expect(downloadLink.getAttribute('href')).toBe('https://x/f/t.ics');
     expect(downloadLink.getAttribute('aria-label')).toBe('Download ICS');
 
-    const addButtons = container.querySelectorAll<HTMLElement>('.feed-add-button');
-    // Google Calendar has no one-click subscribe, so its button opens a
-    // guide modal instead of pointing at a deeplink.
-    expect(addButtons[0].tagName).toBe('BUTTON');
-    expect(addButtons[0].getAttribute('data-action')).toBe('add-google-calendar');
+    const addButtons = container.querySelectorAll<HTMLAnchorElement>('.feed-add-button');
+    expect(addButtons[0].getAttribute('href')).toBe(
+      `https://calendar.google.com/calendar/r?cid=${encodeURIComponent('webcal://x/f/t.ics')}`
+    );
     expect(addButtons[1].getAttribute('href')).toBe('webcal://x/f/t.ics');
     expect(addButtons[2].getAttribute('href')).toBe(
       `https://outlook.live.com/calendar/0/addfromweb?url=${encodeURIComponent('webcal://x/f/t.ics')}`
@@ -380,120 +383,6 @@ describe('renderWorkspace', () => {
     const copyButton = container.querySelector<HTMLButtonElement>('.copy-button')!;
     copyButton.click();
     expect(copyButton.querySelector('.icon-check')).not.toBeNull();
-  });
-
-  describe('Google Calendar add-by-URL modal', () => {
-    const ICS_URL = 'https://x/f/t.ics';
-
-    function renderDashboard(): HTMLElement {
-      const container = document.createElement('div');
-      renderWorkspace(
-        container,
-        {
-          kind: 'dashboard',
-          queries: [],
-          feed: { icsUrl: ICS_URL, rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
-          editing: null,
-          reviewing: null,
-        },
-        noopHandlers()
-      );
-      return container;
-    }
-
-    afterEach(() => {
-      document.body.querySelectorAll('.google-modal-overlay').forEach(el => el.remove());
-      vi.restoreAllMocks();
-      if ('clipboard' in navigator) {
-        delete (navigator as unknown as Record<string, unknown>).clipboard;
-      }
-    });
-
-    it('opens the guide modal from the Google Calendar button', () => {
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-
-      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
-      expect(modal).not.toBeNull();
-      expect(modal.getAttribute('role')).toBe('dialog');
-      expect(modal.getAttribute('aria-modal')).toBe('true');
-      expect(modal.textContent).toContain('Add to Google Calendar');
-      expect(modal.textContent).toContain(ICS_URL);
-    });
-
-    it('copies the link first, then enables opening Google Calendar', async () => {
-      const writeText = vi.fn().mockResolvedValue(undefined);
-      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
-
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
-      const copyButton = modal.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
-      const openButton = modal.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-
-      // The tab may only open after a copy attempt — it starts disabled.
-      expect(openButton.disabled).toBe(true);
-      copyButton.click();
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      expect(writeText).toHaveBeenCalledWith(ICS_URL);
-      expect(copyButton.textContent).toContain('Link copied');
-      expect(openButton.disabled).toBe(false);
-    });
-
-    it('opens the add-by-URL page from the second step', () => {
-      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const openButton = document.body.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-      openButton.disabled = false;
-      openButton.click();
-
-      expect(openSpy).toHaveBeenCalledWith(
-        'https://calendar.google.com/calendar/r/settings/addbyurl',
-        '_blank',
-        'noopener'
-      );
-    });
-
-    it('shows a manual-copy hint and still allows opening when the clipboard is unavailable', () => {
-      const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
-
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      const modal = document.body.querySelector<HTMLElement>('.google-modal')!;
-      const copyButton = modal.querySelector<HTMLButtonElement>('[data-action=google-copy]')!;
-      const openButton = modal.querySelector<HTMLButtonElement>('[data-action=google-open]')!;
-      const hint = modal.querySelector<HTMLElement>('.google-modal-copy-hint')!;
-
-      expect(hint.hidden).toBe(true);
-      copyButton.click();
-      expect(hint.hidden).toBe(false);
-      expect(copyButton.textContent).toBe('Copy link');
-      expect(openButton.disabled).toBe(false);
-
-      openButton.click();
-      expect(openSpy).toHaveBeenCalledWith(
-        'https://calendar.google.com/calendar/r/settings/addbyurl',
-        '_blank',
-        'noopener'
-      );
-    });
-
-    it('closes the modal via its close button', () => {
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      document.body.querySelector<HTMLButtonElement>('.google-modal-close')!.click();
-      expect(document.body.querySelector('.google-modal')).toBeNull();
-    });
-
-    it('closes the modal on Escape', () => {
-      const container = renderDashboard();
-      container.querySelector<HTMLButtonElement>('button[data-action=add-google-calendar]')!.click();
-      document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      expect(document.body.querySelector('.google-modal')).toBeNull();
-    });
   });
 
   it('shows a hint instead of feed links until the user has approved something', () => {
@@ -756,14 +645,14 @@ describe('renderWorkspace', () => {
   it('renders an upgrade action for a free-tier user with remaining quota', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
-    const billing = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const billing = { freeLimit: 1, activeQueryCount: 0, purchasedSlots: 1, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
     renderWorkspace(
       container,
       { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
       handlers
     );
 
-    expect(container.textContent).toContain('1 free');
+    expect(container.textContent).toContain('0 of 1 credits used');
     expect(container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')).not.toBeNull();
     container.querySelector<HTMLButtonElement>('button[data-action=upgrade]')!.click();
     expect(handlers.onUpgrade).toHaveBeenCalled();
@@ -772,16 +661,121 @@ describe('renderWorkspace', () => {
   it('renders a manage action for a subscribed user', () => {
     const container = document.createElement('div');
     const handlers = noopHandlers();
-    const billing = { freeLimit: 1, activeQueryCount: 2, pricePerExtraQuery: 0.5, subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const billing = { freeLimit: 1, activeQueryCount: 2, purchasedSlots: 3, pricePerExtraQuery: 0.5, subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
     renderWorkspace(
       container,
       { kind: 'dashboard', queries: [query()], feed: null, editing: null, reviewing: null, billing },
       handlers
     );
 
-    expect(container.textContent).toContain('Subscribed');
+    expect(container.textContent).toContain('2 of 3 credits used');
     expect(container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')).not.toBeNull();
     container.querySelector<HTMLButtonElement>('button[data-action=manage-billing]')!.click();
     expect(handlers.onManageBilling).toHaveBeenCalled();
+  });
+
+  it('renders a blocked query card with buy-credits and try-again actions', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, {
+      kind: 'dashboard',
+      queries: [{
+        id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly',
+        lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+        approvedCount: 0, candidateCount: 0, status: 'blocked', active: false,
+      }],
+      feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+
+    const card = container.querySelector('.query-card-blocked');
+    expect(card).not.toBeNull();
+    expect(card!.querySelector('[data-action=retry]')).not.toBeNull();
+    expect(card!.querySelector('[data-action=buy-credits]')).not.toBeNull();
+    expect(card!.querySelector('[data-action=pause]')).toBeNull(); // never pausable
+  });
+
+  it('buy-credits on a blocked card adds a slot to the existing subscription for a subscribed user, never starting a second one', () => {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    const billing = {
+      freeLimit: 1, activeQueryCount: 2, purchasedSlots: 2, pricePerExtraQuery: 0.5,
+      subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+    };
+    renderWorkspace(container, {
+      kind: 'dashboard',
+      queries: [{
+        id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly',
+        lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+        approvedCount: 0, candidateCount: 0, status: 'blocked', active: false,
+      }],
+      feed: null, editing: null, reviewing: null, billing,
+    }, handlers);
+
+    container.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers.onBuyMoreSlots).toHaveBeenCalledWith(1);
+    expect(handlers.onUpgrade).not.toHaveBeenCalled();
+  });
+
+  it('buy-credits on a blocked card starts a new checkout when not subscribed (including no billing status)', () => {
+    const blockedQuery = {
+      id: 'q1', text: 'Auer Dult', recurrenceInterval: 'weekly' as const,
+      lastRunAt: null, createdAt: '2026-08-20T00:00:00Z',
+      approvedCount: 0, candidateCount: 0, status: 'blocked' as const, active: false,
+    };
+
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [blockedQuery], feed: null, editing: null, reviewing: null, billing: null,
+    }, handlers);
+    container.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers.onUpgrade).toHaveBeenCalledWith(1);
+    expect(handlers.onBuyMoreSlots).not.toHaveBeenCalled();
+
+    const container2 = document.createElement('div');
+    const handlers2 = noopHandlers();
+    const unsubscribedBilling = {
+      freeLimit: 1, activeQueryCount: 1, purchasedSlots: 1, pricePerExtraQuery: 0.5,
+      subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+    };
+    renderWorkspace(container2, {
+      kind: 'dashboard', queries: [blockedQuery], feed: null, editing: null, reviewing: null, billing: unsubscribedBilling,
+    }, handlers2);
+    container2.querySelector<HTMLButtonElement>('[data-action=buy-credits]')!.click();
+    expect(handlers2.onUpgrade).toHaveBeenCalledWith(1);
+    expect(handlers2.onBuyMoreSlots).not.toHaveBeenCalled();
+  });
+
+  it('renders pause on a ready card and resume on a paused one', () => {
+    const container = document.createElement('div');
+    const readyQuery = {
+      id: 'q1', text: 'Oktoberfest', recurrenceInterval: 'weekly' as const,
+      lastRunAt: '2026-08-20T00:00:00Z', createdAt: '2026-08-20T00:00:00Z',
+      approvedCount: 1, candidateCount: 0, status: 'ready' as const, active: true,
+    };
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [readyQuery], feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+    expect(container.querySelector('[data-action=pause]')).not.toBeNull();
+    expect(container.querySelector('[data-action=resume]')).toBeNull();
+
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [{ ...readyQuery, active: false }], feed: null, editing: null, reviewing: null, billing: null,
+    }, noopHandlers());
+    expect(container.querySelector('[data-action=resume]')).not.toBeNull();
+    expect(container.querySelector('[data-action=pause]')).toBeNull();
+  });
+
+  it('billing row shows used-of-purchased and a buy-more stepper', () => {
+    const container = document.createElement('div');
+    renderWorkspace(container, {
+      kind: 'dashboard', queries: [], feed: null, editing: null, reviewing: null,
+      billing: {
+        freeLimit: 1, activeQueryCount: 2, purchasedSlots: 3, pricePerExtraQuery: 0.5,
+        subscribed: true, subscriptionStatus: 'active', checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal',
+      },
+    }, noopHandlers());
+    expect(container.querySelector('.billing-summary')!.textContent).toContain('2');
+    expect(container.querySelector('.billing-summary')!.textContent).toContain('3');
+    expect(container.querySelector('[data-action=buy-more]')).not.toBeNull();
   });
 });

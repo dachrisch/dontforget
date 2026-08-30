@@ -21,7 +21,7 @@ export const DEFAULT_RECURRENCE_INTERVAL: RecurrenceInterval = 'weekly';
 // `running` = a search is in flight (the card shows a status until it
 // lands); `failed` = the last search errored; `ready` = search results are
 // in (or there were none).
-export type QueryStatus = 'running' | 'ready' | 'failed';
+export type QueryStatus = 'running' | 'ready' | 'failed' | 'blocked';
 
 export interface QuerySummary {
   id: string;
@@ -32,6 +32,7 @@ export interface QuerySummary {
   approvedCount: number;
   candidateCount: number;
   status: QueryStatus;
+  active: boolean;
 }
 
 export interface FeedSummary {
@@ -48,6 +49,7 @@ export interface Dashboard {
 export interface BillingStatus {
   freeLimit: number;
   activeQueryCount: number;
+  purchasedSlots: number;
   pricePerExtraQuery: number;
   subscribed: boolean;
   subscriptionStatus: string | null;

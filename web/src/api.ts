@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-async function handle<T>(response: Response): Promise<T> {
+export async function handle<T>(response: Response): Promise<T> {
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
   }
@@ -51,10 +51,10 @@ export async function getBillingStatus(): Promise<BillingStatus> {
 // because the route has no body to parse and Fastify's default parsers only
 // cover application/json and text/plain — a form's normal default
 // (application/x-www-form-urlencoded) has no registered parser and 415s.
-export function startCheckout(): void {
+export function startCheckout(quantity = 1): void {
   const form = document.createElement('form');
   form.method = 'POST';
-  form.action = '/api/billing/checkout';
+  form.action = `/api/billing/checkout?quantity=${quantity}`;
   form.enctype = 'text/plain';
   document.body.appendChild(form);
   form.submit();
@@ -160,6 +160,26 @@ export async function deleteQuery(queryId: string): Promise<void> {
   if (!response.ok) {
     throw new ApiError(response.status, await response.text());
   }
+}
+
+export async function deactivateQuery(queryId: string): Promise<void> {
+  const response = await fetch(`/api/queries/${queryId}/deactivate`, { method: 'POST', credentials: 'include' });
+  if (!response.ok) throw new ApiError(response.status, 'failed to pause query');
+}
+
+export async function reactivateQuery(queryId: string): Promise<void> {
+  const response = await fetch(`/api/queries/${queryId}/reactivate`, { method: 'POST', credentials: 'include' });
+  if (!response.ok) throw new ApiError(response.status, 'failed to resume query');
+}
+
+export async function addSlots(count: number): Promise<{ purchasedSlots: number }> {
+  const response = await fetch('/api/billing/add-slots', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ count }),
+  });
+  return handle(response);
 }
 
 export async function getAdminStats(): Promise<AdminStats> {

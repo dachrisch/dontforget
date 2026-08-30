@@ -10,6 +10,9 @@ import {
   updateQuery,
   getQueryEvents,
   deleteQuery,
+  deactivateQuery,
+  reactivateQuery,
+  addSlots,
   rotateFeedToken,
   runQuery,
   signOut,
@@ -17,13 +20,13 @@ import {
   getAdminStats,
   listAdminUsers,
   deleteAdminUser,
+  getBillingStatus,
+  startCheckout,
+  startPortal,
   listAdminModels,
   getAdminSearch,
   updateAdminModel,
   addAdminModel,
-  getBillingStatus,
-  startCheckout,
-  startPortal,
   ApiError,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
@@ -220,16 +223,7 @@ function paint() {
       // refresh lands them on) picks the results up on its next poll.
       submitQuery(text)
         .then(() => refreshDashboard())
-        .catch(err => {
-          // Hard free-tier gate: past the free query limit, the backend
-          // returns 402 with a checkout URL before any search runs. Send the
-          // user to Stripe Checkout to upgrade.
-          if (err instanceof ApiError && err.status === 402) {
-            startCheckout();
-            return;
-          }
-          showError('error.searching', err);
-        });
+        .catch(err => showError('error.searching', err));
     },
     onStartReview: queryId => {
       clearError();
@@ -271,7 +265,18 @@ function paint() {
       clearError();
       runQuery(queryId)
         .then(() => refreshDashboard())
-        .catch(err => showError('error.searching', err));
+        .catch(err => {
+          // A 409 here means the slot-claim gate rejected the retry (out of
+          // free credits, or — reachable only over the API today — the
+          // query is paused and needs a resume first). Either way, the
+          // generic "something went wrong searching" message is actively
+          // misleading, so show the credits-specific one instead.
+          if (err instanceof ApiError && err.status === 409) {
+            showError('error.noFreeCredits', err);
+          } else {
+            showError('error.searching', err);
+          }
+        });
     },
     onStartEdit: queryId => {
       clearError();
@@ -323,6 +328,26 @@ function paint() {
         })
         .catch(err => showError('error.deleting', err));
     },
+    onDeactivateQuery: queryId => {
+      clearError();
+      deactivateQuery(queryId)
+        .then(() => refreshDashboard())
+        .catch(err => showError('error.pausing', err));
+    },
+    onReactivateQuery: queryId => {
+      clearError();
+      reactivateQuery(queryId)
+        .then(() => refreshDashboard())
+        .catch(err => {
+          // A 409 here means no free slot was available to resume into —
+          // show the credits-specific message rather than a generic one.
+          if (err instanceof ApiError && err.status === 409) {
+            showError('error.noFreeCredits', err);
+          } else {
+            showError('error.resuming', err);
+          }
+        });
+    },
     onRotateFeedToken: () => {
       clearError();
       rotateFeedToken()
@@ -353,6 +378,20 @@ function paint() {
         .then(() => refreshAdmin())
         .catch(err => showError('error.deletingUser', err));
     },
+    onUpgrade: quantity => {
+      clearError();
+      startCheckout(quantity);
+    },
+    onManageBilling: () => {
+      clearError();
+      startPortal();
+    },
+    onBuyMoreSlots: count => {
+      clearError();
+      addSlots(count)
+        .then(() => refreshDashboard())
+        .catch(err => showError('error.updatingSlots', err));
+    },
     onSetAdminModel: (id, patch) => {
       clearError();
       updateAdminModel(id, patch)
@@ -364,14 +403,6 @@ function paint() {
       addAdminModel(id, providerID)
         .then(() => refreshAdmin())
         .catch(err => showError('error.addingModel', err));
-    },
-    onUpgrade: () => {
-      clearError();
-      startCheckout();
-    },
-    onManageBilling: () => {
-      clearError();
-      startPortal();
     },
   });
 }

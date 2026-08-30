@@ -28,6 +28,7 @@ interface QueryRow {
   created_at: Date;
   last_run_at?: Date | null;
   status?: QueryStatus;
+  active?: boolean;
 }
 
 // The shape `runInitialQuery` needs to kick off a background search for a
@@ -54,7 +55,8 @@ export async function createQuery(
   db: Db,
   userId: string,
   queryText: string,
-  recurrenceInterval: RecurrenceInterval = DEFAULT_RECURRENCE_INTERVAL
+  recurrenceInterval: RecurrenceInterval = DEFAULT_RECURRENCE_INTERVAL,
+  active: boolean = true
 ): Promise<NewQuery> {
   const now = new Date();
   const queryResult = await db.collection('queries').insertOne({
@@ -66,7 +68,8 @@ export async function createQuery(
     // with even if the background search dies mid-run; completeQueryRun bumps
     // it once the run actually lands.
     last_run_at: now,
-    status: 'running' as const,
+    status: active ? ('running' as const) : ('blocked' as const),
+    active,
   });
   return {
     _id: queryResult.insertedId,
@@ -132,6 +135,22 @@ export async function markQueryFailed(db: Db, queryId: ObjectId): Promise<void> 
   await db.collection('queries').updateOne({ _id: queryId }, { $set: { status: 'failed' as const } });
 }
 
+// Single-document atomicity: prevents the SAME query being claimed twice by
+// a rapid double-click on retry/reactivate. Two DIFFERENT blocked/paused
+// queries racing for the last free slot can each pass an earlier
+// hasFreeSlot() check and both land here — this Mongo deployment is a
+// standalone instance without a replica set, so multi-document transactions
+// aren't available to close that window. Accepted: it's a soft billing
+// quota, not a security boundary, and self-corrects on the next status
+// fetch. See docs/superpowers/specs/2026-08-20-query-credits-design.md.
+export async function claimSlotForQuery(db: Db, userId: string, queryId: ObjectId): Promise<boolean> {
+  const result = await db.collection('queries').findOneAndUpdate(
+    { _id: queryId, user_id: userId, active: { $ne: true } },
+    { $set: { active: true } }
+  );
+  return result !== null;
+}
+
 export async function listQueriesForUser(
   db: Db,
   userId: string,
@@ -154,6 +173,7 @@ export async function listQueriesForUser(
     approvedCount: counts.get(row._id.toString())?.approved ?? 0,
     candidateCount: counts.get(row._id.toString())?.candidate ?? 0,
     status: row.status ?? 'ready',
+    active: row.active ?? true,
   }));
 
   const feed = await feedSummary(db, userId, publicBaseUrl);
@@ -201,6 +221,7 @@ export async function updateQuery(
     approvedCount: rowCounts.approved,
     candidateCount: rowCounts.candidate,
     status: result.status ?? 'ready',
+    active: result.active ?? true,
   };
 }
 
@@ -280,18 +301,31 @@ export async function getQueryEvents(
   }));
 }
 
-export async function deleteQuery(db: Db, userId: string, queryId: string): Promise<boolean> {
+// The shape the DELETE route needs to decide whether the deleted query held
+// a purchased slot — a blocked or already-paused query never did, so
+// deleting one must not release a slot (see `active`'s "absent means
+// active" convention: a legacy row missing the field counts as active).
+export interface DeletedQuery {
+  active: boolean;
+}
+
+export async function deleteQuery(db: Db, userId: string, queryId: string): Promise<DeletedQuery | null> {
   const queryObjectId = toObjectId(queryId);
   if (!queryObjectId) {
-    return false;
+    return null;
   }
 
-  const result = await db.collection('queries').deleteOne({ _id: queryObjectId, user_id: userId });
-  if (result.deletedCount === 0) {
-    return false;
+  // findOneAndDelete atomically reads the row's `active` flag as it deletes
+  // it, avoiding a second round-trip (and a race where the row's active
+  // state changes between a separate read and delete).
+  const deleted = await db
+    .collection<QueryRow>('queries')
+    .findOneAndDelete({ _id: queryObjectId, user_id: userId });
+  if (!deleted) {
+    return null;
   }
   await db.collection('events').deleteMany({ query_id: queryObjectId });
-  return true;
+  return { active: deleted.active !== false };
 }
 
 function toObjectId(id: string): ObjectId | null {
