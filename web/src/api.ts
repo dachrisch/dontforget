@@ -1,4 +1,4 @@
-import type { AdminModel, AdminSearch, AdminStats, AdminUser, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, BillingStatus, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -38,6 +38,30 @@ export async function getMe(): Promise<Me> {
 export async function listQueries(): Promise<Dashboard> {
   const response = await fetch('/api/queries', { credentials: 'include' });
   return handle(response);
+}
+
+export async function getBillingStatus(): Promise<BillingStatus> {
+  const response = await fetch('/api/billing/status', { credentials: 'include' });
+  return handle(response);
+}
+
+// Checkout creates a Stripe object server-side, so the route is POST —
+// unlike startPortal below, a plain `window.location.href` navigation can't
+// send POST, so submit a real (invisible) form instead. enctype=text/plain
+// because the route has no body to parse and Fastify's default parsers only
+// cover application/json and text/plain — a form's normal default
+// (application/x-www-form-urlencoded) has no registered parser and 415s.
+export function startCheckout(): void {
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = '/api/billing/checkout';
+  form.enctype = 'text/plain';
+  document.body.appendChild(form);
+  form.submit();
+}
+
+export function startPortal(): void {
+  window.location.href = '/api/billing/portal';
 }
 
 export async function submitQuery(

@@ -14,6 +14,8 @@ import {
   getAdminStats,
   listAdminUsers,
   deleteAdminUser,
+  getBillingStatus,
+  startCheckout,
   listAdminModels,
   addAdminModel,
   updateAdminModel,
@@ -245,6 +247,21 @@ describe('api client', () => {
     await expect(deleteAdminUser('u1')).rejects.toBeInstanceOf(ApiError);
   });
 
+  it('startCheckout submits a real POST form, not a GET navigation', () => {
+    const submitSpy = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+
+    startCheckout();
+
+    const form = document.querySelector('form');
+    expect(form?.getAttribute('method')).toBe('POST');
+    expect(form?.getAttribute('action')).toBe('/api/billing/checkout');
+    expect(form?.getAttribute('enctype')).toBe('text/plain');
+    expect(submitSpy).toHaveBeenCalledOnce();
+
+    submitSpy.mockRestore();
+    form?.remove();
+  });
+
   it('listAdminModels parses the model list', async () => {
     const body = [
       {
@@ -297,5 +314,14 @@ describe('api client', () => {
 
     expect(await getAdminSearch()).toEqual(body);
     expect(fetch).toHaveBeenCalledWith('/api/admin/search', { credentials: 'include' });
+  });
+
+  it('getBillingStatus parses the billing status payload', async () => {
+    const body = { freeLimit: 1, activeQueryCount: 0, pricePerExtraQuery: 0.5, subscribed: false, subscriptionStatus: null, checkoutUrl: '/api/billing/checkout', portalUrl: '/api/billing/portal' };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(getBillingStatus()).resolves.toEqual(body);
+    expect(fetchMock).toHaveBeenCalledWith('/api/billing/status', { credentials: 'include' });
   });
 });

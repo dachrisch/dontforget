@@ -7,6 +7,8 @@ import { CapturingEmailSender } from '../email/EmailSender';
 import { SessionService, SESSION_COOKIE } from '../auth/session';
 import { approveEvents } from './approveEvents';
 import { flushSearches } from './searchQueue';
+import { FakeBillingGateway } from '../billing/stripeGateway';
+import { BillingService } from '../billing/billingService';
 
 async function authenticatedUser(db: Db, email = 'u@example.com') {
   const { insertedId } = await db.collection('users').insertOne({ email });
@@ -18,6 +20,7 @@ async function authenticatedUser(db: Db, email = 'u@example.com') {
     publicBaseUrl: 'http://localhost:3000',
     frontendUrl: 'http://localhost:5173',
     runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
+    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
   });
   return { app, userId, sessionId };
 }
@@ -150,6 +153,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await intervalApp.inject({
@@ -184,6 +188,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await intervalApp.inject({
@@ -212,6 +217,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await intervalApp.inject({
@@ -238,6 +244,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await asyncApp.inject({
@@ -275,6 +282,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await asyncApp.inject({
@@ -305,6 +313,7 @@ describe('query dashboard routes', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery,
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
 
     const response = await asyncApp.inject({
@@ -476,5 +485,61 @@ describe('query dashboard routes', () => {
     const oldToken = originalIcsUrl.split('/f/')[1]!.replace('.ics', '');
     const staleLookup = await app.inject({ method: 'GET', url: `/f/${oldToken}.ics` });
     expect(staleLookup.statusCode).toBe(404);
+  });
+
+  it('POST /api/queries allows the first (free) query', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/queries',
+      headers: authHeaders(sessionId),
+      payload: { text: 'Oktoberfest' },
+    });
+    expect(response.statusCode).toBe(202);
+  });
+
+  it('POST /api/queries returns 402 for a second query without a subscription', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/queries',
+      headers: authHeaders(sessionId),
+      payload: { text: 'Auer Dult' },
+    });
+    expect(response.statusCode).toBe(402);
+    expect(response.json().checkoutUrl).toBe('/api/billing/checkout');
+  });
+
+  it('POST /api/queries allows a second query for a subscribed user and syncs quantity', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active' },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/queries',
+      headers: authHeaders(sessionId),
+      payload: { text: 'Auer Dult' },
+    });
+    expect(response.statusCode).toBe(202);
+  });
+
+  it('DELETE syncs the subscription quantity down', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active' },
+    });
+
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/api/queries/${queryId}`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(204);
   });
 });

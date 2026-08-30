@@ -9,7 +9,7 @@ import type { CandidateEvent, ExtractedEvent, RecurrenceInterval } from './types
 // sharing a DB name with local dev silently wipes dev data on `npm test`.
 export const TEST_DB_URL = process.env.TEST_DATABASE_URL ?? 'mongodb://localhost:27017/dontforget-test';
 
-const COLLECTIONS = ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens', 'models', 'model_metrics', 'search_metrics'] as const;
+const COLLECTIONS = ['users', 'magic_links', 'sessions', 'queries', 'events', 'feed_tokens', 'models', 'model_metrics', 'search_metrics', 'stripe_events'] as const;
 
 export interface TestDb {
   client: MongoClient;

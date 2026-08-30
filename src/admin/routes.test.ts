@@ -7,6 +7,8 @@ import { CapturingEmailSender } from '../email/EmailSender';
 import { SessionService, SESSION_COOKIE } from '../auth/session';
 import { createModelRegistry } from '../search/models';
 import { createMetricsService } from '../search/metrics';
+import { FakeBillingGateway } from '../billing/stripeGateway';
+import { BillingService } from '../billing/billingService';
 
 async function appFor(db: Db) {
   return buildApp({
@@ -17,6 +19,7 @@ async function appFor(db: Db) {
     runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
     modelRegistry: createModelRegistry({ db }),
     metrics: createMetricsService(db),
+    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
   });
 }
 

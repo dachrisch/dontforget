@@ -21,6 +21,10 @@ import {
   getAdminSearch,
   updateAdminModel,
   addAdminModel,
+  getBillingStatus,
+  startCheckout,
+  startPortal,
+  ApiError,
 } from './api';
 import { renderMasthead, startWordmarkAnimation } from './masthead';
 import { detectLocale, setLocale, t, type MessageKey } from './i18n';
@@ -53,6 +57,18 @@ function showError(key: MessageKey, err: unknown): void {
 
 function clearError(): void {
   errorBanner.hidden = true;
+}
+
+// Billing may be unavailable (no Stripe config → 503); the dashboard must
+// still load, so a failed status fetch degrades to no billing row rather
+// than taking the whole app down.
+async function loadBilling(): Promise<import('./types').BillingStatus | null> {
+  try {
+    return await getBillingStatus();
+  } catch (err) {
+    console.error('[dontforget] billing status unavailable:', err);
+    return null;
+  }
 }
 
 let state: WorkspaceState = { kind: 'signedOut' };
@@ -114,7 +130,8 @@ async function boot(): Promise<void> {
     if (data.queries.length === 0) {
       setState({ kind: 'empty' });
     } else {
-      setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed }));
+      const billing = await loadBilling();
+      setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed, billing }));
       // If the server was mid-search when the page loaded (a reload during
       // a slow run), resume polling so the card can land.
       scheduleDashboardPoll();
@@ -152,7 +169,8 @@ async function refreshDashboard(): Promise<void> {
     // Re-check after the fetch resolves — the user may have navigated away
     // while it was in flight, and the result is now stale for this page.
     if (!canRefreshDashboard(state)) return;
-    setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed }));
+    const billing = await loadBilling();
+    setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed, billing }));
     // A query that finished searching while we were watching opens its
     // review inline — the user just submitted it from here and is waiting
     // on the card, so land them straight on the approval tiles.
@@ -202,7 +220,16 @@ function paint() {
       // refresh lands them on) picks the results up on its next poll.
       submitQuery(text)
         .then(() => refreshDashboard())
-        .catch(err => showError('error.searching', err));
+        .catch(err => {
+          // Hard free-tier gate: past the free query limit, the backend
+          // returns 402 with a checkout URL before any search runs. Send the
+          // user to Stripe Checkout to upgrade.
+          if (err instanceof ApiError && err.status === 402) {
+            startCheckout();
+            return;
+          }
+          showError('error.searching', err);
+        });
     },
     onStartReview: queryId => {
       clearError();
@@ -337,6 +364,14 @@ function paint() {
       addAdminModel(id, providerID)
         .then(() => refreshAdmin())
         .catch(err => showError('error.addingModel', err));
+    },
+    onUpgrade: () => {
+      clearError();
+      startCheckout();
+    },
+    onManageBilling: () => {
+      clearError();
+      startPortal();
     },
   });
 }

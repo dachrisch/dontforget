@@ -18,12 +18,14 @@ import {
   type ExtractionResult,
   type QueryStatus,
 } from '../types.js';
+import { isOverFreeLimit, isSubscribed, type BillingService } from '../billing/billingService.js';
 
 export interface QueryRouteDeps {
   db: Db;
   runQuery: (query: string) => Promise<ExtractionResult>;
   requireAuth: preHandlerHookHandler;
   publicBaseUrl: string;
+  billingService: BillingService;
 }
 
 export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps): void {
@@ -39,11 +41,22 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (interval !== undefined && !isRecurrenceInterval(interval)) {
         return reply.code(400).send({ error: 'invalid recurrenceInterval' });
       }
+      // Hard free-tier gate: a user with no active subscription who already
+      // holds the free quota gets 402 before the query is created (and long
+      // before any search runs), so searxng/opencode is never burned on a
+      // query that cannot be created.
+      const user = await deps.db
+        .collection<{ _id: ObjectId; stripe_subscription_status?: string }>('users')
+        .findOne({ _id: new ObjectId(request.userId!) });
+      if (user && (await isOverFreeLimit(deps.db, request.userId!)) && !isSubscribed(user)) {
+        return reply.code(402).send({ error: 'free query limit reached', checkoutUrl: '/api/billing/checkout' });
+      }
       // The search runs in the background (searxng + opencode can take a
       // minute or more), so the request only creates the query row and
       // returns. The dashboard shows the running card and picks up the
       // results on its next poll.
       const query = await createQuery(deps.db, request.userId!, text, interval ?? DEFAULT_RECURRENCE_INTERVAL);
+      await deps.billingService.syncQuantity(request.userId!);
       enqueueSearch(() => runInitialQuery(deps.db, query, { runQuery: deps.runQuery, applyCadence: interval === undefined }));
       return reply.code(202).send({ queryId: query.queryId });
     }
@@ -163,6 +176,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!deleted) {
         return reply.code(403).send({ error: 'not your query' });
       }
+      await deps.billingService.syncQuantity(request.userId!);
       return reply.code(204).send();
     }
   );
