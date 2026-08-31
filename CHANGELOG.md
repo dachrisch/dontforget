@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.20.4](https://github.com/dachrisch/dontforget/compare/v0.20.3...v0.20.4) (2026-08-31)
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v9.1.0 ([#148](https://github.com/dachrisch/dontforget/issues/148)) ([65c4a3d](https://github.com/dachrisch/dontforget/commit/65c4a3d7830ad625d575ff99fc677d4520bad484))
+* **deps:** update dependency undici to v8.10.1 ([#147](https://github.com/dachrisch/dontforget/issues/147)) ([d468cf1](https://github.com/dachrisch/dontforget/commit/d468cf148600a8c8f0a4bd904d2d3f50387d6fe4))
+
 ## [0.20.3](https://github.com/dachrisch/dontforget/compare/v0.20.2...v0.20.3) (2026-08-30)
 
 
