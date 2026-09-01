@@ -63,10 +63,10 @@ describe('extractDates', () => {
       'https://code.lehel.xyz/api/session',
       expect.objectContaining({ method: 'POST', headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
-    // Pin a specific, still-listed model (qwen3.7-flash on bailian-payg)
+    // Pin a specific, still-listed model (glm-5.3-flash on opencode-go)
     // rather than relying on whatever opencode defaults to.
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
-      model: { id: 'qwen3.7-flash', providerID: 'bailian-payg' },
+      model: { id: 'glm-5.3-flash', providerID: 'opencode-go' },
     });
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,

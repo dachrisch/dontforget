@@ -191,7 +191,7 @@ describe('admin routes', () => {
     expect(response.statusCode).toBe(200);
     const models = response.json();
     expect(models).toHaveLength(2);
-    expect(models[0]).toMatchObject({ id: 'qwen3.7-flash', role: 'default', enabled: true });
+    expect(models[0]).toMatchObject({ id: 'glm-5.3-flash', role: 'default', enabled: true });
     expect(models[1]).toMatchObject({ id: 'antigravity-gemini-3-flash', role: 'backup', enabled: true });
     expect(models[0].calls).toBe(0);
     expect(models[0].successRate).toBeNull();
@@ -213,12 +213,12 @@ describe('admin routes', () => {
 
     const retire = await app.inject({
       method: 'PATCH',
-      url: '/api/admin/models/qwen3.7-flash',
+      url: '/api/admin/models/glm-5.3-flash',
       headers: authHeaders(sessionId),
       payload: { enabled: false },
     });
     expect(retire.statusCode).toBe(200);
-    expect(retire.json()).toMatchObject({ id: 'qwen3.7-flash', enabled: false });
+    expect(retire.json()).toMatchObject({ id: 'glm-5.3-flash', enabled: false });
 
     const models = (await app.inject({
       method: 'GET',
