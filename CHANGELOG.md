@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/dachrisch/dontforget/compare/v0.20.4...v0.21.0) (2026-09-01)
+
+
+### Features
+
+* switch default extraction model to opencode-go/glm-5.3-flash ([#151](https://github.com/dachrisch/dontforget/issues/151)) ([cc030cd](https://github.com/dachrisch/dontforget/commit/cc030cd841d8be068942eed41f5a75b1855e40dc))
+
 ## [0.20.4](https://github.com/dachrisch/dontforget/compare/v0.20.3...v0.20.4) (2026-08-31)
 
 
