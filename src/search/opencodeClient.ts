@@ -135,15 +135,15 @@ function classifyError(err: unknown): string {
 // (Antigravity). Pin explicit model ids that still exist; relying on
 // opencode's own default ("ling-3.0-tiny-free" historically) is unreliable.
 //
-// Primary is the fastest responsive model available; the fallback is on a
-// different provider so a provider-side outage/rate limit on the primary
-// fails over rather than giving up. Both verified present in the
-// code.lehel.xyz catalog as of 2026-08-29.
-const MODEL = { id: 'qwen3.7-flash', providerID: 'bailian-payg' };
+// As of 2026-09-01 the primary is "glm-5.3-flash" on the "opencode-go"
+// provider (OpenCode Go). The fallback is on a different provider so a
+// provider-side outage/rate limit on the primary fails over rather than
+// giving up. Both verified present in the code.lehel.xyz catalog.
+const MODEL = { id: 'glm-5.3-flash', providerID: 'opencode-go' };
 
 // Backup model tried only after MODEL exhausts every attempt above — a
-// distinct model on a different provider (google/Antigravity) so a
-// bailian-payg outage or rate limit doesn't take extraction down.
+// distinct model on a different provider (google/Antigravity) so an
+// opencode-go outage or rate limit doesn't take extraction down.
 const FALLBACK_MODEL = { id: 'antigravity-gemini-3-flash', providerID: 'google' };
 
 const MODEL_TIERS = [MODEL, FALLBACK_MODEL];

@@ -23,7 +23,7 @@ describe('model registry', () => {
     const registry = createModelRegistry({ db });
     const active = await registry.listActive();
     expect(active).toEqual([
-      { id: 'qwen3.7-flash', providerID: 'bailian-payg' },
+      { id: 'glm-5.3-flash', providerID: 'opencode-go' },
       { id: 'antigravity-gemini-3-flash', providerID: 'google' },
     ]);
   });
@@ -33,16 +33,16 @@ describe('model registry', () => {
     // Promote the backup to default; the old default becomes a backup via
     // the update below (it keeps its role unless cleared).
     await registry.update('antigravity-gemini-3-flash', { role: 'default' });
-    await registry.update('qwen3.7-flash', { role: 'backup' });
+    await registry.update('glm-5.3-flash', { role: 'backup' });
     await registry.add({ id: 'tertiary', providerID: 'opencode' });
 
     const active = await registry.listActive();
-    expect(active.map(m => m.id)).toEqual(['antigravity-gemini-3-flash', 'qwen3.7-flash', 'tertiary']);
+    expect(active.map(m => m.id)).toEqual(['antigravity-gemini-3-flash', 'glm-5.3-flash', 'tertiary']);
   });
 
   it('excludes retired models from the active list', async () => {
     const registry = createModelRegistry({ db });
-    await registry.update('qwen3.7-flash', { enabled: false });
+    await registry.update('glm-5.3-flash', { enabled: false });
 
     const active = await registry.listActive();
     expect(active).toEqual([{ id: 'antigravity-gemini-3-flash', providerID: 'google' }]);

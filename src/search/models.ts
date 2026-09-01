@@ -62,13 +62,13 @@ export function createNoopModelRegistry(): ModelRegistry {
 }
 
 // Defaults mirror the hard-coded tiers in opencodeClient.ts. As of
-// 2026-08-29 opencode's free models were retired and the catalog now exposes
-// "bailian-payg" (Qwen, pay-as-you-go) and "google" (Antigravity) models;
-// these are the verified-working picks. Seeded only when the registry is
-// empty so an existing deployment keeps its current choices (and is migrated
-// to these by 005_swap_dead_models).
+// 2026-09-01 the primary is "glm-5.3-flash" on the "opencode-go" provider
+// (OpenCode Go); the backup stays on "google" (Antigravity) so an
+// opencode-go outage fails over to a different provider. Seeded only when
+// the registry is empty so an existing deployment keeps its current choices
+// (and is migrated to these by 005_swap_dead_models / 006_swap_default_model).
 const DEFAULT_MODELS: Array<{ id: string; providerID: string; role: ModelRole }> = [
-  { id: 'qwen3.7-flash', providerID: 'bailian-payg', role: 'default' },
+  { id: 'glm-5.3-flash', providerID: 'opencode-go', role: 'default' },
   { id: 'antigravity-gemini-3-flash', providerID: 'google', role: 'backup' },
 ];
 
