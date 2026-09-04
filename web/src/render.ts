@@ -38,6 +38,17 @@ export function renderWorkspace(
     ? document.activeElement.closest<HTMLElement>('[data-id]')?.dataset.id
     : undefined;
 
+  // Preserve search-input focus and value across full re-renders caused by
+  // background polling (every 4 s while a search is running).  The search
+  // input sits outside any [data-id] container, so the normal restore
+  // logic below never touches it.
+  const activeEl = document.activeElement;
+  const searchInputId =
+    activeEl instanceof HTMLInputElement && /query-input|dashboard-query-input/.test(activeEl.id)
+      ? activeEl.id
+      : null;
+  const searchValue = searchInputId && activeEl instanceof HTMLInputElement ? activeEl.value : null;
+
   container.innerHTML = '';
   const wrapper = render(state, handlers);
   // Only animate in on an actual state change — re-rendering the same
@@ -48,6 +59,15 @@ export function renderWorkspace(
   }
   lastRenderedKind.set(container, state.kind);
   container.appendChild(wrapper);
+
+  // Restore search input value and focus if it was active before the re-render.
+  if (searchInputId) {
+    const input = container.querySelector<HTMLInputElement>(`#${searchInputId}`);
+    if (input) {
+      input.value = searchValue ?? '';
+      input.focus();
+    }
+  }
 
   // A full re-render tears down and rebuilds every element, so the
   // previously focused control (e.g. a review tile's checkbox) loses
