@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.21.0](https://github.com/dachrisch/dontforget/compare/v0.20.0...v0.21.0) (2026-09-04)
+
+
+### Features
+
+* switch default extraction model to opencode-go/glm-5.3-flash ([#151](https://github.com/dachrisch/dontforget/issues/151)) ([cc030cd](https://github.com/dachrisch/dontforget/commit/cc030cd841d8be068942eed41f5a75b1855e40dc))
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastify to v5.12.3 ([#158](https://github.com/dachrisch/dontforget/issues/158)) ([8bf56e4](https://github.com/dachrisch/dontforget/commit/8bf56e47b5d40831bdd8dab39615753da62b86ed))
+* **deps:** update dependency nodemailer to v9.1.0 ([#148](https://github.com/dachrisch/dontforget/issues/148)) ([65c4a3d](https://github.com/dachrisch/dontforget/commit/65c4a3d7830ad625d575ff99fc677d4520bad484))
+* **deps:** update dependency nodemailer to v9.1.1 ([#154](https://github.com/dachrisch/dontforget/issues/154)) ([99b60be](https://github.com/dachrisch/dontforget/commit/99b60be5b759c608a9a72d7a55b1d26813c0805f))
+* **deps:** update dependency tsx to v4.23.13 ([#144](https://github.com/dachrisch/dontforget/issues/144)) ([3b4c6c3](https://github.com/dachrisch/dontforget/commit/3b4c6c3e2171208a49a2991dca386e74af64d9a5))
+* **deps:** update dependency undici to v8.10.1 ([f5cf07e](https://github.com/dachrisch/dontforget/commit/f5cf07e4e0b41194e54f1ce6bf9c0436d669f82f))
+* **deps:** update dependency undici to v8.10.1 ([5140c47](https://github.com/dachrisch/dontforget/commit/5140c47f66fcaf4d603d31ec82dd53d4557e530f))
+* **deps:** update dependency undici to v8.10.1 ([#147](https://github.com/dachrisch/dontforget/issues/147)) ([d468cf1](https://github.com/dachrisch/dontforget/commit/d468cf148600a8c8f0a4bd904d2d3f50387d6fe4))
+* **deps:** update dependency undici to v8.10.2 ([#161](https://github.com/dachrisch/dontforget/issues/161)) ([937dfb1](https://github.com/dachrisch/dontforget/commit/937dfb17b9577aea55620baf23b2f67fa0cfb138))
+* **deps:** update dependency vitest to v5 ([#156](https://github.com/dachrisch/dontforget/issues/156)) ([8a0d7f6](https://github.com/dachrisch/dontforget/commit/8a0d7f69ecb7028a85ba1159c126993e9e1c1e01))
+* repoint opencode models after catalog retirement ([356838e](https://github.com/dachrisch/dontforget/commit/356838e83b5a16a7a6633e6d6bfbc62eacf87100))
+* repoint opencode models after catalog retirement ([2a48388](https://github.com/dachrisch/dontforget/commit/2a48388c53a196bdf94116ec5bf777603d0b8a61))
+* **web:** copy Google Calendar link before opening add-by-URL tab ([e8f8961](https://github.com/dachrisch/dontforget/commit/e8f8961d9383f23633b26338f53f77747d8506bf))
+* **web:** copy Google Calendar link before opening add-by-URL tab ([2a0dae1](https://github.com/dachrisch/dontforget/commit/2a0dae1db8702239f1b8acf03151741fc7d023d9))
+
 ## [0.20.0](https://github.com/dachrisch/dontforget/compare/v0.19.0...v0.20.0) (2026-09-04)
 
 
