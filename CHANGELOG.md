@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.21.1](https://github.com/dachrisch/dontforget/compare/v0.21.0...v0.21.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastify to v5.12.3 ([#158](https://github.com/dachrisch/dontforget/issues/158)) ([8bf56e4](https://github.com/dachrisch/dontforget/commit/8bf56e47b5d40831bdd8dab39615753da62b86ed))
+* **deps:** update dependency nodemailer to v9.1.1 ([#154](https://github.com/dachrisch/dontforget/issues/154)) ([99b60be](https://github.com/dachrisch/dontforget/commit/99b60be5b759c608a9a72d7a55b1d26813c0805f))
+* **deps:** update dependency undici to v8.10.1 ([f5cf07e](https://github.com/dachrisch/dontforget/commit/f5cf07e4e0b41194e54f1ce6bf9c0436d669f82f))
+* **deps:** update dependency undici to v8.10.2 ([#161](https://github.com/dachrisch/dontforget/issues/161)) ([937dfb1](https://github.com/dachrisch/dontforget/commit/937dfb17b9577aea55620baf23b2f67fa0cfb138))
+* **deps:** update dependency vitest to v5 ([#156](https://github.com/dachrisch/dontforget/issues/156)) ([8a0d7f6](https://github.com/dachrisch/dontforget/commit/8a0d7f69ecb7028a85ba1159c126993e9e1c1e01))
+* preserve search input focus and value during dashboard polling ([d18607d](https://github.com/dachrisch/dontforget/commit/d18607d95d258f6589654a0e8e304d87de2fd718))
+
 ## [0.21.0](https://github.com/dachrisch/dontforget/compare/v0.20.0...v0.21.0) (2026-09-04)
 
 
