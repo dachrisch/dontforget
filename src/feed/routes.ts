@@ -1,8 +1,10 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import type { Db } from 'mongodb';
-import { buildIcs } from './icsGenerator.js';
-import { buildRss } from './rssGenerator.js';
+import { ObjectId, type Db } from 'mongodb';
+import { buildIcs, type IcsFeedEvent } from './icsGenerator.js';
+import { buildRss, type RssFeedEvent } from './rssGenerator.js';
 import type { CandidateEvent } from '../types.js';
+import { getOrCreateReviewToken } from '../review/reviewTokens.js';
+import { buildReviewEntryContent, reviewEntryTitle } from '../review/reviewDescription.js';
 
 export interface FeedRouteDeps {
   db: Db;
@@ -61,6 +63,9 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     .find({ user_id: tokenRow.user_id })
     .toArray();
   const queryIds = queries.map(q => q._id);
+  const queryTextById = new Map<string, string>(
+    queries.map(q => [q._id.toString(), (q.query_text as string) ?? ''])
+  );
   const eventRows = await deps.db
     .collection('events')
     .find({
@@ -78,14 +83,74 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     status: 'approved',
   }));
 
+  // Candidate events become one-off review entries — the primary triage
+  // surface — so the user never has to open the app to approve. Each entry
+  // is distinct from the real event (Review: title, review- id) and carries
+  // Approve / Not interested this time / Not interested at all links. Once
+  // any action lands, the event leaves `candidate` (or its query is
+  // deleted), so the entry is naturally not re-presented.
+  const candidateRows = await deps.db
+    .collection('events')
+    .find({
+      query_id: { $in: queryIds },
+      status: 'candidate',
+    })
+    .sort({ start_date: 1 })
+    .toArray();
+
+  const reviewIcsEvents: IcsFeedEvent[] = [];
+  const reviewRssEvents: RssFeedEvent[] = [];
+  for (const row of candidateRows) {
+    const eventId = row._id as ObjectId;
+    const queryId = row.query_id as ObjectId;
+    const reviewToken = await getOrCreateReviewToken(deps.db, eventId, queryId, tokenRow.user_id);
+    const content = buildReviewEntryContent({
+      publicBaseUrl: deps.publicBaseUrl,
+      token: reviewToken,
+      queryText: queryTextById.get(queryId.toString()) ?? '',
+      label: row.label as string,
+      startDate: row.start_date as string,
+      endDate: row.end_date as string,
+      sourceUrl: row.source_url as string,
+    });
+    const reviewId = `review-${eventId.toString()}`;
+    const reviewLabel = reviewEntryTitle(row.label as string);
+    reviewIcsEvents.push({
+      id: reviewId,
+      label: reviewLabel,
+      startDate: row.start_date as string,
+      endDate: row.end_date as string,
+      sourceUrl: row.source_url as string,
+      status: 'candidate',
+      description: content.text,
+      htmlDescription: content.html,
+    });
+    reviewRssEvents.push({
+      id: reviewId,
+      label: reviewLabel,
+      startDate: row.start_date as string,
+      endDate: row.end_date as string,
+      sourceUrl: row.source_url as string,
+      status: 'candidate',
+      description: content.html,
+    });
+  }
+
   // Event labels routinely carry umlauts ("Frühjahrsdult"), so the charset has
   // to be explicit: Google Calendar parses the feed during the subscribe step
   // and rejects the whole subscription — "Oops, we couldn't add this calendar"
   // — if it decodes the body as anything but UTF-8.
   if (ext === 'ics') {
     reply.header('Content-Type', 'text/calendar; charset=utf-8');
-    return reply.send(buildIcs(events));
+    return reply.send(
+      buildIcs([
+        ...events,
+        ...reviewIcsEvents,
+      ])
+    );
   }
   reply.header('Content-Type', 'application/rss+xml; charset=utf-8');
-  return reply.send(buildRss(events, `${deps.publicBaseUrl}/f/${token}`));
+  return reply.send(
+    buildRss([...events, ...reviewRssEvents], `${deps.publicBaseUrl}/f/${token}`)
+  );
 }
