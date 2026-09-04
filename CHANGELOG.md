@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.20.0](https://github.com/dachrisch/dontforget/compare/v0.19.0...v0.20.0) (2026-09-04)
+
+
+### Features
+
+* switch default extraction model to opencode-go/glm-5.3-flash ([#151](https://github.com/dachrisch/dontforget/issues/151)) ([cc030cd](https://github.com/dachrisch/dontforget/commit/cc030cd841d8be068942eed41f5a75b1855e40dc))
+* **web:** guide Google Calendar add via modal instead of unreliable cid deeplink ([4c1c07a](https://github.com/dachrisch/dontforget/commit/4c1c07a5064243ba796b54bb6351868fe63b0c6e))
+
+
+### Bug Fixes
+
+* add RFC 7986 NAME property to ICS feed for calendar name ([#125](https://github.com/dachrisch/dontforget/issues/125)) ([76cdb04](https://github.com/dachrisch/dontforget/commit/76cdb042a9e772908a3f55bffe5db0ab7ec1d04d))
+* declare charset=utf-8 on ICS and RSS feed responses ([#130](https://github.com/dachrisch/dontforget/issues/130)) ([9651e58](https://github.com/dachrisch/dontforget/commit/9651e58c20301fedb2f26bbe822da5291b916059))
+* **deps:** update dependency fastify to v5.12.3 ([#158](https://github.com/dachrisch/dontforget/issues/158)) ([8bf56e4](https://github.com/dachrisch/dontforget/commit/8bf56e47b5d40831bdd8dab39615753da62b86ed))
+* **deps:** update dependency mongodb to v7.6.0 ([#132](https://github.com/dachrisch/dontforget/issues/132)) ([94ac10e](https://github.com/dachrisch/dontforget/commit/94ac10ef8d5b6db18e846cd66635c969ce3afcce))
+* **deps:** update dependency nodemailer to v9.0.6 ([#134](https://github.com/dachrisch/dontforget/issues/134)) ([397c55c](https://github.com/dachrisch/dontforget/commit/397c55cd249717d81efa460aa2c7770b627ec852))
+* **deps:** update dependency nodemailer to v9.1.0 ([#148](https://github.com/dachrisch/dontforget/issues/148)) ([65c4a3d](https://github.com/dachrisch/dontforget/commit/65c4a3d7830ad625d575ff99fc677d4520bad484))
+* **deps:** update dependency nodemailer to v9.1.1 ([#154](https://github.com/dachrisch/dontforget/issues/154)) ([99b60be](https://github.com/dachrisch/dontforget/commit/99b60be5b759c608a9a72d7a55b1d26813c0805f))
+* **deps:** update dependency tsx to v4.23.13 ([#144](https://github.com/dachrisch/dontforget/issues/144)) ([3b4c6c3](https://github.com/dachrisch/dontforget/commit/3b4c6c3e2171208a49a2991dca386e74af64d9a5))
+* **deps:** update dependency undici to v8.10.1 ([f5cf07e](https://github.com/dachrisch/dontforget/commit/f5cf07e4e0b41194e54f1ce6bf9c0436d669f82f))
+* **deps:** update dependency undici to v8.10.1 ([5140c47](https://github.com/dachrisch/dontforget/commit/5140c47f66fcaf4d603d31ec82dd53d4557e530f))
+* **deps:** update dependency undici to v8.10.1 ([#147](https://github.com/dachrisch/dontforget/issues/147)) ([d468cf1](https://github.com/dachrisch/dontforget/commit/d468cf148600a8c8f0a4bd904d2d3f50387d6fe4))
+* **deps:** update dependency vite to v8.2.2 ([#115](https://github.com/dachrisch/dontforget/issues/115)) ([4cb2ccc](https://github.com/dachrisch/dontforget/commit/4cb2ccc0d8d8d0f20ddd4549b17d5f2430525201))
+* **deps:** update dependency vitest to v5 ([#156](https://github.com/dachrisch/dontforget/issues/156)) ([8a0d7f6](https://github.com/dachrisch/dontforget/commit/8a0d7f69ecb7028a85ba1159c126993e9e1c1e01))
+* give feed URLs a readable slug for calendar-name fallback ([#127](https://github.com/dachrisch/dontforget/issues/127)) ([0fe6715](https://github.com/dachrisch/dontforget/commit/0fe67151de4b2186d3c6491ae38837ebd33e1497))
+* keep search poll from hijacking navigation to other pages ([#117](https://github.com/dachrisch/dontforget/issues/117)) ([369eb05](https://github.com/dachrisch/dontforget/commit/369eb05e8e83cf91283acb5d92e361134ea0010f))
+* raise opencode poll timeout to 120s and switch model tiers ([#121](https://github.com/dachrisch/dontforget/issues/121)) ([03145dd](https://github.com/dachrisch/dontforget/commit/03145dda35077ba649793bb171ead51ecd0a4744))
+* remove accidentally-released Stripe billing code ([#119](https://github.com/dachrisch/dontforget/issues/119)) ([946ff8a](https://github.com/dachrisch/dontforget/commit/946ff8ac78793a2246a213ade915d09598a4f73f))
+* repoint opencode models after catalog retirement ([356838e](https://github.com/dachrisch/dontforget/commit/356838e83b5a16a7a6633e6d6bfbc62eacf87100))
+* repoint opencode models after catalog retirement ([2a48388](https://github.com/dachrisch/dontforget/commit/2a48388c53a196bdf94116ec5bf777603d0b8a61))
+* **web:** copy Google Calendar link before opening add-by-URL tab ([e8f8961](https://github.com/dachrisch/dontforget/commit/e8f8961d9383f23633b26338f53f77747d8506bf))
+* **web:** copy Google Calendar link before opening add-by-URL tab ([2a0dae1](https://github.com/dachrisch/dontforget/commit/2a0dae1db8702239f1b8acf03151741fc7d023d9))
+* **web:** guide Google Calendar add via modal instead of unreliable cid deeplink ([e88c707](https://github.com/dachrisch/dontforget/commit/e88c707000f6ec30e8bdf64bc2bf53a4bda067da))
+
 ## [0.19.0](https://github.com/dachrisch/dontforget/compare/v0.18.0...v0.19.0) (2026-09-03)
 
 
