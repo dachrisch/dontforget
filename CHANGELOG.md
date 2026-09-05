@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.22.0](https://github.com/dachrisch/dontforget/compare/v0.21.1...v0.22.0) (2026-09-05)
+
+
+### Features
+
+* review new candidate events from the calendar feed ([ed0217a](https://github.com/dachrisch/dontforget/commit/ed0217ace073620f6ce190887b42ee7497f5e37a))
+* review new candidate events from the calendar feed ([c2b947e](https://github.com/dachrisch/dontforget/commit/c2b947e2d71452b54f8615f2d64bad50a0ce5a05)), closes [#142](https://github.com/dachrisch/dontforget/issues/142)
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastify to v5.12.3 ([#158](https://github.com/dachrisch/dontforget/issues/158)) ([8bf56e4](https://github.com/dachrisch/dontforget/commit/8bf56e47b5d40831bdd8dab39615753da62b86ed))
+* **deps:** update dependency nodemailer to v10 ([03f3977](https://github.com/dachrisch/dontforget/commit/03f3977fa5dec2b42a41a5ae041e143407cd93be))
+* **deps:** update dependency nodemailer to v10 ([0cfaf89](https://github.com/dachrisch/dontforget/commit/0cfaf89d8c2f32adfd263146d6e0bc57830dbf22))
+* **deps:** update dependency undici to v8.10.2 ([#161](https://github.com/dachrisch/dontforget/issues/161)) ([937dfb1](https://github.com/dachrisch/dontforget/commit/937dfb17b9577aea55620baf23b2f67fa0cfb138))
+* **deps:** update dependency vitest to v5 ([#156](https://github.com/dachrisch/dontforget/issues/156)) ([8a0d7f6](https://github.com/dachrisch/dontforget/commit/8a0d7f69ecb7028a85ba1159c126993e9e1c1e01))
+* preserve search input focus and value during dashboard polling ([d18607d](https://github.com/dachrisch/dontforget/commit/d18607d95d258f6589654a0e8e304d87de2fd718))
+* remove redundant feed_tokens insert in admin cascade-delete test ([10356f6](https://github.com/dachrisch/dontforget/commit/10356f615959c6df088f385e729c2fd5b607225a))
+
 ## [0.21.1](https://github.com/dachrisch/dontforget/compare/v0.21.0...v0.21.1) (2026-09-04)
 
 
