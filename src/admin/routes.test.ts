@@ -137,7 +137,6 @@ describe('admin routes', () => {
     const { queryId } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1' },
     ]);
-    await db.collection('feed_tokens').insertOne({ user_id: userId, token: 'tok' });
     await db
       .collection<{ _id: string; user_id: string; expires_at: Date }>('sessions')
       .insertOne({ _id: 'sess', user_id: userId, expires_at: new Date() });

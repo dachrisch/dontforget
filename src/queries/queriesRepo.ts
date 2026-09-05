@@ -10,6 +10,7 @@ import {
 } from '../types.js';
 import { filterNewEvents } from '../scheduler/dedupeEvents.js';
 import { buildFeedUrls } from '../feed/feedUrl.js';
+import { getOrCreateFeedToken } from '../feed/feedToken.js';
 
 interface EventRow {
   _id: ObjectId;
@@ -120,6 +121,16 @@ export async function completeQueryRun(
         status: doc.status as 'candidate' | 'approved',
       }))
     );
+
+    // A fresh feed token means the user can subscribe before approving
+    // anything — the candidate review entries show up in the feed alongside
+    // any approved events from the very first run.
+    const queryRow = await db
+      .collection<{ _id: ObjectId; user_id: string }>('queries')
+      .findOne({ _id: queryId }, { projection: { user_id: 1 } });
+    if (queryRow) {
+      await getOrCreateFeedToken(db, queryRow.user_id);
+    }
   }
 
   const set: Record<string, unknown> = { status: 'ready' as const, last_run_at: now };

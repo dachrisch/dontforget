@@ -3,6 +3,7 @@ import type { EmailSender } from '../email/EmailSender.js';
 import type { ExtractionResult } from '../types.js';
 import type { DueQuery } from './dueQueries.js';
 import { filterNewEvents, type ExistingEventKey } from './dedupeEvents.js';
+import { getOrCreateFeedToken } from '../feed/feedToken.js';
 
 export interface ScheduledRunDeps {
   runQuery: (query: string) => Promise<ExtractionResult>;
@@ -58,6 +59,10 @@ export async function runScheduledQuery(db: Db, query: DueQuery, deps: Scheduled
         created_at: insertedAt,
       }))
     );
+
+    // Same as completeQueryRun: the feed must exist while candidates are
+    // still awaiting review, so the review entries have somewhere to appear.
+    await getOrCreateFeedToken(db, query.user_id);
 
     await sendReRunEmail(db, query, newEvents.length, isTrusted, deps);
   }

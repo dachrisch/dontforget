@@ -8,6 +8,7 @@ import { SessionService, createRequireAuth, createRequireAdmin } from './auth/se
 import { registerAuthRoutes } from './auth/routes.js';
 import { registerQueryRoutes } from './queries/routes.js';
 import { registerFeedRoutes } from './feed/routes.js';
+import { registerReviewRoutes } from './review/routes.js';
 import { registerAdminRoutes } from './admin/routes.js';
 import { createNoopModelRegistry } from './search/models.js';
 import type { ModelRegistry } from './search/models.js';
@@ -64,6 +65,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     publicBaseUrl: deps.publicBaseUrl,
   });
   registerFeedRoutes(app, { db: deps.db, publicBaseUrl: deps.publicBaseUrl });
+  registerReviewRoutes(app, { db: deps.db });
   registerAdminRoutes(app, {
     db: deps.db,
     requireAdmin: createRequireAdmin(sessionService),
