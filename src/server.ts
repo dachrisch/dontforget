@@ -3,8 +3,8 @@ import { createClient } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/EmailSender.js';
 import { searxngSearch } from './search/searxngClient.js';
-import { extractDates } from './search/opencodeClient.js';
-import { createSearchOrchestrator } from './search/searchOrchestrator.js';
+import { extractDates, extractSeries } from './search/opencodeClient.js';
+import { createSearchOrchestrator, createSeriesDiscoveryOrchestrator } from './search/searchOrchestrator.js';
 import { createModelRegistry } from './search/models.js';
 import { createMetricsService } from './search/metrics.js';
 import { startScheduler } from './scheduler/scheduler.js';
@@ -48,6 +48,21 @@ async function main() {
     metrics,
   });
 
+  // Stage 1 of the two-stage pipeline (issue #143): one broad searxng probe
+  // + one LLM grouping call. Per-series expansion reuses runQuery above.
+  const discoverSeries = createSeriesDiscoveryOrchestrator({
+    searxngSearch: query =>
+      searxngSearch(process.env.SEARXNG_BASE_URL!, query, process.env.SEARXNG_TOKEN!),
+    extractSeries: async (query, results) => {
+      const models = await modelRegistry.listActive();
+      return extractSeries(process.env.OPENCODE_BASE_URL!, process.env.OPENCODE_API_KEY!, query, results, {
+        models,
+        metrics,
+      });
+    },
+    metrics,
+  });
+
   const isProduction = process.env.NODE_ENV === 'production';
   const publicBaseUrl = process.env.PUBLIC_BASE_URL ?? 'http://localhost:3000';
   // Whose emails get the admin role on sign-in (comma-separated). The admin
@@ -69,6 +84,7 @@ async function main() {
     // route outside production.
     frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
+    discoverSeries,
     modelRegistry,
     metrics,
   });

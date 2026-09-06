@@ -22,6 +22,40 @@ export interface ExtractionResult {
 export interface CandidateEvent extends ExtractedEvent {
   id: string;
   status: 'candidate' | 'approved' | 'dismissed';
+  seriesId?: string;
+}
+
+// A coherent event series discovered from a broad free-form query
+// (e.g. `events in munich` -> Oktoberfest, FC Bayern home matches, ...).
+// Each series carries its own search keywords so the existing per-series
+// expansion path (searxngSearch + extractDates + date-dedupe) can expand it
+// into concrete dated occurrences on demand.
+export interface ExtractedSeries {
+  title: string;
+  description: string;
+  searchKeywords: string;
+  sourceUrls: string[];
+}
+
+export interface SeriesExtractionResult {
+  series: ExtractedSeries[];
+}
+
+export type SeriesStatus = 'candidate' | 'approved' | 'dismissed';
+
+export interface CandidateSeries extends ExtractedSeries {
+  id: string;
+  status: SeriesStatus;
+}
+
+export interface SeriesSummary {
+  id: string;
+  title: string;
+  description: string;
+  searchKeywords: string;
+  sourceUrls: string[];
+  status: SeriesStatus;
+  eventCounts: { approved: number; candidate: number };
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -53,6 +87,9 @@ export interface QuerySummary {
   approvedCount: number;
   candidateCount: number;
   status: QueryStatus;
+  // Series counts nested under their parent query (issue #143). Present
+  // once the series migration has run; older payloads omit it.
+  series?: SeriesSummary[];
 }
 
 export interface FeedSummary {

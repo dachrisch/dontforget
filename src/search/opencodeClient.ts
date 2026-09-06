@@ -1,5 +1,5 @@
 import { Agent, fetch as undiciFetch } from 'undici';
-import { isRecurrenceInterval, type ExtractionResult, type SearchResult } from '../types.js';
+import { isRecurrenceInterval, type ExtractionResult, type SearchResult, type SeriesExtractionResult } from '../types.js';
 import type { ActiveModel } from './models.js';
 import type { MetricsService } from './metrics.js';
 
@@ -81,6 +81,33 @@ export async function extractDates(
   results: SearchResult[],
   opts: ExtractDatesOptions = {}
 ): Promise<ExtractionResult> {
+  return runExtraction(baseUrl, apiKey, query, results, opts, buildPrompt, parseExtraction);
+}
+
+// Groups a broad free-form query into a bounded set of coherent event
+// series (not raw dates). One broad searxng probe's results in, at most
+// MAX_SERIES_OUT series out — each with a title, one-line description,
+// reusable search keywords, and exemplar source URLs. Narrow queries are
+// the degenerate case: the model returns a single series.
+export async function extractSeries(
+  baseUrl: string,
+  apiKey: string,
+  query: string,
+  results: SearchResult[],
+  opts: ExtractDatesOptions = {}
+): Promise<SeriesExtractionResult> {
+  return runExtraction(baseUrl, apiKey, query, results, opts, buildSeriesPrompt, parseSeriesExtraction);
+}
+
+async function runExtraction<T>(
+  baseUrl: string,
+  apiKey: string,
+  query: string,
+  results: SearchResult[],
+  opts: ExtractDatesOptions,
+  build: (query: string, results: SearchResult[]) => string,
+  parse: (replyText: string) => T
+): Promise<T> {
   const models = opts.models ?? MODEL_TIERS;
   const metrics = opts.metrics ?? noopMetrics;
   let lastError: unknown;
@@ -89,9 +116,9 @@ export async function extractDates(
       const started = Date.now();
       try {
         const sessionId = await createSession(baseUrl, apiKey, model);
-        await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+        await sendPrompt(baseUrl, apiKey, sessionId, build(query, results));
         const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-        const parsed = parseExtraction(replyText);
+        const parsed = parse(replyText);
         await metrics.recordModelCall({
           modelId: model.id,
           providerId: model.providerID,
@@ -234,6 +261,53 @@ function parseExtraction(replyText: string): ExtractionResult {
   const events = Array.isArray(parsed.events) ? parsed.events : [];
   const cadence = isRecurrenceInterval(parsed.cadence) ? parsed.cadence : null;
   return { events, cadence };
+}
+
+// Cost guardrail for series discovery (issue #143): one broad query yields
+// at most MAX_SERIES series, truncated deterministically (model order,
+// first N win). Tunable after the first real-world run.
+export const MAX_SERIES = 12;
+
+function buildSeriesPrompt(query: string, results: SearchResult[]): string {
+  const resultsBlock = results
+    .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.content}`)
+    .join('\n\n');
+  return [
+    `Group the broad query "${query}" into coherent recurring event series based on these search results.`,
+    `Each series is a distinct repeating event (e.g. a festival, a sports season's home matches, a fair) — not a single dated occurrence.`,
+    `Respond with only JSON, no prose: {"series":[{"title":string,"description":string,"searchKeywords":string,"sourceUrls":string[]}]}`,
+    `Rules: at most ${MAX_SERIES} series, most prominent first; title is the series name; description is one line; searchKeywords is a focused searxng query that would find this series' dates (include place/theme, e.g. "Oktoberfest Munich dates"); sourceUrls lists 1-2 URLs from the results above that mention the series.`,
+    `If the query already resolves to one series (e.g. "Auer Dult Munich"), return exactly 1 series for it.`,
+    `If nothing is found, respond {"series":[]}.`,
+    '',
+    resultsBlock,
+  ].join('\n');
+}
+
+function parseSeriesExtraction(replyText: string): SeriesExtractionResult {
+  const jsonText = extractFirstJsonObject(replyText);
+  const parsed = JSON.parse(jsonText) as { series?: unknown };
+  const raw = Array.isArray(parsed.series) ? parsed.series : [];
+  const seen = new Set<string>();
+  const series: SeriesExtractionResult['series'] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const title = typeof rec.title === 'string' ? rec.title.trim() : '';
+    const description = typeof rec.description === 'string' ? rec.description.trim() : '';
+    const searchKeywords = typeof rec.searchKeywords === 'string' ? rec.searchKeywords.trim() : '';
+    const sourceUrls = Array.isArray(rec.sourceUrls)
+      ? rec.sourceUrls.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).map(u => u.trim())
+      : [];
+    if (!title || !searchKeywords || sourceUrls.length === 0) continue;
+    const key = title.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    series.push({ title, description, searchKeywords, sourceUrls });
+    // Deterministic truncation: keep model order, first MAX_SERIES win.
+    if (series.length >= MAX_SERIES) break;
+  }
+  return { series };
 }
 
 // A plain /\{[\s\S]*\}/ match greedily spans from the first '{' to the very

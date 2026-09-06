@@ -747,3 +747,28 @@ describe('renderWorkspace', () => {
     expect(container.querySelectorAll('.admin-stat')).toHaveLength(0);
   });
 });
+describe('series nesting', () => {
+  it('shows series rows nested under their parent query', () => {
+    const container = document.createElement('div');
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [
+          query({
+            text: 'events in munich',
+            series: [
+              { id: 's1', title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } },
+            ],
+          }),
+        ],
+        feed: null,
+        editing: null,
+        reviewing: null,
+      },
+      noopHandlers()
+    );
+    expect(container.textContent).toContain('Oktoberfest');
+    expect(container.querySelector('.query-series-row[data-series-id="s1"]')).not.toBeNull();
+  });
+});

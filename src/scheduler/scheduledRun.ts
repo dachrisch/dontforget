@@ -4,6 +4,8 @@ import type { ExtractionResult } from '../types.js';
 import type { DueQuery } from './dueQueries.js';
 import { filterNewEvents, type ExistingEventKey } from './dedupeEvents.js';
 import { getOrCreateFeedToken } from '../feed/feedToken.js';
+import { completeSeriesExpansion } from '../queries/queriesRepo.js';
+import type { SeriesRow } from '../queries/seriesRepo.js';
 
 export interface ScheduledRunDeps {
   runQuery: (query: string) => Promise<ExtractionResult>;
@@ -16,6 +18,69 @@ interface ExistingEventRow extends ExistingEventKey {
 }
 
 export async function runScheduledQuery(db: Db, query: DueQuery, deps: ScheduledRunDeps): Promise<void> {
+  // Two-stage pipeline (issue #143): scheduled re-runs expand per approved
+  // series, not the raw broad query. Dismissed/candidate series are never
+  // expanded; dismissed titles are never re-created (insert path dedupes).
+  // Queries with no series rows at all (pre-migration, or unit tests using
+  // the legacy helper) fall back to the legacy raw-query path.
+  const seriesRows = await db
+    .collection<SeriesRow>('series')
+    .find({ query_id: query._id })
+    .toArray();
+  if (seriesRows.length > 0) {
+    await runScheduledSeriesExpansion(db, query, seriesRows, deps);
+    return;
+  }
+  await runLegacyScheduledQuery(db, query, deps);
+}
+
+async function runScheduledSeriesExpansion(
+  db: Db,
+  query: DueQuery,
+  seriesRows: SeriesRow[],
+  deps: ScheduledRunDeps
+): Promise<void> {
+  const approved = seriesRows.filter(s => s.status === 'approved');
+  if (approved.length === 0) {
+    // Nothing trusted to expand — still advance the schedule so the query
+    // doesn't go permanently due. Discovery re-runs only on explicit
+    // refresh, not here.
+    await db
+      .collection('queries')
+      .updateOne({ _id: query._id }, { $set: { last_run_at: new Date(), status: 'ready' as const } });
+    return;
+  }
+
+  let totalNew = 0;
+  try {
+    // One searxng call per expanded series (cost guardrail); sequential so
+    // date-dedupe sees each series' inserts before the next runs.
+    for (const series of approved) {
+      const extracted = await deps.runQuery(series.search_keywords);
+      const inserted = await completeSeriesExpansion(db, query._id, series._id, extracted.events);
+      totalNew += inserted.length;
+    }
+  } catch (err) {
+    await db
+      .collection('queries')
+      .updateOne({ _id: query._id }, { $set: { status: 'failed' as const } })
+      .catch(() => undefined);
+    throw err;
+  }
+
+  if (totalNew > 0) {
+    // Approved-series expansions land as approved (trusted), so the email
+    // is always the FYI variant.
+    await sendReRunEmail(db, query, totalNew, true, deps);
+  }
+
+  await db.collection('queries').updateOne(
+    { _id: query._id },
+    { $set: { last_run_at: new Date(), status: 'ready' as const } }
+  );
+}
+
+async function runLegacyScheduledQuery(db: Db, query: DueQuery, deps: ScheduledRunDeps): Promise<void> {
   // Dedup set and trust are snapshotted here, before deps.runQuery (the
   // orchestrator, which can take a while — real search + LLM extraction)
   // runs — not re-read afterward. If a user approves this query's

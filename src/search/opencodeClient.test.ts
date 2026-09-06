@@ -14,7 +14,7 @@ vi.mock('undici', async importOriginal => {
   return { ...actual, fetch: fetchMock };
 });
 
-import { extractDates } from './opencodeClient.js';
+import { extractDates, extractSeries, MAX_SERIES } from './opencodeClient.js';
 
 afterEach(() => {
   fetchMock.mockReset();
@@ -289,5 +289,68 @@ describe('extractDates', () => {
     expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
       model: { id: 'primary', providerID: 'opencode' },
     });
+  });
+});
+
+describe('extractSeries', () => {
+  it('sends a series-grouping prompt and parses coherent series', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_series'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"series":[{"title":"Oktoberfest","description":"Beer festival","searchKeywords":"Oktoberfest Munich dates","sourceUrls":["https://oktoberfest.de"]}]}'
+        )
+      );
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', [
+      { title: 'Oktoberfest', url: 'https://oktoberfest.de', content: 'dates' },
+    ]);
+
+    const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(promptBody.prompt.text).toMatch(/series/i);
+    expect(promptBody.prompt.text).toMatch(/searchKeywords/);
+    expect(result).toEqual({
+      series: [
+        {
+          title: 'Oktoberfest',
+          description: 'Beer festival',
+          searchKeywords: 'Oktoberfest Munich dates',
+          sourceUrls: ['https://oktoberfest.de'],
+        },
+      ],
+    });
+  });
+
+  it('caps at MAX_SERIES and drops entries without title, keywords, or sources', async () => {
+    const many = Array.from({ length: MAX_SERIES + 5 }, (_, i) => ({
+      title: `Series ${i + 1}`,
+      description: 'd',
+      searchKeywords: `Series ${i + 1} Munich`,
+      sourceUrls: ['https://example.com'],
+    }));
+    many.push(
+      { title: '', description: 'no title', searchKeywords: 'x Munich', sourceUrls: ['https://example.com'] },
+      { title: 'No keywords', description: 'd', searchKeywords: '', sourceUrls: ['https://example.com'] },
+      { title: 'No sources', description: 'd', searchKeywords: 'No sources Munich', sourceUrls: [] }
+    );
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_cap'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse(JSON.stringify({ series: many })));
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', []);
+    expect(result.series).toHaveLength(MAX_SERIES);
+    expect(result.series[0].title).toBe('Series 1');
+  });
+
+  it('returns an empty list when the model finds nothing', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_empty'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"series":[]}'));
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', []);
+    expect(result).toEqual({ series: [] });
   });
 });

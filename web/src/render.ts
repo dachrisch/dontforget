@@ -817,6 +817,20 @@ function renderQueryCard(query: QuerySummary): string {
   const reviewAction = query.candidateCount > 0
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
+  // Series nested under their parent query (issue #143): one row per
+  // series with title + status. Dated events still live in the existing
+  // per-event review; series are the first review gate for broad queries.
+  const seriesSection =
+    query.series && query.series.length > 0
+      ? `<div class="query-series" aria-label="series">${query.series
+          .map(
+            s => `<div class="ledger-row query-series-row" data-series-id="${s.id}">
+        <span class="ledger-label">${escapeHtml(s.title)}</span>
+        <span class="ledger-value">${escapeHtml(s.status)}</span>
+      </div>`
+          )
+          .join('')}</div>`
+      : '';
   return `
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
@@ -839,6 +853,7 @@ function renderQueryCard(query: QuerySummary): string {
         <span class="ledger-label">${t('queryCard.events')}</span>
         <span class="ledger-value">${eventSummary.length > 0 ? escapeHtml(eventSummary.join(' · ')) : t('queryCard.noneYet')}</span>
       </div>
+      ${seriesSection}
     </article>
   `;
 }

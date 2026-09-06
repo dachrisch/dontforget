@@ -6,6 +6,7 @@ import { migrate as migrate004 } from '../migrations/004_models_metrics.js';
 import { migrate as migrate005 } from '../migrations/005_swap_dead_models.js';
 import { migrate as migrate006 } from '../migrations/006_swap_default_model.js';
 import { migrate as migrate007 } from '../migrations/007_review_tokens.js';
+import { migrate as migrate008 } from '../migrations/008_series.js';
 
 interface Migration {
   name: string;
@@ -22,6 +23,7 @@ const MIGRATIONS: Migration[] = [
   { name: '005_swap_dead_models.ts', migrate: migrate005 },
   { name: '006_swap_default_model.ts', migrate: migrate006 },
   { name: '007_review_tokens.ts', migrate: migrate007 },
+  { name: '008_series.ts', migrate: migrate008 },
 ];
 
 export async function runMigrations(db: Db): Promise<string[]> {
