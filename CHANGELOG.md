@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.24.1](https://github.com/dachrisch/dontforget/compare/v0.24.0...v0.24.1) (2026-09-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24.13.4 ([#173](https://github.com/dachrisch/dontforget/issues/173)) ([77e5562](https://github.com/dachrisch/dontforget/commit/77e5562cec73f9a657950ff46a13a9bd2cc44e76))
+
 ## [0.24.0](https://github.com/dachrisch/dontforget/compare/v0.23.0...v0.24.0) (2026-09-09)
 
 
