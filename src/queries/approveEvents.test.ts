@@ -2,6 +2,8 @@ import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { approveEvents } from './approveEvents';
+import { createQuery, completeSeriesExpansion } from './queriesRepo';
+import { insertDiscoveredSeries } from './seriesRepo';
 
 describe('approveEvents', () => {
   let client: MongoClient;
@@ -97,6 +99,36 @@ describe('approveEvents', () => {
     const byLabel = Object.fromEntries(statuses.map(r => [r.label as string, r.status as string]));
     expect(byLabel['Frühjahrsdult']).toBe('candidate');
     expect(byLabel['Kirchweihdult (stale)']).toBe('dismissed');
+  });
+
+  it('subscribes to the parent series when approving its dates', async () => {
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    const inserted = await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    await approveEvents(db, userId, query.queryId, [inserted[0].id], 'http://localhost:3000');
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('approved');
+  });
+
+  it('does not subscribe to the parent series for dismissed dates', async () => {
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    const inserted = await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    await approveEvents(db, userId, query.queryId, [], 'http://localhost:3000', undefined, [inserted[0].id]);
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('candidate');
   });
 
   it('approves and dismisses different events in the same call', async () => {

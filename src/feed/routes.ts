@@ -2,9 +2,12 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { ObjectId, type Db } from 'mongodb';
 import { buildIcs, type IcsFeedEvent } from './icsGenerator.js';
 import { buildRss, type RssFeedEvent } from './rssGenerator.js';
-import type { CandidateEvent } from '../types.js';
 import { getOrCreateReviewToken } from '../review/reviewTokens.js';
-import { buildReviewEntryContent, reviewEntryTitle } from '../review/reviewDescription.js';
+import {
+  buildApprovedEntryContent,
+  buildReviewEntryContent,
+  reviewEntryTitle,
+} from '../review/reviewDescription.js';
 
 export interface FeedRouteDeps {
   db: Db;
@@ -74,14 +77,43 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     })
     .sort({ start_date: 1 })
     .toArray();
-  const events: CandidateEvent[] = eventRows.map(r => ({
-    id: r._id.toString(),
-    label: r.label,
-    startDate: r.start_date,
-    endDate: r.end_date,
-    sourceUrl: r.source_url,
-    status: 'approved',
-  }));
+  // Series titles for the per-date triage links below: an approved date
+  // that belongs to a subscribed series offers "unsubscribe from the
+  // series" one level above the date itself.
+  const seriesTitleById = new Map<string, string>();
+  if (queryIds.length > 0) {
+    const seriesRows = await deps.db
+      .collection<{ _id: ObjectId; title: string }>('series')
+      .find({ query_id: { $in: queryIds } }, { projection: { title: 1 } })
+      .toArray();
+    for (const row of seriesRows) seriesTitleById.set(row._id.toString(), row.title);
+  }
+  // Approved dates carry dismiss/unsubscribe links in their description:
+  // keeping them needs no action, dropping one is a click. Same token
+  // pattern as the candidate review entries.
+  const events: IcsFeedEvent[] = [];
+  for (const r of eventRows) {
+    const eventId = r._id as ObjectId;
+    const queryId = r.query_id as ObjectId;
+    const seriesTitle = seriesTitleById.get((r.series_id as ObjectId | undefined)?.toString() ?? '') ?? null;
+    const triageToken = await getOrCreateReviewToken(deps.db, eventId, queryId, tokenRow.user_id);
+    const triage = buildApprovedEntryContent({
+      publicBaseUrl: deps.publicBaseUrl,
+      token: triageToken,
+      label: r.label as string,
+      seriesTitle,
+    });
+    events.push({
+      id: eventId.toString(),
+      label: r.label,
+      startDate: r.start_date,
+      endDate: r.end_date,
+      sourceUrl: r.source_url,
+      status: 'approved',
+      description: triage.text,
+      htmlDescription: triage.html,
+    });
+  }
 
   // Candidate events become one-off review entries — the primary triage
   // surface — so the user never has to open the app to approve. Each entry

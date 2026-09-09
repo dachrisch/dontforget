@@ -1,5 +1,5 @@
 import { Agent, fetch as undiciFetch } from 'undici';
-import { isRecurrenceInterval, type ExtractionResult, type SearchResult } from '../types.js';
+import { isRecurrenceInterval, type ExtractionResult, type SearchResult, type SeriesExtractionResult } from '../types.js';
 import type { ActiveModel } from './models.js';
 import type { MetricsService } from './metrics.js';
 
@@ -81,6 +81,33 @@ export async function extractDates(
   results: SearchResult[],
   opts: ExtractDatesOptions = {}
 ): Promise<ExtractionResult> {
+  return runExtraction(baseUrl, apiKey, query, results, opts, buildPrompt, parseExtraction);
+}
+
+// Groups a broad free-form query into a bounded set of coherent event
+// series (not raw dates). One broad searxng probe's results in, at most
+// MAX_SERIES_OUT series out — each with a title, one-line description,
+// reusable search keywords, and exemplar source URLs. Narrow queries are
+// the degenerate case: the model returns a single series.
+export async function extractSeries(
+  baseUrl: string,
+  apiKey: string,
+  query: string,
+  results: SearchResult[],
+  opts: ExtractDatesOptions = {}
+): Promise<SeriesExtractionResult> {
+  return runExtraction(baseUrl, apiKey, query, results, opts, buildSeriesPrompt, parseSeriesExtraction);
+}
+
+async function runExtraction<T>(
+  baseUrl: string,
+  apiKey: string,
+  query: string,
+  results: SearchResult[],
+  opts: ExtractDatesOptions,
+  build: (query: string, results: SearchResult[]) => string,
+  parse: (replyText: string) => T
+): Promise<T> {
   const models = opts.models ?? MODEL_TIERS;
   const metrics = opts.metrics ?? noopMetrics;
   let lastError: unknown;
@@ -89,9 +116,9 @@ export async function extractDates(
       const started = Date.now();
       try {
         const sessionId = await createSession(baseUrl, apiKey, model);
-        await sendPrompt(baseUrl, apiKey, sessionId, buildPrompt(query, results));
+        await sendPrompt(baseUrl, apiKey, sessionId, build(query, results));
         const replyText = await pollForReply(baseUrl, apiKey, sessionId);
-        const parsed = parseExtraction(replyText);
+        const parsed = parse(replyText);
         await metrics.recordModelCall({
           modelId: model.id,
           providerId: model.providerID,
@@ -234,6 +261,117 @@ function parseExtraction(replyText: string): ExtractionResult {
   const events = Array.isArray(parsed.events) ? parsed.events : [];
   const cadence = isRecurrenceInterval(parsed.cadence) ? parsed.cadence : null;
   return { events, cadence };
+}
+
+// Cost guardrail for series discovery (issue #143): one broad query yields
+// at most MAX_SERIES series, truncated deterministically (model order,
+// first N win). Tunable after the first real-world run.
+export const MAX_SERIES = 12;
+
+// The identity a discovered series applies to (e.g. "Auer Dult",
+// "Stadtfest Minden"): the canonical recurring entity, always with its
+// place. Dedupe key everywhere — the model's `appliesTo` when present,
+// falling back to `title` for older replies/fixtures that predate it.
+export function seriesIdentityKey(entry: { title: string; appliesTo?: string }): string {
+  const raw = entry.appliesTo?.trim() || entry.title;
+  return raw.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function buildSeriesPrompt(query: string, results: SearchResult[]): string {
+  const resultsBlock = results
+    .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.content}`)
+    .join('\n\n');
+  return [
+    `Group the broad query "${query}" into coherent recurring event series based on these search results.`,
+    `Each series is a distinct repeating event (e.g. a festival, a sports season's home matches, a fair) — not a single dated occurrence.`,
+    `Work in two steps per series. Step 1: find out what the series applies to — the canonical recurring entity with its place (e.g. "Auer Dult" in Munich, "Stadtfest Minden" in Minden). Step 2: only then give the search keywords and sources for dates in THIS series.`,
+    `Respond with only JSON, no prose: {"series":[{"title":string,"appliesTo":string,"description":string,"searchKeywords":string,"sourceUrls":string[]}]}`,
+    `Rules: at most ${MAX_SERIES} series, most prominent first; title is the series display name; appliesTo is the canonical recurring entity it applies to, including place (e.g. "Auer Dult, Munich"); description is one line saying what recurs where; searchKeywords is a focused searxng query that would find dates of exactly this entity (include place/theme, e.g. "Auer Dult Munich Termine"); sourceUrls lists 1-2 URLs from the results above that mention this entity.`,
+    `If the query already resolves to one series (e.g. "Auer Dult Munich"), return exactly 1 series for it, with appliesTo naming that entity.`,
+    `If nothing is found, respond {"series":[]}.`,
+    '',
+    resultsBlock,
+  ].join('\n');
+}
+
+function parseSeriesExtraction(replyText: string): SeriesExtractionResult {
+  const jsonText = extractFirstJsonObject(replyText);
+  const parsed = JSON.parse(jsonText) as { series?: unknown };
+  const raw = Array.isArray(parsed.series) ? parsed.series : [];
+  const seen = new Set<string>();
+  const series: SeriesExtractionResult['series'] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue;
+    const rec = item as Record<string, unknown>;
+    const title = typeof rec.title === 'string' ? rec.title.trim() : '';
+    // appliesTo postdates some fixtures — fall back to the title so older
+    // replies still yield a usable identity.
+    const appliesToRaw = typeof rec.appliesTo === 'string' ? rec.appliesTo.trim() : '';
+    const appliesTo = appliesToRaw || title;
+    const description = typeof rec.description === 'string' ? rec.description.trim() : '';
+    const searchKeywords = typeof rec.searchKeywords === 'string' ? rec.searchKeywords.trim() : '';
+    const sourceUrls = Array.isArray(rec.sourceUrls)
+      ? rec.sourceUrls.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).map(u => u.trim())
+      : [];
+    if (!title || !appliesTo || !searchKeywords || sourceUrls.length === 0) continue;
+    const key = seriesIdentityKey({ title, appliesTo });
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    series.push({ title, appliesTo, description, searchKeywords, sourceUrls });
+    // Deterministic truncation: keep model order, first MAX_SERIES win.
+    if (series.length >= MAX_SERIES) break;
+  }
+  return { series };
+}
+
+// The scope a date lookup is restricted to: dates must be occurrences of
+// THIS series' entity, not just anything mentioning the keywords.
+export interface SeriesScope {
+  title: string;
+  appliesTo: string;
+  description: string;
+  searchKeywords: string;
+}
+
+// Series-scoped date extraction (stage 2 of the two-stage pipeline): the
+// user subscribes to the series, not to individual events, so the lookup
+// must first recall what the series applies to and then return only dates
+// that are occurrences of that entity. Anything else mentioned in the
+// results (other fairs, other towns, generic event roundups) is ignored.
+export async function extractSeriesDates(
+  baseUrl: string,
+  apiKey: string,
+  series: SeriesScope,
+  results: SearchResult[],
+  opts: ExtractDatesOptions = {}
+): Promise<ExtractionResult> {
+  return runExtraction(
+    baseUrl,
+    apiKey,
+    series.searchKeywords,
+    results,
+    opts,
+    () => buildSeriesDatesPrompt(series, results),
+    parseExtraction
+  );
+}
+
+function buildSeriesDatesPrompt(series: SeriesScope, results: SearchResult[]): string {
+  const resultsBlock = results
+    .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.content}`)
+    .join('\n\n');
+  const identity = series.appliesTo.trim() || series.title;
+  return [
+    `This series applies to "${identity}"${series.title && series.title !== identity ? ` (shown as "${series.title}")` : ''}${series.description ? `: ${series.description}` : ''}.`,
+    `Extract only concrete dates that are occurrences of THIS series from these search results (e.g. its editions, shows, or match dates).`,
+    `Ignore dates belonging to any other event, fair, or town mentioned in the results, even if the wording overlaps.`,
+    `Respond with only JSON, no prose: {"events":[{"label":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","sourceUrl":string}],"cadence":"weekly"|"monthly"|"quarterly"|"yearly"|null}`,
+    `If a result gives a single day, set startDate and endDate to the same date. Label each event as an occurrence of "${identity}" (e.g. its edition or season name).`,
+    `Also judge how often "${identity}" recurs as a whole: set cadence to "weekly", "monthly", "quarterly", or "yearly". If it does not recur on a predictable cadence, set "cadence":null.`,
+    `If no dates of this series are found, respond {"events":[],"cadence":null}.`,
+    '',
+    resultsBlock,
+  ].join('\n');
 }
 
 // A plain /\{[\s\S]*\}/ match greedily spans from the first '{' to the very

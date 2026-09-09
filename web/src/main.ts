@@ -12,6 +12,7 @@ import {
   deleteQuery,
   rotateFeedToken,
   runQuery,
+  reviewSeries,
   signOut,
   deleteAccount,
   getAdminStats,
@@ -155,13 +156,16 @@ async function refreshDashboard(): Promise<void> {
     setState(reducer(state, { type: 'DASHBOARD_LOADED', queries: data.queries, feed: data.feed }));
     // A query that finished searching while we were watching opens its
     // review inline — the user just submitted it from here and is waiting
-    // on the card, so land them straight on the approval tiles.
+    // on the card, so land them straight on the approval tiles. Queries
+    // with series skip this: their review happens one level above (series
+    // subscribe buttons on the card, single dates in the calendar).
     if (state.kind === 'dashboard') {
       const dashboardState = state;
       const landed = dashboardState.queries.find(
         q =>
           q.status !== 'running' &&
           q.candidateCount > 0 &&
+          (q.series?.length ?? 0) === 0 &&
           previous.some(p => p.id === q.id && p.status === 'running') &&
           dashboardState.editing?.queryId !== q.id &&
           dashboardState.reviewing?.queryId !== q.id
@@ -173,6 +177,21 @@ async function refreshDashboard(): Promise<void> {
   } finally {
     scheduleDashboardPoll();
   }
+}
+
+// After subscribing, the series expansion (search + extraction) lands in
+// the background with no `running` state to drive the normal poll. Refresh
+// a few times on a fixed schedule so the dates preview appears without a
+// manual reload; each tick is skipped once the user leaves the dashboard.
+let seriesPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSeriesPreviewPoll(remaining = 3): void {
+  if (seriesPollTimer || remaining <= 0) return;
+  seriesPollTimer = setTimeout(() => {
+    seriesPollTimer = null;
+    if (!canRefreshDashboard(state)) return;
+    refreshDashboard().finally(() => scheduleSeriesPreviewPoll(remaining - 1));
+  }, 8000);
 }
 
 function startReview(queryId: string): void {
@@ -207,6 +226,24 @@ function paint() {
     onStartReview: queryId => {
       clearError();
       startReview(queryId);
+    },
+    onSubscribeSeries: (queryId, seriesId) => {
+      clearError();
+      // Subscribing kicks off a background expansion — the query card stays
+      // `ready`, so the running-card poll won't pick the new dates up. Re-
+      // poll on a bounded schedule instead so the dates preview lands.
+      reviewSeries(queryId, [seriesId])
+        .then(() => {
+          refreshDashboard();
+          scheduleSeriesPreviewPoll();
+        })
+        .catch(err => showError('error.subscribing', err));
+    },
+    onUnsubscribeSeries: (queryId, seriesId) => {
+      clearError();
+      reviewSeries(queryId, [], [seriesId])
+        .then(() => refreshDashboard())
+        .catch(err => showError('error.subscribing', err));
     },
     onToggleReviewEvent: id => {
       setState(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id }));

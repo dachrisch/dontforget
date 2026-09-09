@@ -1,4 +1,4 @@
-import type { AdminModel, AdminSearch, AdminStats, AdminUser, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval } from './types';
+import type { AdminModel, AdminSearch, AdminStats, AdminUser, Dashboard, EventDetail, Me, ModelRole, QuerySummary, RecurrenceInterval, SeriesSummary } from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -117,6 +117,33 @@ export async function deleteAccount(): Promise<void> {
 
 export async function getQueryEvents(queryId: string): Promise<EventDetail[]> {
   const response = await fetch(`/api/queries/${queryId}/events`, { credentials: 'include' });
+  return handle(response);
+}
+
+export async function listSeries(queryId: string): Promise<SeriesSummary[]> {
+  const response = await fetch(`/api/queries/${queryId}/series`, { credentials: 'include' });
+  return handle(response);
+}
+
+export async function reviewSeries(
+  queryId: string,
+  approveIds: string[],
+  dismissIds: string[] = []
+): Promise<SeriesSummary[]> {
+  const response = await fetch(`/api/queries/${queryId}/series/review`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ approveIds, dismissIds }),
+  });
+  return handle(response);
+}
+
+export async function expandSeries(queryId: string, seriesId: string): Promise<EventDetail[]> {
+  const response = await fetch(`/api/queries/${queryId}/series/${seriesId}/expand`, {
+    method: 'POST',
+    credentials: 'include',
+  });
   return handle(response);
 }
 

@@ -5,6 +5,7 @@ export interface CandidateEvent {
   endDate: string;
   sourceUrl: string;
   status: 'candidate' | 'approved' | 'dismissed';
+  seriesId?: string;
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
@@ -32,6 +33,29 @@ export interface QuerySummary {
   approvedCount: number;
   candidateCount: number;
   status: QueryStatus;
+  // Series nested under their parent query (issue #143). Present once the
+  // backend series migration has run; older payloads omit it.
+  series?: SeriesSummary[];
+}
+
+export type SeriesStatus = 'candidate' | 'approved' | 'dismissed';
+
+export interface SeriesDatePreview {
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
+export interface SeriesSummary {
+  id: string;
+  title: string;
+  appliesTo: string;
+  description: string;
+  searchKeywords: string;
+  sourceUrls: string[];
+  status: SeriesStatus;
+  eventCounts: { approved: number; candidate: number };
+  previewEvents: SeriesDatePreview[];
 }
 
 export interface FeedSummary {
@@ -61,6 +85,7 @@ export interface EventDetail {
   endDate: string;
   sourceUrl: string;
   status: 'candidate' | 'approved' | 'dismissed';
+  seriesId?: string;
 }
 
 export type UserRole = 'admin' | 'user';

@@ -2,15 +2,16 @@ import { ObjectId, type Db } from 'mongodb';
 import { isReviewAction, type ReviewAction, type ReviewTokenRow } from './reviewTokens.js';
 
 export type ReviewCallbackResult =
-  | { ok: true; action: ReviewAction; eventLabel: string; queryText: string }
+  | { ok: true; action: ReviewAction; eventLabel: string; queryText: string; seriesTitle: string | null }
   | { ok: false; reason: 'invalid-action' | 'invalid-or-used' | 'not-found' | 'already-acted' };
 
 // Applies a calendar review click. Converges on the same state changes as
-// the in-app approval flow: approve flips the candidate to approved,
-// dismiss flips it to dismissed, suppress deletes the originating query and
-// all its events. The token is single-use — every path that resolves a live
-// token marks it consumed, so the review entry (derived from still-
-// candidate events) is not re-presented after any action.
+// the in-app flows: approve flips the date to approved (and subscribes the
+// parent series when the date belongs to one), dismiss drops just that
+// date, suppress unsubscribes one level above the date — its series when it
+// has one, else the whole search. The token is single-use — every path that
+// resolves a live token marks it consumed, so the entry is not re-presented
+// after any action.
 export async function handleReviewCallback(
   db: Db,
   token: string,
@@ -35,10 +36,42 @@ export async function handleReviewCallback(
     return { ok: false, reason: 'not-found' };
   }
 
+  const event = await db
+    .collection<{ _id: ObjectId; label: string; status: string; series_id?: ObjectId }>('events')
+    .findOne({ _id: tokenRow.event_id, query_id: query._id });
+  if (!event) {
+    return { ok: false, reason: 'not-found' };
+  }
+
   if (action === 'suppress') {
-    // "Not interested at all" unsubscribes the search: delete the query and
-    // its events, like deleteQuery in queriesRepo.ts. No confirmation step —
-    // the unguessable token already gates the action.
+    // "Not interested at all" unsubscribes one level above the date. A date
+    // of a subscribed series drops the series (its dates leave the feed)
+    // but keeps the search; a series-less date keeps the legacy behavior of
+    // deleting the query and its events, like deleteQuery in queriesRepo.ts.
+    // No confirmation step — the unguessable token already gates the action.
+    if (event.series_id) {
+      const series = await db
+        .collection<{ _id: ObjectId; title: string }>('series')
+        .findOne({ _id: event.series_id, query_id: query._id });
+      await db
+        .collection('series')
+        .updateMany({ _id: event.series_id, query_id: query._id }, { $set: { status: 'dismissed' } });
+      const seriesEventIds = await db
+        .collection<{ _id: ObjectId }>('events')
+        .find({ query_id: query._id, series_id: event.series_id }, { projection: { _id: 1 } })
+        .toArray();
+      await db.collection('events').updateMany(
+        { query_id: query._id, series_id: event.series_id, status: { $in: ['candidate', 'approved'] } },
+        { $set: { status: 'dismissed' } }
+      );
+      // Retire sibling tokens for the unsubscribed series so no dangling
+      // live token survives for a date that left the feed.
+      await db.collection('review_tokens').updateMany(
+        { event_id: { $in: seriesEventIds.map(r => r._id) }, used_at: null },
+        { $set: { used_at: new Date(), action: 'suppress' as ReviewAction } }
+      );
+      return { ok: true, action, eventLabel: event.label, queryText: query.query_text, seriesTitle: series?.title ?? null };
+    }
     await db.collection('queries').deleteOne({ _id: query._id });
     await db.collection('events').deleteMany({ query_id: query._id });
     // Retire sibling tokens for the deleted query so no dangling live token
@@ -49,16 +82,13 @@ export async function handleReviewCallback(
         { query_id: query._id, used_at: null },
         { $set: { used_at: new Date(), action: 'suppress' as ReviewAction } }
       );
-    return { ok: true, action, eventLabel: '', queryText: query.query_text };
+    return { ok: true, action, eventLabel: '', queryText: query.query_text, seriesTitle: null };
   }
 
-  const event = await db
-    .collection<{ _id: ObjectId; label: string; status: string }>('events')
-    .findOne({ _id: tokenRow.event_id, query_id: query._id });
-  if (!event) {
-    return { ok: false, reason: 'not-found' };
-  }
-  if (event.status !== 'candidate') {
+  // Dismissing drops one date off the calendar — allowed from both candidate
+  // and approved (keeping an approved date needs no action at all).
+  // Approving only makes sense while the date is still a candidate.
+  if (event.status !== 'candidate' && !(action === 'dismiss' && event.status === 'approved')) {
     return { ok: false, reason: 'already-acted' };
   }
 
@@ -68,7 +98,25 @@ export async function handleReviewCallback(
       { _id: event._id, query_id: query._id },
       { $set: { status: action === 'approve' ? 'approved' : 'dismissed' } }
     );
-  return { ok: true, action, eventLabel: event.label, queryText: query.query_text };
+  let seriesTitle: string | null = null;
+  if (action === 'approve' && event.series_id) {
+    // Approving a series' date from the calendar subscribes the series, so
+    // its future dates keep flowing without further approval.
+    const series = await db
+      .collection<{ _id: ObjectId; title: string }>('series')
+      .findOneAndUpdate(
+        { _id: event.series_id, query_id: query._id },
+        { $set: { status: 'approved' } },
+        { returnDocument: 'after' }
+      );
+    seriesTitle = series?.title ?? null;
+  } else if (event.series_id) {
+    const series = await db
+      .collection<{ _id: ObjectId; title: string }>('series')
+      .findOne({ _id: event.series_id, query_id: query._id }, { projection: { title: 1 } });
+    seriesTitle = series?.title ?? null;
+  }
+  return { ok: true, action, eventLabel: event.label, queryText: query.query_text, seriesTitle };
 }
 
 export function reviewConfirmationHtml(result: ReviewCallbackResult): string {
@@ -95,6 +143,12 @@ export function reviewConfirmationHtml(result: ReviewCallbackResult): string {
       return (
         `<p style="margin:0;font-size:15px;color:#1a1a2e;line-height:1.5;"><b>Dismissed.</b> ` +
         `You won't see ${escapeHtml(result.eventLabel)} again.</p>`
+      );
+    }
+    if (result.seriesTitle) {
+      return (
+        `<p style="margin:0;font-size:15px;color:#1a1a2e;line-height:1.5;"><b>Unsubscribed.</b> ` +
+        `Removed the series &quot;${escapeHtml(result.seriesTitle)}&quot; — its dates left your feed.</p>`
       );
     }
     return (

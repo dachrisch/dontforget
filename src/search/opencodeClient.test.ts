@@ -14,7 +14,7 @@ vi.mock('undici', async importOriginal => {
   return { ...actual, fetch: fetchMock };
 });
 
-import { extractDates } from './opencodeClient.js';
+import { extractDates, extractSeries, extractSeriesDates, MAX_SERIES } from './opencodeClient.js';
 
 afterEach(() => {
   fetchMock.mockReset();
@@ -288,6 +288,150 @@ describe('extractDates', () => {
     // The custom list is what the client tried — no fallback model was used.
     expect(JSON.parse(fetchMock.mock.calls[3][1].body)).toEqual({
       model: { id: 'primary', providerID: 'opencode' },
+    });
+  });
+});
+
+describe('extractSeries', () => {
+  it('sends a series-grouping prompt that first resolves what each series applies to', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_series'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"series":[{"title":"Auer Dult","appliesTo":"Auer Dult, Munich","description":"Thrice-yearly fair","searchKeywords":"Auer Dult Munich Termine","sourceUrls":["https://auerdult.de"]}]}'
+        )
+      );
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', [
+      { title: 'Auer Dult', url: 'https://auerdult.de', content: 'dates' },
+    ]);
+
+    const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(promptBody.prompt.text).toMatch(/applies to/i);
+    expect(promptBody.prompt.text).toMatch(/appliesTo/);
+    expect(promptBody.prompt.text).toMatch(/searchKeywords/);
+    expect(result).toEqual({
+      series: [
+        {
+          title: 'Auer Dult',
+          appliesTo: 'Auer Dult, Munich',
+          description: 'Thrice-yearly fair',
+          searchKeywords: 'Auer Dult Munich Termine',
+          sourceUrls: ['https://auerdult.de'],
+        },
+      ],
+    });
+  });
+
+  it('falls back to the title when the model omits appliesTo', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_fallback'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"series":[{"title":"Oktoberfest","description":"Beer festival","searchKeywords":"Oktoberfest Munich dates","sourceUrls":["https://oktoberfest.de"]}]}'
+        )
+      );
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', [
+      { title: 'Oktoberfest', url: 'https://oktoberfest.de', content: 'dates' },
+    ]);
+
+    expect(result.series[0].appliesTo).toBe('Oktoberfest');
+  });
+
+  it('dedupes by what the series applies to rather than the display title', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_dedupe'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          JSON.stringify({
+            series: [
+              { title: 'Auer Dult — Spring', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
+              { title: 'Auer Dult — Summer', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://b.example'] },
+              { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'd', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://c.example'] },
+            ],
+          })
+        )
+      );
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events', []);
+    expect(result.series.map(s => s.appliesTo)).toEqual(['Auer Dult, Munich', 'Stadtfest Minden, Minden']);
+  });
+
+  it('caps at MAX_SERIES and drops entries without title, keywords, or sources', async () => {
+    const many = Array.from({ length: MAX_SERIES + 5 }, (_, i) => ({
+      title: `Series ${i + 1}`,
+      appliesTo: `Series ${i + 1}, Munich`,
+      description: 'd',
+      searchKeywords: `Series ${i + 1} Munich`,
+      sourceUrls: ['https://example.com'],
+    }));
+    many.push(
+      { title: '', appliesTo: '', description: 'no title', searchKeywords: 'x Munich', sourceUrls: ['https://example.com'] },
+      { title: 'No keywords', appliesTo: 'No keywords, Munich', description: 'd', searchKeywords: '', sourceUrls: ['https://example.com'] },
+      { title: 'No sources', appliesTo: 'No sources, Munich', description: 'd', searchKeywords: 'No sources Munich', sourceUrls: [] }
+    );
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_cap'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse(JSON.stringify({ series: many })));
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', []);
+    expect(result.series).toHaveLength(MAX_SERIES);
+    expect(result.series[0].title).toBe('Series 1');
+  });
+
+  it('returns an empty list when the model finds nothing', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_empty'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"series":[]}'));
+
+    const result = await extractSeries('https://code.lehel.xyz', 'test-key', 'events in munich', []);
+    expect(result).toEqual({ series: [] });
+  });
+});
+
+describe('extractSeriesDates', () => {
+  it('scopes the date lookup to what the series applies to and ignores other events', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_dates'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(
+        assistantMessageResponse(
+          '{"events":[{"label":"Stadtfest Minden 2026","startDate":"2026-06-12","endDate":"2026-06-14","sourceUrl":"https://stadtfest-minden.de"}],"cadence":"yearly"}'
+        )
+      );
+
+    const result = await extractSeriesDates(
+      'https://code.lehel.xyz',
+      'test-key',
+      {
+        title: 'Stadtfest Minden',
+        appliesTo: 'Stadtfest Minden, Minden',
+        description: 'Annual city festival in Minden',
+        searchKeywords: 'Stadtfest Minden Termine',
+      },
+      [{ title: 'Stadtfest Minden', url: 'https://stadtfest-minden.de', content: 'dates plus other Minden events' }]
+    );
+
+    const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(promptBody.prompt.text).toMatch(/Stadtfest Minden, Minden/);
+    expect(promptBody.prompt.text).toMatch(/only concrete dates that are occurrences of THIS series/i);
+    expect(promptBody.prompt.text).toMatch(/Ignore dates belonging to any other event/i);
+    expect(result).toEqual({
+      events: [
+        {
+          label: 'Stadtfest Minden 2026',
+          startDate: '2026-06-12',
+          endDate: '2026-06-14',
+          sourceUrl: 'https://stadtfest-minden.de',
+        },
+      ],
+      cadence: 'yearly',
     });
   });
 });

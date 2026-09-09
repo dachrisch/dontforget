@@ -1,5 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSearchOrchestrator } from './searchOrchestrator';
+import {
+  createSearchOrchestrator,
+  createSeriesDiscoveryOrchestrator,
+  createSeriesExpansionOrchestrator,
+} from './searchOrchestrator';
+import { MAX_SERIES } from './opencodeClient';
 
 describe('createSearchOrchestrator', () => {
   it('searches then extracts, in order, passing through the AI cadence', async () => {
@@ -56,6 +61,130 @@ describe('createSearchOrchestrator', () => {
     const result = await runQuery('nothing found query');
 
     expect(extractDates).not.toHaveBeenCalled();
+    expect(result).toEqual({ events: [], cadence: null });
+  });
+});
+
+describe('createSeriesDiscoveryOrchestrator', () => {
+  function seriesFixture(n: number, prefix = 'Series') {
+    return Array.from({ length: n }, (_, i) => ({
+      title: `${prefix} ${i + 1}`,
+      appliesTo: `${prefix} ${i + 1}, Munich`,
+      description: `desc ${i + 1}`,
+      searchKeywords: `${prefix} ${i + 1} Munich dates`,
+      sourceUrls: [`https://example.com/${i + 1}`],
+    }));
+  }
+
+  it('issues exactly 1 searxng call + 1 extractSeries call for a broad query', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeries = vi.fn().mockResolvedValue({ series: seriesFixture(4) });
+
+    const discover = createSeriesDiscoveryOrchestrator({ searxngSearch, extractSeries });
+    const result = await discover('events in munich');
+
+    expect(searxngSearch).toHaveBeenCalledTimes(1);
+    expect(searxngSearch).toHaveBeenCalledWith('events in munich');
+    expect(extractSeries).toHaveBeenCalledTimes(1);
+    expect(extractSeries).toHaveBeenCalledWith('events in munich', [{ title: 't', url: 'u', content: 'c' }]);
+    expect(result.series).toHaveLength(4);
+    for (const s of result.series) {
+      expect(s.title).toBeTruthy();
+      expect(s.searchKeywords).toBeTruthy();
+      expect(s.sourceUrls.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('caps discovery at MAX_SERIES, truncating deterministically in model order', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeries = vi.fn().mockResolvedValue({ series: seriesFixture(MAX_SERIES + 8) });
+
+    const discover = createSeriesDiscoveryOrchestrator({ searxngSearch, extractSeries });
+    const result = await discover('events in munich');
+
+    expect(MAX_SERIES).toBe(12);
+    expect(result.series).toHaveLength(MAX_SERIES);
+    // First N in model order win.
+    expect(result.series[0].title).toBe('Series 1');
+    expect(result.series[MAX_SERIES - 1].title).toBe(`Series ${MAX_SERIES}`);
+  });
+
+  it('dedupes series by normalized title, first occurrence wins', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeries = vi.fn().mockResolvedValue({
+      series: [
+        { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+        { title: '  OKTOBERFEST ', appliesTo: 'Oktoberfest, Munich', description: 'dup', searchKeywords: 'Oktoberfest dup', sourceUrls: ['https://b.example'] },
+        { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://c.example'] },
+      ],
+    });
+
+    const discover = createSeriesDiscoveryOrchestrator({ searxngSearch, extractSeries });
+    const result = await discover('events in munich');
+
+    expect(result.series.map(s => s.title)).toEqual(['Oktoberfest', 'Auer Dult']);
+  });
+
+  it('resolves a narrow query to exactly 1 series (degenerate case)', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeries = vi.fn().mockResolvedValue({
+      series: [
+        { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'Munich fair', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://auerdult.de'] },
+      ],
+    });
+
+    const discover = createSeriesDiscoveryOrchestrator({ searxngSearch, extractSeries });
+    const result = await discover('Auer Dult Munich');
+
+    expect(result.series).toHaveLength(1);
+    expect(result.series[0]).toMatchObject({ title: 'Auer Dult', searchKeywords: 'Auer Dult Munich dates' });
+  });
+
+  it('skips extraction when the probe returns nothing', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([]);
+    const extractSeries = vi.fn();
+
+    const discover = createSeriesDiscoveryOrchestrator({ searxngSearch, extractSeries });
+    const result = await discover('nothing found query');
+
+    expect(extractSeries).not.toHaveBeenCalled();
+    expect(result).toEqual({ series: [] });
+  });
+});
+
+describe('createSeriesExpansionOrchestrator', () => {
+  const auerDult = {
+    title: 'Auer Dult',
+    appliesTo: 'Auer Dult, Munich',
+    description: 'Thrice-yearly fair on Mariahilfplatz',
+    searchKeywords: 'Auer Dult Munich Termine',
+  };
+
+  it('searches with the series keywords and extracts dates scoped to the series identity', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeriesDates = vi.fn().mockResolvedValue({
+      events: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
+      cadence: 'yearly',
+    });
+
+    const expand = createSeriesExpansionOrchestrator({ searxngSearch, extractSeriesDates });
+    const result = await expand(auerDult);
+
+    expect(searxngSearch).toHaveBeenCalledTimes(1);
+    expect(searxngSearch).toHaveBeenCalledWith('Auer Dult Munich Termine');
+    expect(extractSeriesDates).toHaveBeenCalledTimes(1);
+    expect(extractSeriesDates).toHaveBeenCalledWith(auerDult, [{ title: 't', url: 'u', content: 'c' }]);
+    expect(result.events).toHaveLength(1);
+  });
+
+  it('skips scoped extraction when the series probe returns nothing', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([]);
+    const extractSeriesDates = vi.fn();
+
+    const expand = createSeriesExpansionOrchestrator({ searxngSearch, extractSeriesDates });
+    const result = await expand(auerDult);
+
+    expect(extractSeriesDates).not.toHaveBeenCalled();
     expect(result).toEqual({ events: [], cadence: null });
   });
 });
