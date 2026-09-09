@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.0](https://github.com/dachrisch/dontforget/compare/v0.23.0...v0.24.0) (2026-09-09)
+
+
+### Features
+
+* styled info block and buttons in calendar entries ([54cbe8f](https://github.com/dachrisch/dontforget/commit/54cbe8ff1e6d81c357cbd3c753fc1730f97f8574))
+* styled info block and buttons in calendar entries ([842094e](https://github.com/dachrisch/dontforget/commit/842094e1718d7853cfb9388815f51bc728f099ff))
+
 ## [0.23.0](https://github.com/dachrisch/dontforget/compare/v0.22.1...v0.23.0) (2026-09-09)
 
 
