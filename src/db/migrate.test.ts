@@ -29,6 +29,8 @@ describe('runMigrations', () => {
       '005_swap_dead_models.ts',
       '006_swap_default_model.ts',
       '007_review_tokens.ts',
+      '008_series.ts',
+      '009_series_applies_to.ts',
     ]);
 
     const collections = await db.listCollections().toArray();
@@ -44,6 +46,7 @@ describe('runMigrations', () => {
         'models',
         'model_metrics',
         'search_metrics',
+        'series',
       ])
     );
 
@@ -63,6 +66,11 @@ describe('runMigrations', () => {
     const eventsIndexes = await db.collection('events').indexes();
     expect(eventsIndexes.map(i => i.name)).toEqual(
       expect.arrayContaining(['query_id_1', 'query_id_1_status_1', 'query_id_1_status_1_label_1_start_date_1_end_date_1'])
+    );
+
+    const seriesIndexes = await db.collection('series').indexes();
+    expect(seriesIndexes.map(i => i.name)).toEqual(
+      expect.arrayContaining(['query_id_1', 'query_id_1_normalized_title_1'])
     );
 
     const secondRun = await runMigrations(db);
