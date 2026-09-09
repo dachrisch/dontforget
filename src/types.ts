@@ -54,6 +54,15 @@ export interface CandidateSeries extends ExtractedSeries {
   status: SeriesStatus;
 }
 
+// A taste of what subscribing to a series gets you: its next few dates.
+// Shown in the dashboard so the user subscribes to the series with eyes
+// open, instead of reviewing events one by one.
+export interface SeriesDatePreview {
+  label: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD, inclusive
+}
+
 export interface SeriesSummary {
   id: string;
   title: string;
@@ -63,6 +72,7 @@ export interface SeriesSummary {
   sourceUrls: string[];
   status: SeriesStatus;
   eventCounts: { approved: number; candidate: number };
+  previewEvents: SeriesDatePreview[];
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';

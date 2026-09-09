@@ -7,6 +7,7 @@ import {
   type QueryStatus,
   type QuerySummary,
   type RecurrenceInterval,
+  type SeriesDatePreview,
   type SeriesSummary,
 } from '../types.js';
 import { filterNewEvents } from '../scheduler/dedupeEvents.js';
@@ -377,6 +378,7 @@ async function seriesSummariesByQuery(
     if (row._id.status === 'candidate') entry.candidate = row.count;
     eventCounts.set(key, entry);
   }
+  const previews = await seriesDatePreviews(db, seriesIds);
 
   for (const row of seriesRows) {
     const counts = eventCounts.get(row._id.toString()) ?? { approved: 0, candidate: 0 };
@@ -389,9 +391,49 @@ async function seriesSummariesByQuery(
       sourceUrls: row.source_urls,
       status: row.status,
       eventCounts: counts,
+      previewEvents: previews.get(row._id.toString()) ?? [],
     });
   }
   return byQuery;
+}
+
+// Next few dates per series for the dashboard preview: upcoming
+// non-dismissed dates first (ascending); when everything is in the past,
+// the most recent ones instead so the row never looks inexplicably empty.
+async function seriesDatePreviews(
+  db: Db,
+  seriesIds: ObjectId[]
+): Promise<Map<string, SeriesDatePreview[]>> {
+  const previews = new Map<string, SeriesDatePreview[]>();
+  if (seriesIds.length === 0) return previews;
+  const rows = await db
+    .collection<{ series_id?: ObjectId; label: string; start_date: string; end_date: string; status: string }>(
+      'events'
+    )
+    .find(
+      { series_id: { $in: seriesIds }, status: { $in: ['approved', 'candidate'] } },
+      { projection: { series_id: 1, label: 1, start_date: 1, end_date: 1 } }
+    )
+    .sort({ start_date: 1 })
+    .toArray();
+  const bySeries = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.series_id?.toString();
+    if (!key) continue;
+    const list = bySeries.get(key) ?? [];
+    list.push(row);
+    bySeries.set(key, list);
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [key, list] of bySeries) {
+    const upcoming = list.filter(r => r.start_date >= today);
+    const picked = (upcoming.length > 0 ? upcoming : list.slice(-3)).slice(0, 3);
+    previews.set(
+      key,
+      picked.map(r => ({ label: r.label, startDate: r.start_date, endDate: r.end_date }))
+    );
+  }
+  return previews;
 }
 
 export async function getQueryEvents(

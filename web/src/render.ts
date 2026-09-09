@@ -1,6 +1,6 @@
 import type { AdminState, WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft } from './state';
 import { RECURRENCE_INTERVALS } from './types';
-import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval } from './types';
+import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval, SeriesSummary } from './types';
 import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
 
 export interface WorkspaceHandlers {
@@ -15,6 +15,8 @@ export interface WorkspaceHandlers {
   onSignOut: () => void;
   onDeleteAccount: () => void;
   onStartReview: (queryId: string) => void;
+  onSubscribeSeries: (queryId: string, seriesId: string) => void;
+  onUnsubscribeSeries: (queryId: string, seriesId: string) => void;
   onToggleReviewEvent: (id: string) => void;
   onSetReviewInterval: (interval: RecurrenceInterval) => void;
   onApproveReview: (queryId: string) => void;
@@ -498,6 +500,20 @@ function renderDashboard(
     });
   });
 
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=subscribe-series]').forEach(button => {
+    button.addEventListener('click', () => {
+      const card = button.closest<HTMLElement>('.query-card')!;
+      handlers.onSubscribeSeries(card.dataset.id!, button.dataset.seriesId!);
+    });
+  });
+
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=unsubscribe-series]').forEach(button => {
+    button.addEventListener('click', () => {
+      const card = button.closest<HTMLElement>('.query-card')!;
+      handlers.onUnsubscribeSeries(card.dataset.id!, button.dataset.seriesId!);
+    });
+  });
+
   wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=retry]').forEach(button => {
     button.addEventListener('click', () => {
       handlers.onRetrySearch(button.closest<HTMLElement>('.query-card')!.dataset.id!);
@@ -811,37 +827,27 @@ function renderQueryCard(query: QuerySummary): string {
     `;
   }
 
+  const hasSeries = !!query.series && query.series.length > 0;
   const eventSummary = [];
   if (query.approvedCount > 0) eventSummary.push(t('queryCard.approved', { count: query.approvedCount }));
   if (query.candidateCount > 0) eventSummary.push(t('queryCard.pending', { count: query.candidateCount }));
-  const reviewAction = query.candidateCount > 0
+  // Per-event review in the app is the legacy path: queries with series are
+  // triaged one level above (subscribe to the series here, dismiss single
+  // dates from the calendar entry), so no per-event review button.
+  const reviewAction = query.candidateCount > 0 && !hasSeries
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
-  // Series nested under their parent query (issue #143): one row per
-  // subscribed series — what it applies to, its subscription status, and how
-  // many of its dates are already in the feed. The user subscribes to the
-  // series; dated events are just its occurrences.
-  const seriesSection =
-    query.series && query.series.length > 0
-      ? `<div class="query-series" aria-label="series">${query.series
-          .map(s => {
-            const identity = s.appliesTo && s.appliesTo !== s.title
-              ? `${s.title} · ${s.appliesTo}`
-              : s.appliesTo || s.title;
-            const counts = s.eventCounts
-              ? ` · ${s.eventCounts.approved} in feed${s.eventCounts.candidate > 0 ? ` · ${s.eventCounts.candidate} pending` : ''}`
-              : '';
-            const sources = (s.sourceUrls ?? [])
-              .slice(0, 2)
-              .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
-              .join(' ');
-            return `<div class="ledger-row query-series-row" data-series-id="${s.id}">
-        <span class="ledger-label">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
-        <span class="ledger-value">${escapeHtml(s.status)}${escapeHtml(counts)}</span>
-      </div>`;
-          })
-          .join('')}</div>`
-      : '';
+  // Series nested under their parent query (issue #143): one subscription
+  // row per series — what it applies to, a dates preview, subscribe state,
+  // and a subscribe/unsubscribe button. Approving individual dates happens
+  // in the calendar, not here.
+  const seriesSection = hasSeries
+    ? `<div class="query-series" aria-label="series">
+      <p class="subtext">${t('series.hint')}</p>
+      ${query.series!
+        .map(s => renderSeriesRow(s))
+        .join('')}</div>`
+    : '';
   return `
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
@@ -867,6 +873,41 @@ function renderQueryCard(query: QuerySummary): string {
       ${seriesSection}
     </article>
   `;
+}
+
+function seriesStatusLabel(status: SeriesSummary['status']): string {
+  if (status === 'approved') return t('series.statusApproved');
+  if (status === 'dismissed') return t('series.statusDismissed');
+  return t('series.statusCandidate');
+}
+
+function renderSeriesRow(s: SeriesSummary): string {
+  const identity = s.appliesTo && s.appliesTo !== s.title
+    ? `${s.title} · ${s.appliesTo}`
+    : s.appliesTo || s.title;
+  const counts = s.eventCounts
+    ? ` · ${s.eventCounts.approved} in feed${s.eventCounts.candidate > 0 ? ` · ${s.eventCounts.candidate} pending` : ''}`
+    : '';
+  const sources = (s.sourceUrls ?? [])
+    .slice(0, 2)
+    .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
+    .join(' ');
+  const preview = (s.previewEvents ?? []).length > 0
+    ? `<div class="query-series-preview" aria-label="${escapeHtml(t('series.upcomingDates'))}"><span class="ledger-label">${escapeHtml(t('series.upcomingDates'))}</span> ` +
+      (s.previewEvents ?? [])
+        .map(p => `<span class="ledger-value">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</span>`)
+        .join('<br>') +
+      `</div>`
+    : `<div class="query-series-preview"><span class="ledger-value">${escapeHtml(t('series.noDates'))}</span></div>`;
+  const action = s.status === 'approved'
+    ? `<button type="button" class="link-button" data-action="unsubscribe-series" data-series-id="${s.id}">${t('series.unsubscribe')}</button>`
+    : `<button type="button" class="link-button" data-action="subscribe-series" data-series-id="${s.id}">${t('series.subscribe')}</button>`;
+  return `<div class="ledger-row query-series-row" data-series-id="${s.id}">
+      <span class="ledger-label">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
+      <span class="ledger-value">${escapeHtml(seriesStatusLabel(s.status))}${escapeHtml(counts)}</span>
+    </div>
+    ${preview}
+    <div class="query-series-actions">${action}</div>`;
 }
 
 function renderReviewCard(reviewing: ReviewingDraft): string {

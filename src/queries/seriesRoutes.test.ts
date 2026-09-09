@@ -85,6 +85,27 @@ describe('series review routes', () => {
     ]);
   });
 
+  it('dashboard nests the dates preview under each series', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db, {});
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
+    ]);
+    const { completeSeriesExpansion } = await import('./queriesRepo');
+    const { reviewSeries } = await import('./seriesRepo');
+    await reviewSeries(db, userId, query.queryId, [series.id]);
+    await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2099-04-11', endDate: '2099-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    const response = await app.inject({ method: 'GET', url: '/api/queries', headers: authHeaders(sessionId) });
+    expect(response.statusCode).toBe(200);
+    const shown = response.json().queries[0].series[0];
+    expect(shown.previewEvents).toEqual([
+      { label: 'Frühjahrsdult', startDate: '2099-04-11', endDate: '2099-05-11' },
+    ]);
+  });
+
   it('GET returns 403 for a query the user does not own', async () => {
     const { app, sessionId } = await authenticatedUser(db, {});
     const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });

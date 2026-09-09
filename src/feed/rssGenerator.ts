@@ -2,8 +2,9 @@ import { Feed } from 'feed';
 import type { CandidateEvent } from '../types.js';
 
 // Like ICS, RSS items may carry a review description (HTML with the triage
-// links plus plain-text fallback URLs). Approved events keep the plain
-// date-range description as before.
+// links plus plain-text fallback URLs). Candidates link approve/dismiss;
+// approved dates link dismiss-this-date/unsubscribe, falling back to the
+// plain date-range description when no triage content is attached.
 export type RssFeedEvent = CandidateEvent & {
   description?: string;
 };

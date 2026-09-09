@@ -4,7 +4,8 @@ import { CALENDAR_SLUG } from './feedUrl.js';
 
 // Feed events may carry a review payload: plain-text DESCRIPTION plus an
 // HTML variant (X-ALT-DESC via htmlContent) with the clickable triage links.
-// Approved events omit both, as before.
+// Candidates carry approve/dismiss/unsubscribe links; approved dates carry
+// dismiss-this-date/unsubscribe links (keeping them needs no action).
 export type IcsFeedEvent = CandidateEvent & {
   description?: string;
   htmlDescription?: string;

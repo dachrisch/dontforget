@@ -182,6 +182,87 @@ describe('review callback', () => {
     });
   });
 
+  it('approve from the calendar subscribes the parent series', async () => {
+    const { createQuery, completeSeriesExpansion } = await import('../queries/queriesRepo.js');
+    const { insertDiscoveredSeries } = await import('../queries/seriesRepo.js');
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    const inserted = await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+    const token = await reviewTokenFor(query.queryId, inserted[0].id);
+
+    const result = await handleReviewCallback(db, token, 'approve');
+    expect(result).toMatchObject({ ok: true, action: 'approve', eventLabel: 'Frühjahrsdult' });
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('approved');
+  });
+
+  it('dismiss drops one approved date off the calendar but keeps the subscription', async () => {
+    const { createQuery, completeSeriesExpansion } = await import('../queries/queriesRepo.js');
+    const { insertDiscoveredSeries, reviewSeries } = await import('../queries/seriesRepo.js');
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, query.queryId, [series.id]);
+    const inserted = await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+    expect(inserted[0].status).toBe('approved');
+    const token = await reviewTokenFor(query.queryId, inserted[0].id);
+
+    const result = await handleReviewCallback(db, token, 'dismiss');
+    expect(result).toMatchObject({ ok: true, action: 'dismiss' });
+
+    const event = await db.collection('events').findOne({ _id: new ObjectId(inserted[0].id) });
+    expect(event?.status).toBe('dismissed');
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('approved');
+  });
+
+  it('suppress on a series date unsubscribes the series but keeps the search', async () => {
+    const { createQuery, completeSeriesExpansion } = await import('../queries/queriesRepo.js');
+    const { insertDiscoveredSeries, reviewSeries } = await import('../queries/seriesRepo.js');
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, query.queryId, [series.id]);
+    const inserted = await completeSeriesExpansion(db, query._id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+    const token = await reviewTokenFor(query.queryId, inserted[0].id);
+
+    const result = await handleReviewCallback(db, token, 'suppress');
+    expect(result).toMatchObject({ ok: true, action: 'suppress', seriesTitle: 'Auer Dult' });
+
+    // Series unsubscribed, its dates dismissed — but the search survives.
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('dismissed');
+    const event = await db.collection('events').findOne({ _id: new ObjectId(inserted[0].id) });
+    expect(event?.status).toBe('dismissed');
+    expect(await db.collection('queries').countDocuments({ _id: new ObjectId(query.queryId) })).toBe(1);
+  });
+
+  it('approved dates carry dismiss/unsubscribe links and no approve link', async () => {
+    const { buildApprovedEntryContent } = await import('./reviewDescription.js');
+    const content = buildApprovedEntryContent({
+      publicBaseUrl: 'http://localhost:3000',
+      token: 'tok',
+      label: 'Frühjahrsdult',
+      seriesTitle: 'Auer Dult',
+    });
+    expect(content.text).toContain('action=dismiss');
+    expect(content.text).toContain('action=suppress');
+    expect(content.text).not.toContain('action=approve');
+    expect(content.text).toContain('Auer Dult');
+    expect(content.html).toContain('Not interested in this date');
+  });
+
   it('reports already-acted when the event left candidate via the in-app flow', async () => {
     const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
@@ -358,6 +439,28 @@ describe('review entries in the feed', () => {
     ics = await fetchIcs();
     expect(ics).not.toContain('Jakobidult');
     expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(1);
+  });
+
+  it('serves dismiss/unsubscribe links on approved entries without an approve link', async () => {
+    const { insertedId } = await db.collection('users').insertOne({ email: 'kept@example.com' });
+    const userId = insertedId.toString();
+    const { queryId, candidates } = await createQueryWithCandidates(db, userId, 'Auer Dult Munich', [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://auerdult.de' },
+    ]);
+    const { approveEvents } = await import('../queries/approveEvents.js');
+    await approveEvents(db, userId, queryId, [candidates[0].id], 'http://localhost:3000');
+    const feedRow = (await db.collection('feed_tokens').findOne({ user_id: userId }))!;
+
+    const app = Fastify();
+    registerFeedRoutes(app, { db, publicBaseUrl: 'http://localhost:3000' });
+    const ics = await app.inject({ method: 'GET', url: `/f/${feedRow.token}.ics` });
+    expect(ics.statusCode).toBe(200);
+    // Confirmed entry, not a review entry — keeping it needs no action.
+    expect(ics.body).toContain('SUMMARY:Frühjahrsdult');
+    expect(ics.body).not.toContain('SUMMARY:Review:');
+    expect(ics.body).toContain('action=dismiss');
+    expect(ics.body).toContain('action=suppress');
+    expect(ics.body).not.toContain('action=approve');
   });
 
   it('removes all review entries once the query is suppressed', async () => {

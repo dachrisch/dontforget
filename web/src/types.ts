@@ -40,6 +40,12 @@ export interface QuerySummary {
 
 export type SeriesStatus = 'candidate' | 'approved' | 'dismissed';
 
+export interface SeriesDatePreview {
+  label: string;
+  startDate: string;
+  endDate: string;
+}
+
 export interface SeriesSummary {
   id: string;
   title: string;
@@ -49,6 +55,7 @@ export interface SeriesSummary {
   sourceUrls: string[];
   status: SeriesStatus;
   eventCounts: { approved: number; candidate: number };
+  previewEvents: SeriesDatePreview[];
 }
 
 export interface FeedSummary {

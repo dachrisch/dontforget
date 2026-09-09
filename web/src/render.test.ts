@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { renderWorkspace, type WorkspaceHandlers } from './render';
-import type { QuerySummary } from './types';
+import type { QuerySummary, SeriesSummary } from './types';
 
 function noopHandlers(): WorkspaceHandlers {
   return {
@@ -15,6 +15,8 @@ function noopHandlers(): WorkspaceHandlers {
     onSignOut: vi.fn(),
     onDeleteAccount: vi.fn(),
     onStartReview: vi.fn(),
+    onSubscribeSeries: vi.fn(),
+    onUnsubscribeSeries: vi.fn(),
     onToggleReviewEvent: vi.fn(),
     onSetReviewInterval: vi.fn(),
     onApproveReview: vi.fn(),
@@ -748,27 +750,78 @@ describe('renderWorkspace', () => {
   });
 });
 describe('series nesting', () => {
+  function seriesDashboard(series: SeriesSummary[]) {
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [query({ text: 'events in munich', series })],
+        feed: null,
+        editing: null,
+        reviewing: null,
+      },
+      handlers
+    );
+    return { container, handlers };
+  }
+
   it('shows series rows nested under their parent query', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+    ]);
+    expect(container.textContent).toContain('Oktoberfest');
+    expect(container.querySelector('.query-series-row[data-series-id="s1"]')).not.toBeNull();
+  });
+
+  it('offers subscribe for unsubscribed series and unsubscribe for subscribed ones', () => {
+    const { container, handlers } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [] },
+    ]);
+
+    const subscribe = container.querySelector<HTMLButtonElement>('button[data-action=subscribe-series][data-series-id="s1"]');
+    const unsubscribe = container.querySelector<HTMLButtonElement>('button[data-action=unsubscribe-series][data-series-id="s2"]');
+    expect(subscribe).not.toBeNull();
+    expect(unsubscribe).not.toBeNull();
+
+    subscribe!.click();
+    expect(handlers.onSubscribeSeries).toHaveBeenCalledWith('q1', 's1');
+    unsubscribe!.click();
+    expect(handlers.onUnsubscribeSeries).toHaveBeenCalledWith('q1', 's2');
+  });
+
+  it('shows the dates preview under each series', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 1, candidate: 0 }, previewEvents: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11' }] },
+    ]);
+    expect(container.textContent).toContain('Frühjahrsdult');
+    expect(container.textContent).toContain('Upcoming dates');
+    expect(container.querySelector('.query-series-preview')).not.toBeNull();
+  });
+
+  it('hides the per-event review button while series own the card', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
+    ]);
+    // candidates exist, but triage moved one level up (series) + calendar.
+    expect(container.querySelector('button[data-action=review]')).toBeNull();
+  });
+
+  it('keeps the per-event review button for queries without series', () => {
     const container = document.createElement('div');
     renderWorkspace(
       container,
       {
         kind: 'dashboard',
-        queries: [
-          query({
-            text: 'events in munich',
-            series: [
-              { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } },
-            ],
-          }),
-        ],
+        queries: [query({ candidateCount: 2 })],
         feed: null,
         editing: null,
         reviewing: null,
       },
       noopHandlers()
     );
-    expect(container.textContent).toContain('Oktoberfest');
-    expect(container.querySelector('.query-series-row[data-series-id="s1"]')).not.toBeNull();
+    expect(container.querySelector('button[data-action=review]')).not.toBeNull();
   });
 });
