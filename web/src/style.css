@@ -537,12 +537,12 @@ h1, h2 {
   justify-content: flex-end;
 }
 
-// Series subscription rows. Unlike .ledger-row/.ledger-label (nowrap
-// single-line entries), every line here must wrap: a series identity plus
-// description plus source links never fits one 360px line, and reusing the
-// ledger classes pushed the whole card into horizontal scroll on mobile.
-// The head is a wrapping flex row so the status drops below the title on
-// narrow screens instead of squeezing it.
+/* Series subscription rows. Unlike .ledger-row/.ledger-label (nowrap
+   single-line entries), every line here must wrap: a series identity plus
+   description plus source links never fits one 360px line, and reusing the
+   ledger classes pushed the whole card into horizontal scroll on mobile.
+   The head is a wrapping flex row so the status drops below the title on
+   narrow screens instead of squeezing it. */
 .query-series {
   margin-top: 0.5rem;
   border-top: 1px solid var(--rule);
