@@ -91,6 +91,22 @@ describe('style.css', () => {
     expect(Number(width) * 16).toBeGreaterThanOrEqual(32);
   });
 
+  it('lets .query-series-title wrap so a long series identity cannot force the card wider than its container', () => {
+    // Series rows must never reuse the nowrap .ledger-label: identity plus
+    // description plus source links never fits one 360px line. The head is
+    // a wrapping flex row and the title takes a wrapping flex share with
+    // min-width: 0, so the status drops below instead of squeezing (or
+    // overflowing) the title on mobile.
+    const head = css.match(/\.query-series-head\s*\{([\s\S]*?)\}/)?.[1];
+    expect(head).toBeDefined();
+    expect(head).toMatch(/flex-wrap:\s*wrap;?/);
+    const title = css.match(/\.query-series-title\s*\{([\s\S]*?)\}/)?.[1];
+    expect(title).toBeDefined();
+    expect(title).not.toMatch(/white-space:\s*nowrap/);
+    expect(title).toMatch(/min-width:\s*0;?/);
+    expect(title).toMatch(/overflow-wrap:\s*anywhere;?/);
+  });
+
   it('ships the actual Latin-subset font file, not a stripped/wrong subset', () => {
     const fontPath = resolve(__dirname, '../public/fonts/playfair-display-700.woff2');
     const { size } = statSync(fontPath);
