@@ -43,6 +43,7 @@ export type SeriesStatus = 'candidate' | 'approved' | 'dismissed';
 export interface SeriesSummary {
   id: string;
   title: string;
+  appliesTo: string;
   description: string;
   searchKeywords: string;
   sourceUrls: string[];

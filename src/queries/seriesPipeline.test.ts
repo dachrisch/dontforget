@@ -28,11 +28,12 @@ describe('two-stage series pipeline', () => {
     await teardownTestDb(client);
   });
 
-  function discoveryDeps(series: Array<{ title: string; searchKeywords: string }>) {
+  function discoveryDeps(series: Array<{ title: string; appliesTo?: string; searchKeywords: string }>) {
     const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
     const extractSeries = vi.fn().mockResolvedValue({
       series: series.map((s, i) => ({
         title: s.title,
+        appliesTo: s.appliesTo ?? `${s.title}, Munich`,
         description: `desc ${i}`,
         searchKeywords: s.searchKeywords,
         sourceUrls: [`https://example.com/${i}`],

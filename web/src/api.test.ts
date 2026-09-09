@@ -302,7 +302,7 @@ describe('api client', () => {
 describe('series api client', () => {
   it('listSeries fetches series for a query', async () => {
     const { listSeries } = await import('./api');
-    const body = [{ id: 's1', title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } }];
+    const body = [{ id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } }];
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => body }));
     expect(await listSeries('q1')).toEqual(body);
     expect(fetch).toHaveBeenCalledWith('/api/queries/q1/series', { credentials: 'include' });
@@ -310,7 +310,7 @@ describe('series api client', () => {
 
   it('reviewSeries posts approve and dismiss ids', async () => {
     const { reviewSeries } = await import('./api');
-    const body = [{ id: 's1', title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'approved', eventCounts: { approved: 0, candidate: 0 } }];
+    const body = [{ id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'approved', eventCounts: { approved: 0, candidate: 0 } }];
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
     vi.stubGlobal('fetch', fetchMock);
     expect(await reviewSeries('q1', ['s1'], ['s2'])).toEqual(body);

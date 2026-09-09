@@ -15,6 +15,7 @@ import type { ModelRegistry } from './search/models.js';
 import { createMetricsService } from './search/metrics.js';
 import type { MetricsService } from './search/metrics.js';
 import type { ExtractionResult, SeriesExtractionResult } from './types.js';
+import type { SeriesScope } from './search/opencodeClient.js';
 
 export interface AppDeps {
   db: Db;
@@ -25,6 +26,10 @@ export interface AppDeps {
   // Stage-1 discovery for the two-stage pipeline (issue #143). Optional so
   // unit tests exercising only user/query flows don't need to provide it.
   discoverSeries?: (query: string) => Promise<SeriesExtractionResult>;
+  // Stage-2 expansion: series-scoped date lookup (only dates that are
+  // occurrences of what the series applies to). Falls back to runQuery when
+  // omitted (older callers/tests).
+  runSeriesExpansion?: (series: SeriesScope) => Promise<ExtractionResult>;
   // Model registry + metrics are required for the admin model/health
   // endpoints; defaulted to no-op variants when omitted so unit tests that
   // only exercise user/query flows don't need to provide them.
@@ -65,6 +70,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     db: deps.db,
     runQuery: deps.runQuery,
     discoverSeries: deps.discoverSeries,
+    runSeriesExpansion: deps.runSeriesExpansion,
     requireAuth,
     publicBaseUrl: deps.publicBaseUrl,
   });

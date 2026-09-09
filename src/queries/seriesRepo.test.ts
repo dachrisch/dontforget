@@ -8,6 +8,7 @@ import { MAX_SERIES } from '../search/opencodeClient';
 function seriesFixture(n: number, prefix = 'Series') {
   return Array.from({ length: n }, (_, i) => ({
     title: `${prefix} ${i + 1}`,
+    appliesTo: `${prefix} ${i + 1}, Munich`,
     description: `desc ${i + 1}`,
     searchKeywords: `${prefix} ${i + 1} Munich dates`,
     sourceUrls: [`https://example.com/${i + 1}`],
@@ -51,11 +52,11 @@ describe('series repo', () => {
   it('dedupes by normalized title and skips invalid entries', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const inserted = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
-      { title: '  oktoberfest  ', description: 'dup', searchKeywords: 'Oktoberfest dup', sourceUrls: ['https://b.example'] },
-      { title: '', description: 'no title', searchKeywords: 'x Munich', sourceUrls: ['https://a.example'] },
-      { title: 'No keywords', description: 'd', searchKeywords: '  ', sourceUrls: ['https://a.example'] },
-      { title: 'No sources', description: 'd', searchKeywords: 'No sources Munich', sourceUrls: [] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+      { title: '  oktoberfest  ', appliesTo: 'Oktoberfest, Munich', description: 'dup', searchKeywords: 'Oktoberfest dup', sourceUrls: ['https://b.example'] },
+      { title: '', appliesTo: '', description: 'no title', searchKeywords: 'x Munich', sourceUrls: ['https://a.example'] },
+      { title: 'No keywords', appliesTo: 'No keywords, Munich', description: 'd', searchKeywords: '  ', sourceUrls: ['https://a.example'] },
+      { title: 'No sources', appliesTo: 'No sources, Munich', description: 'd', searchKeywords: 'No sources Munich', sourceUrls: [] },
     ]);
 
     expect(inserted.map(s => s.title)).toEqual(['Oktoberfest']);
@@ -64,13 +65,13 @@ describe('series repo', () => {
   it('never re-creates a dismissed series on re-discovery', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [first] = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
     ]);
     await reviewSeries(db, userId, _id.toString(), [], [first.id]);
 
     const second = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'OKTOBERFEST', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://b.example'] },
+      { title: 'OKTOBERFEST', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://b.example'] },
     ]);
 
     expect(second.map(s => s.title)).toEqual(['Auer Dult']);
@@ -99,7 +100,7 @@ describe('series repo', () => {
   it('expands an approved series into dated events linked via series_id', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
     ]);
     await reviewSeries(db, userId, _id.toString(), [series.id]);
 
@@ -120,7 +121,7 @@ describe('series repo', () => {
   it('lands candidate events for a non-approved series when the query is untrusted', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
     ]);
 
     const inserted = await completeSeriesExpansion(db, _id, new ObjectId(series.id), [
@@ -130,10 +131,10 @@ describe('series repo', () => {
     expect(inserted[0].status).toBe('candidate');
   });
 
-  it('does not reinsert a date that already exists for the query', async () => {
+  it('does not reinsert a date that already exists for the series', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
     ]);
     await reviewSeries(db, userId, _id.toString(), [series.id]);
     const seriesObjectId = new ObjectId(series.id);
@@ -152,7 +153,7 @@ describe('series repo', () => {
   it('nests series with event counts under the parent query in the dashboard', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'Auer Dult', description: 'fair', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'fair', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
     ]);
     await reviewSeries(db, userId, _id.toString(), [series.id]);
     await completeSeriesExpansion(db, _id, new ObjectId(series.id), [
@@ -176,5 +177,73 @@ describe('series repo', () => {
     const { insertedId: otherId } = await db.collection('users').insertOne({ email: 'other@example.com' });
     const result = await listSeriesForQuery(db, otherId.toString(), _id.toString());
     expect(result).toBeNull();
+  });
+
+  it('stores what each series applies to and exposes it', async () => {
+    const { _id } = await createQuery(db, userId, 'Stadtfest Minden');
+    const [series] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'annual city festival', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://a.example'] },
+    ]);
+
+    expect(series.appliesTo).toBe('Stadtfest Minden, Minden');
+    const row = await db.collection('series').findOne({ query_id: _id });
+    expect(row?.applies_to).toBe('Stadtfest Minden, Minden');
+  });
+
+  it('dedupes by what the series applies to, not the display title', async () => {
+    const { _id } = await createQuery(db, userId, 'events in munich');
+    const inserted = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Auer Dult — Spring', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult — Summer', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://b.example'] },
+    ]);
+
+    expect(inserted).toHaveLength(1);
+  });
+
+  it('approving a series subscribes its existing candidate events', async () => {
+    const { _id } = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    await completeSeriesExpansion(db, _id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    await reviewSeries(db, userId, _id.toString(), [series.id]);
+
+    const row = await db.collection('events').findOne({ query_id: _id });
+    expect(row?.status).toBe('approved');
+  });
+
+  it('dismissing a series unsubscribes its events so they never reach the feed', async () => {
+    const { _id } = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, _id.toString(), [series.id]);
+    await completeSeriesExpansion(db, _id, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    await reviewSeries(db, userId, _id.toString(), [], [series.id]);
+
+    const row = await db.collection('events').findOne({ query_id: _id });
+    expect(row?.status).toBe('dismissed');
+  });
+
+  it('keeps the same calendar date for two different subscribed series', async () => {
+    const { _id } = await createQuery(db, userId, 'events in munich');
+    const [first, second] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://b.example'] },
+    ]);
+    await reviewSeries(db, userId, _id.toString(), [first.id, second.id]);
+
+    const date = { label: 'Shared date', startDate: '2026-09-19', endDate: '2026-09-19', sourceUrl: 'https://a.example' };
+    const firstInsert = await completeSeriesExpansion(db, _id, new ObjectId(first.id), [date]);
+    const secondInsert = await completeSeriesExpansion(db, _id, new ObjectId(second.id), [date]);
+
+    expect(firstInsert).toHaveLength(1);
+    expect(secondInsert).toHaveLength(1);
   });
 });

@@ -1,5 +1,6 @@
 import type { ExtractedEvent, ExtractedSeries, ExtractionResult, SearchResult, SeriesExtractionResult } from '../types.js';
-import { MAX_SERIES } from './opencodeClient.js';
+import { MAX_SERIES, seriesIdentityKey } from './opencodeClient.js';
+import type { SeriesScope } from './opencodeClient.js';
 import type { MetricsService } from './metrics.js';
 
 export interface SearchOrchestratorDeps {
@@ -99,16 +100,59 @@ export function createSeriesDiscoveryOrchestrator(
   };
 }
 
-// Same normalized-title dedupe as the series repo (defense in depth — the
-// repo also dedupes against stored dismissed titles). First occurrence wins,
+// Same identity dedupe as the series repo (defense in depth — the repo
+// also dedupes against stored dismissed identities). The key is what the
+// series applies to (falling back to title). First occurrence wins,
 // preserving model order so truncation is deterministic.
 function dedupeSeries(series: ExtractedSeries[]): ExtractedSeries[] {
   const seen = new Set<string>();
   return series.filter(entry => {
-    const key = entry.title.toLowerCase().replace(/\s+/g, ' ').trim();
+    const key = seriesIdentityKey(entry);
     if (!key) return false;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });
+}
+
+export interface SeriesExpansionDeps {
+  searxngSearch: (query: string) => Promise<SearchResult[]>;
+  extractSeriesDates: (series: SeriesScope, results: SearchResult[]) => Promise<ExtractionResult>;
+  // Records one search_metric per expansion probe. Optional — no-op when absent.
+  metrics?: MetricsService | null;
+}
+
+// Two-stage pipeline, stage 2 (issue #143): expand one subscribed series
+// into its dated occurrences. The search runs with the series' own
+// searchKeywords, but extraction is scoped to the series identity
+// (extractSeriesDates): only dates that are occurrences of what the series
+// applies to come back. One searxng call + one LLM call per expansion.
+export function createSeriesExpansionOrchestrator(
+  deps: SeriesExpansionDeps
+): (series: SeriesScope) => Promise<ExtractionResult> {
+  return async function expandSeries(series: SeriesScope): Promise<ExtractionResult> {
+    const started = Date.now();
+    let results: SearchResult[];
+    try {
+      results = await deps.searxngSearch(series.searchKeywords);
+    } catch (err) {
+      await deps.metrics?.recordSearchCall({
+        outcome: 'failure',
+        errorType: err instanceof Error ? err.message : String(err),
+        resultCount: 0,
+        durationMs: Date.now() - started,
+      });
+      throw err;
+    }
+    await deps.metrics?.recordSearchCall({
+      outcome: 'success',
+      resultCount: results.length,
+      durationMs: Date.now() - started,
+    });
+    if (results.length === 0) {
+      return { events: [], cadence: null };
+    }
+    const extracted = await deps.extractSeriesDates(series, results);
+    return { events: dedupeEvents(extracted.events), cadence: extracted.cadence };
+  };
 }

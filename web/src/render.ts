@@ -818,17 +818,28 @@ function renderQueryCard(query: QuerySummary): string {
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
   // Series nested under their parent query (issue #143): one row per
-  // series with title + status. Dated events still live in the existing
-  // per-event review; series are the first review gate for broad queries.
+  // subscribed series — what it applies to, its subscription status, and how
+  // many of its dates are already in the feed. The user subscribes to the
+  // series; dated events are just its occurrences.
   const seriesSection =
     query.series && query.series.length > 0
       ? `<div class="query-series" aria-label="series">${query.series
-          .map(
-            s => `<div class="ledger-row query-series-row" data-series-id="${s.id}">
-        <span class="ledger-label">${escapeHtml(s.title)}</span>
-        <span class="ledger-value">${escapeHtml(s.status)}</span>
-      </div>`
-          )
+          .map(s => {
+            const identity = s.appliesTo && s.appliesTo !== s.title
+              ? `${s.title} · ${s.appliesTo}`
+              : s.appliesTo || s.title;
+            const counts = s.eventCounts
+              ? ` · ${s.eventCounts.approved} in feed${s.eventCounts.candidate > 0 ? ` · ${s.eventCounts.candidate} pending` : ''}`
+              : '';
+            const sources = (s.sourceUrls ?? [])
+              .slice(0, 2)
+              .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
+              .join(' ');
+            return `<div class="ledger-row query-series-row" data-series-id="${s.id}">
+        <span class="ledger-label">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
+        <span class="ledger-value">${escapeHtml(s.status)}${escapeHtml(counts)}</span>
+      </div>`;
+          })
           .join('')}</div>`
       : '';
   return `

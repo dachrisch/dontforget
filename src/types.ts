@@ -27,11 +27,17 @@ export interface CandidateEvent extends ExtractedEvent {
 
 // A coherent event series discovered from a broad free-form query
 // (e.g. `events in munich` -> Oktoberfest, FC Bayern home matches, ...).
-// Each series carries its own search keywords so the existing per-series
-// expansion path (searxngSearch + extractDates + date-dedupe) can expand it
-// into concrete dated occurrences on demand.
+// `appliesTo` is the canonical recurring entity the series covers — the
+// answer to "what does this series apply to?" (e.g. "Auer Dult",
+// "Stadtfest Minden", always with its place). It is resolved FIRST during
+// discovery; searchKeywords/sources and later date lookups are then scoped
+// to exactly that entity. `title` is the display name (usually the same).
+// Each series carries its own search keywords so the per-series expansion
+// path (searxngSearch + extractSeriesDates + date-dedupe) can expand it
+// into concrete dated occurrences of that entity on demand.
 export interface ExtractedSeries {
   title: string;
+  appliesTo: string;
   description: string;
   searchKeywords: string;
   sourceUrls: string[];
@@ -51,6 +57,7 @@ export interface CandidateSeries extends ExtractedSeries {
 export interface SeriesSummary {
   id: string;
   title: string;
+  appliesTo: string;
   description: string;
   searchKeywords: string;
   sourceUrls: string[];

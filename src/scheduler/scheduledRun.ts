@@ -6,9 +6,13 @@ import { filterNewEvents, type ExistingEventKey } from './dedupeEvents.js';
 import { getOrCreateFeedToken } from '../feed/feedToken.js';
 import { completeSeriesExpansion } from '../queries/queriesRepo.js';
 import type { SeriesRow } from '../queries/seriesRepo.js';
+import type { SeriesScope } from '../search/opencodeClient.js';
 
 export interface ScheduledRunDeps {
   runQuery: (query: string) => Promise<ExtractionResult>;
+  // Series-scoped expansion (only dates that are occurrences of what the
+  // series applies to). Falls back to runQuery on the series' keywords.
+  runSeriesExpansion?: (series: SeriesScope) => Promise<ExtractionResult>;
   emailSender: EmailSender;
   publicBaseUrl: string;
 }
@@ -52,13 +56,26 @@ async function runScheduledSeriesExpansion(
   }
 
   let totalNew = 0;
+  const expandedNames: string[] = [];
   try {
-    // One searxng call per expanded series (cost guardrail); sequential so
-    // date-dedupe sees each series' inserts before the next runs.
+    // One searxng call per subscribed series (cost guardrail); sequential so
+    // date-dedupe sees each series' inserts before the next runs. Each
+    // lookup is scoped to what that series applies to.
     for (const series of approved) {
-      const extracted = await deps.runQuery(series.search_keywords);
+      const scope: SeriesScope = {
+        title: series.title,
+        appliesTo: series.applies_to ?? series.title,
+        description: series.description,
+        searchKeywords: series.search_keywords,
+      };
+      const extracted = deps.runSeriesExpansion
+        ? await deps.runSeriesExpansion(scope)
+        : await deps.runQuery(series.search_keywords);
       const inserted = await completeSeriesExpansion(db, query._id, series._id, extracted.events);
-      totalNew += inserted.length;
+      if (inserted.length > 0) {
+        totalNew += inserted.length;
+        expandedNames.push(series.applies_to ?? series.title);
+      }
     }
   } catch (err) {
     await db
@@ -69,9 +86,10 @@ async function runScheduledSeriesExpansion(
   }
 
   if (totalNew > 0) {
-    // Approved-series expansions land as approved (trusted), so the email
-    // is always the FYI variant.
-    await sendReRunEmail(db, query, totalNew, true, deps);
+    // Subscribed-series expansions land as approved (trusted), so the email
+    // is always the FYI variant — and it names the subscribed series, since
+    // that is what the user follows.
+    await sendReRunEmail(db, query, totalNew, true, deps, expandedNames);
   }
 
   await db.collection('queries').updateOne(
@@ -143,7 +161,8 @@ async function sendReRunEmail(
   query: DueQuery,
   count: number,
   isTrusted: boolean,
-  deps: ScheduledRunDeps
+  deps: ScheduledRunDeps,
+  seriesNames: string[] = []
 ): Promise<void> {
   try {
     const user = await db
@@ -157,16 +176,20 @@ async function sendReRunEmail(
     }
 
     const plural = count === 1 ? '' : 's';
-    // query_text is user-controlled free text embedded in an email header
-    // (not just the body) — strip newlines/carriage returns first to guard
-    // against header injection.
-    const safeQueryText = query.query_text.replace(/[\r\n]+/g, ' ');
+    // Series names and query_text are partly model- or user-controlled free
+    // text embedded in an email header (not just the body) — strip
+    // newlines/carriage returns first to guard against header injection.
+    const safeNames = seriesNames.map(n => n.replace(/[\r\n]+/g, ' ').trim()).filter(n => n.length > 0);
+    const subjectScope = safeNames.length > 0 ? safeNames.join(', ') : query.query_text.replace(/[\r\n]+/g, ' ');
     const subject = isTrusted
-      ? `${count} new date${plural} added to your feed for '${safeQueryText}'`
-      : `${count} new date${plural} found for '${safeQueryText}' — go review`;
+      ? `${count} new date${plural} added to your feed for '${subjectScope}'`
+      : `${count} new date${plural} found for '${subjectScope}' — go review`;
+    const bodyScope = safeNames.length > 0
+      ? `Your subscribed series ${safeNames.map(n => `"${n}"`).join(', ')} found ${count} new date${plural}, already added to your feed.`
+      : `"${query.query_text}" found ${count} new date${plural}, already added to your feed.`;
     const body = isTrusted
-      ? `"${query.query_text}" found ${count} new date${plural}, already added to your feed.\n\n${deps.publicBaseUrl}`
-      : `"${query.query_text}" found ${count} new date${plural} awaiting your review.\n\n${deps.publicBaseUrl}`;
+      ? `${bodyScope}\n\n${deps.publicBaseUrl}`
+      : `"${subjectScope}" found ${count} new date${plural} awaiting your review.\n\n${deps.publicBaseUrl}`;
 
     await deps.emailSender.send(user.email, subject, body);
   } catch (err) {

@@ -3,8 +3,12 @@ import { createClient } from './db/client.js';
 import { runMigrations } from './db/migrate.js';
 import { SmtpEmailSender, ConsoleEmailSender, type EmailSender } from './email/EmailSender.js';
 import { searxngSearch } from './search/searxngClient.js';
-import { extractDates, extractSeries } from './search/opencodeClient.js';
-import { createSearchOrchestrator, createSeriesDiscoveryOrchestrator } from './search/searchOrchestrator.js';
+import { extractDates, extractSeries, extractSeriesDates } from './search/opencodeClient.js';
+import {
+  createSearchOrchestrator,
+  createSeriesDiscoveryOrchestrator,
+  createSeriesExpansionOrchestrator,
+} from './search/searchOrchestrator.js';
 import { createModelRegistry } from './search/models.js';
 import { createMetricsService } from './search/metrics.js';
 import { startScheduler } from './scheduler/scheduler.js';
@@ -49,7 +53,7 @@ async function main() {
   });
 
   // Stage 1 of the two-stage pipeline (issue #143): one broad searxng probe
-  // + one LLM grouping call. Per-series expansion reuses runQuery above.
+  // + one LLM grouping call that first resolves what each series applies to.
   const discoverSeries = createSeriesDiscoveryOrchestrator({
     searxngSearch: query =>
       searxngSearch(process.env.SEARXNG_BASE_URL!, query, process.env.SEARXNG_TOKEN!),
@@ -59,6 +63,25 @@ async function main() {
         models,
         metrics,
       });
+    },
+    metrics,
+  });
+
+  // Stage 2: per-series expansion scoped to the series identity — only dates
+  // that are occurrences of what the series applies to come back. The user
+  // subscribes to the series, so this is the lookup that feeds the calendar.
+  const runSeriesExpansion = createSeriesExpansionOrchestrator({
+    searxngSearch: query =>
+      searxngSearch(process.env.SEARXNG_BASE_URL!, query, process.env.SEARXNG_TOKEN!),
+    extractSeriesDates: async (series, results) => {
+      const models = await modelRegistry.listActive();
+      return extractSeriesDates(
+        process.env.OPENCODE_BASE_URL!,
+        process.env.OPENCODE_API_KEY!,
+        series,
+        results,
+        { models, metrics }
+      );
     },
     metrics,
   });
@@ -85,6 +108,7 @@ async function main() {
     frontendUrl: process.env.FRONTEND_URL ?? (isProduction ? '/' : 'http://localhost:5173'),
     runQuery,
     discoverSeries,
+    runSeriesExpansion,
     modelRegistry,
     metrics,
   });
@@ -93,7 +117,7 @@ async function main() {
   // disabled. Prevents every `tsx watch` restart in local dev from firing
   // real searxng/opencode calls if the dev DB has any due query.
   if (process.env.SCHEDULER_ENABLED !== 'false') {
-    startScheduler(db, { runQuery, emailSender, publicBaseUrl });
+    startScheduler(db, { runQuery, runSeriesExpansion, emailSender, publicBaseUrl });
   }
 
   if (isProduction) {

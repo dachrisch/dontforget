@@ -21,15 +21,31 @@ import {
   type QueryStatus,
   type SeriesExtractionResult,
 } from '../types.js';
+import type { SeriesScope } from '../search/opencodeClient.js';
 
 export interface QueryRouteDeps {
   db: Db;
   runQuery: (query: string) => Promise<ExtractionResult>;
   // Stage-1 discovery (issue #143). When present, new queries and explicit
-  // refreshes discover series; per-series expansion reuses runQuery.
+  // refreshes discover series; per-series expansion uses runSeriesExpansion
+  // (series-scoped dates) and falls back to runQuery.
   discoverSeries?: (query: string) => Promise<SeriesExtractionResult>;
+  runSeriesExpansion?: (series: SeriesScope) => Promise<ExtractionResult>;
   requireAuth: preHandlerHookHandler;
   publicBaseUrl: string;
+}
+
+// Expands one series into dates that are occurrences of what the series
+// applies to. Prefers the series-scoped path; older callers without it fall
+// back to the generic query path on the series' keywords.
+async function expandSeries(
+  deps: QueryRouteDeps,
+  series: { title: string; appliesTo: string; description: string; searchKeywords: string }
+): Promise<ExtractionResult> {
+  if (deps.runSeriesExpansion) {
+    return deps.runSeriesExpansion(series);
+  }
+  return deps.runQuery(series.searchKeywords);
 }
 
 export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps): void {
@@ -201,10 +217,9 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     const newlyApproved = updated.filter(s => (request.body?.approveIds ?? []).includes(s.id));
     for (const series of newlyApproved) {
       const seriesObjectId = new ObjectId(series.id);
-      const keywords = series.searchKeywords;
       enqueueSearch(async () => {
         try {
-          const extracted = await deps.runQuery(keywords);
+          const extracted = await expandSeries(deps, series);
           await completeSeriesExpansion(deps.db, queryObjectId, seriesObjectId, extracted.events);
         } catch (err) {
           console.error(`Series expansion failed for series ${series.id}:`, err);
@@ -232,7 +247,12 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(409).send({ error: 'series dismissed' });
       }
       try {
-        const extracted = await deps.runQuery(series.search_keywords);
+        const extracted = await expandSeries(deps, {
+          title: series.title,
+          appliesTo: series.applies_to ?? series.title,
+          description: series.description,
+          searchKeywords: series.search_keywords,
+        });
         const inserted = await completeSeriesExpansion(deps.db, queryObjectId, series._id, extracted.events);
         return reply.send(inserted);
       } catch (err) {

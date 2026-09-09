@@ -758,7 +758,7 @@ describe('series nesting', () => {
           query({
             text: 'events in munich',
             series: [
-              { id: 's1', title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } },
+              { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 } },
             ],
           }),
         ],

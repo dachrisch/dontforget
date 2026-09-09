@@ -162,13 +162,16 @@ export async function completeSeriesDiscoveryRun(db: Db, queryId: ObjectId): Pro
     .updateOne({ _id: queryId }, { $set: { status: 'ready' as const, last_run_at: new Date() } });
 }
 
-// Expands one approved series into concrete dated occurrences via the
-// existing per-series path (searxngSearch + extractDates + date-dedupe are
+// Expands one subscribed series into concrete dated occurrences of what the
+// series applies to (searxngSearch + extractSeriesDates + date-dedupe are
 // run by the caller; this only lands the results). An approved series is
-// trusted: new dates land as `approved` without re-approval, mirroring the
-// trusted-query rule. A non-approved series falls back to the query trust
-// rule (approved only if the query already has an approved event).
+// trusted: new dates land as `approved` without per-event re-approval —
+// the user subscribes to the series, not to its events individually. A
+// non-approved series falls back to the query trust rule (approved only if
+// the query already has an approved event).
 // Events keep their query_id link and gain a series_id back-pointer.
+// Dedupe is per-series (this series' dates plus legacy rows without any
+// series), so two subscribed series sharing a calendar date both keep it.
 export async function completeSeriesExpansion(
   db: Db,
   queryId: ObjectId,
@@ -177,7 +180,13 @@ export async function completeSeriesExpansion(
 ): Promise<CandidateEvent[]> {
   const existing = await db
     .collection<EventRow>('events')
-    .find({ query_id: queryId }, { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } })
+    .find(
+      {
+        query_id: queryId,
+        $or: [{ series_id: seriesId }, { series_id: { $exists: false } }],
+      },
+      { projection: { _id: 0, start_date: 1, end_date: 1, status: 1 } }
+    )
     .toArray();
   const newEvents = filterNewEvents(events, existing);
   if (newEvents.length === 0) return [];
@@ -374,6 +383,7 @@ async function seriesSummariesByQuery(
     byQuery.get(row.query_id.toString())?.push({
       id: row._id.toString(),
       title: row.title,
+      appliesTo: row.applies_to ?? row.title,
       description: row.description,
       searchKeywords: row.search_keywords,
       sourceUrls: row.source_urls,

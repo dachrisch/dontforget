@@ -11,7 +11,11 @@ import { flushSearches } from './searchQueue';
 
 async function authenticatedUser(
   db: Db,
-  deps: { runQuery?: (...args: never[]) => Promise<never>; discoverSeries?: (...args: never[]) => Promise<never> } & Record<string, unknown>,
+  deps: {
+    runQuery?: (...args: never[]) => Promise<never>;
+    discoverSeries?: (...args: never[]) => Promise<never>;
+    runSeriesExpansion?: (...args: never[]) => Promise<never>;
+  } & Record<string, unknown>,
   email = 'u@example.com'
 ) {
   const { insertedId } = await db.collection('users').insertOne({ email });
@@ -24,6 +28,7 @@ async function authenticatedUser(
     frontendUrl: 'http://localhost:5173',
     runQuery: (deps.runQuery as never) ?? vi.fn().mockResolvedValue({ events: [], cadence: null }),
     discoverSeries: deps.discoverSeries as never,
+    runSeriesExpansion: deps.runSeriesExpansion as never,
   });
   return { app, userId, sessionId };
 }
@@ -54,11 +59,11 @@ describe('series review routes', () => {
     expect(response.statusCode).toBe(401);
   });
 
-  it('GET lists series-review rows (title, description, sources) for the owner', async () => {
+  it('GET lists series-review rows (identity, description, sources) for the owner', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db, {});
     const query = await createQuery(db, userId, 'events in munich');
     await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Oktoberfest', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
     ]);
 
     const response = await app.inject({
@@ -71,6 +76,7 @@ describe('series review routes', () => {
       {
         id: expect.any(String),
         title: 'Oktoberfest',
+        appliesTo: 'Oktoberfest, Munich',
         description: 'Beer festival',
         searchKeywords: 'Oktoberfest Munich',
         sourceUrls: ['https://a.example'],
@@ -92,15 +98,16 @@ describe('series review routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
-  it('POST review approves series and expands them into dated events in the background', async () => {
-    const runQuery = vi.fn().mockResolvedValue({
+  it('POST review subscribes to the series and expands dates scoped to its identity', async () => {
+    const runSeriesExpansion = vi.fn().mockResolvedValue({
       events: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' }],
       cadence: null,
     });
-    const { app, userId, sessionId } = await authenticatedUser(db, { runQuery });
+    const runQuery = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { runQuery, runSeriesExpansion });
     const query = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich Termine', sourceUrls: ['https://a.example'] },
     ]);
 
     const response = await app.inject({
@@ -113,10 +120,16 @@ describe('series review routes', () => {
     expect(response.json()[0]).toMatchObject({ id: series.id, status: 'approved' });
 
     await flushSearches();
-    expect(runQuery).toHaveBeenCalledWith('Auer Dult Munich dates');
+    // Series-scoped path: called with the series identity, not bare keywords.
+    expect(runSeriesExpansion).toHaveBeenCalledWith(
+      expect.objectContaining({ appliesTo: 'Auer Dult, Munich', searchKeywords: 'Auer Dult Munich Termine' })
+    );
+    expect(runQuery).not.toHaveBeenCalled();
     const events = await db.collection('events').find({ query_id: query._id }).toArray();
     expect(events).toHaveLength(1);
     expect(events[0].series_id.toString()).toBe(series.id);
+    // Subscribed series land as approved without per-event re-approval.
+    expect(events[0].status).toBe('approved');
   });
 
   it('POST expand returns dated events linked via series_id', async () => {
@@ -127,7 +140,7 @@ describe('series review routes', () => {
     const { app, userId, sessionId } = await authenticatedUser(db, { runQuery });
     const query = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
     ]);
 
     const response = await app.inject({
@@ -144,7 +157,7 @@ describe('series review routes', () => {
     const { app, userId, sessionId } = await authenticatedUser(db, { runQuery });
     const query = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
     ]);
     await app.inject({
       method: 'POST',
@@ -165,14 +178,14 @@ describe('series review routes', () => {
   it('POST refresh re-runs discovery without re-creating dismissed titles', async () => {
     const discoverSeries = vi.fn().mockResolvedValue({
       series: [
-        { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
-        { title: 'New Series', description: 'd', searchKeywords: 'New Series Munich', sourceUrls: ['https://c.example'] },
+        { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+        { title: 'New Series', appliesTo: 'New Series, Munich', description: 'd', searchKeywords: 'New Series Munich', sourceUrls: ['https://c.example'] },
       ],
     });
     const { app, userId, sessionId } = await authenticatedUser(db, { discoverSeries });
     const query = await createQuery(db, userId, 'events in munich');
     const [existing] = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
     ]);
     await db.collection('series').updateOne({ _id: new ObjectId(existing.id) }, { $set: { status: 'dismissed' } });
 

@@ -38,8 +38,8 @@ describe('runScheduledQuery with series', () => {
   async function setupQueryWithSeries(queryText: string) {
     const query = await createQuery(db, userId, queryText);
     const inserted = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
-      { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://b.example'] },
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://b.example'] },
     ]);
     return { query, inserted };
   }
@@ -135,10 +135,33 @@ describe('runScheduledQuery with series', () => {
     await reviewSeries(db, userId, query.queryId, [], [inserted[0].id]);
 
     const rediscovered = await insertDiscoveredSeries(db, query._id, userId, [
-      { title: 'oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
-      { title: 'New Series', description: 'd', searchKeywords: 'New Series Munich', sourceUrls: ['https://c.example'] },
+      { title: 'oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
+      { title: 'New Series', appliesTo: 'New Series, Munich', description: 'd', searchKeywords: 'New Series Munich', sourceUrls: ['https://c.example'] },
     ]);
 
     expect(rediscovered.map(s => s.title)).toEqual(['New Series']);
+  });
+
+  it('expands via the series-scoped path and names the subscribed series in the email', async () => {
+    const { query, inserted } = await setupQueryWithSeries('events in munich');
+    await reviewSeries(db, userId, query.queryId, [inserted[1].id], [inserted[0].id]);
+
+    const emailSender = new CapturingEmailSender();
+    const runSeriesExpansion = vi.fn().mockResolvedValue({
+      events: [{ label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'https://b.example' }],
+      cadence: null,
+    });
+    const runQuery = vi.fn();
+    const deps: ScheduledRunDeps = { runQuery, runSeriesExpansion, emailSender, publicBaseUrl: 'http://localhost:3000' };
+
+    await runScheduledQuery(db, dueQueryFrom(query.queryId, 'events in munich'), deps);
+
+    expect(runSeriesExpansion).toHaveBeenCalledTimes(1);
+    expect(runSeriesExpansion).toHaveBeenCalledWith(
+      expect.objectContaining({ appliesTo: 'Auer Dult, Munich' })
+    );
+    expect(runQuery).not.toHaveBeenCalled();
+    expect(emailSender.sent).toHaveLength(1);
+    expect(emailSender.sent[0].subject).toMatch(/Auer Dult, Munich/);
   });
 });

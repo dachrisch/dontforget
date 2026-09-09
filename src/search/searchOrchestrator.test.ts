@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createSearchOrchestrator, createSeriesDiscoveryOrchestrator } from './searchOrchestrator';
+import {
+  createSearchOrchestrator,
+  createSeriesDiscoveryOrchestrator,
+  createSeriesExpansionOrchestrator,
+} from './searchOrchestrator';
 import { MAX_SERIES } from './opencodeClient';
 
 describe('createSearchOrchestrator', () => {
@@ -65,6 +69,7 @@ describe('createSeriesDiscoveryOrchestrator', () => {
   function seriesFixture(n: number, prefix = 'Series') {
     return Array.from({ length: n }, (_, i) => ({
       title: `${prefix} ${i + 1}`,
+      appliesTo: `${prefix} ${i + 1}, Munich`,
       description: `desc ${i + 1}`,
       searchKeywords: `${prefix} ${i + 1} Munich dates`,
       sourceUrls: [`https://example.com/${i + 1}`],
@@ -108,9 +113,9 @@ describe('createSeriesDiscoveryOrchestrator', () => {
     const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
     const extractSeries = vi.fn().mockResolvedValue({
       series: [
-        { title: 'Oktoberfest', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
-        { title: '  OKTOBERFEST ', description: 'dup', searchKeywords: 'Oktoberfest dup', sourceUrls: ['https://b.example'] },
-        { title: 'Auer Dult', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://c.example'] },
+        { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+        { title: '  OKTOBERFEST ', appliesTo: 'Oktoberfest, Munich', description: 'dup', searchKeywords: 'Oktoberfest dup', sourceUrls: ['https://b.example'] },
+        { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://c.example'] },
       ],
     });
 
@@ -124,7 +129,7 @@ describe('createSeriesDiscoveryOrchestrator', () => {
     const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
     const extractSeries = vi.fn().mockResolvedValue({
       series: [
-        { title: 'Auer Dult', description: 'Munich fair', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://auerdult.de'] },
+        { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'Munich fair', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://auerdult.de'] },
       ],
     });
 
@@ -144,5 +149,42 @@ describe('createSeriesDiscoveryOrchestrator', () => {
 
     expect(extractSeries).not.toHaveBeenCalled();
     expect(result).toEqual({ series: [] });
+  });
+});
+
+describe('createSeriesExpansionOrchestrator', () => {
+  const auerDult = {
+    title: 'Auer Dult',
+    appliesTo: 'Auer Dult, Munich',
+    description: 'Thrice-yearly fair on Mariahilfplatz',
+    searchKeywords: 'Auer Dult Munich Termine',
+  };
+
+  it('searches with the series keywords and extracts dates scoped to the series identity', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeriesDates = vi.fn().mockResolvedValue({
+      events: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u' }],
+      cadence: 'yearly',
+    });
+
+    const expand = createSeriesExpansionOrchestrator({ searxngSearch, extractSeriesDates });
+    const result = await expand(auerDult);
+
+    expect(searxngSearch).toHaveBeenCalledTimes(1);
+    expect(searxngSearch).toHaveBeenCalledWith('Auer Dult Munich Termine');
+    expect(extractSeriesDates).toHaveBeenCalledTimes(1);
+    expect(extractSeriesDates).toHaveBeenCalledWith(auerDult, [{ title: 't', url: 'u', content: 'c' }]);
+    expect(result.events).toHaveLength(1);
+  });
+
+  it('skips scoped extraction when the series probe returns nothing', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([]);
+    const extractSeriesDates = vi.fn();
+
+    const expand = createSeriesExpansionOrchestrator({ searxngSearch, extractSeriesDates });
+    const result = await expand(auerDult);
+
+    expect(extractSeriesDates).not.toHaveBeenCalled();
+    expect(result).toEqual({ events: [], cadence: null });
   });
 });
