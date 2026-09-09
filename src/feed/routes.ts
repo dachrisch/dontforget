@@ -77,9 +77,9 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
     })
     .sort({ start_date: 1 })
     .toArray();
-  // Series titles for the per-date triage links below: an approved date
-  // that belongs to a subscribed series offers "unsubscribe from the
-  // series" one level above the date itself.
+  // Series titles for the per-date triage links below (approved and
+  // candidate alike): a date that belongs to a series offers "unsubscribe
+  // from the series" one level above the date itself.
   const seriesTitleById = new Map<string, string>();
   if (queryIds.length > 0) {
     const seriesRows = await deps.db
@@ -88,20 +88,26 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
       .toArray();
     for (const row of seriesRows) seriesTitleById.set(row._id.toString(), row.title);
   }
-  // Approved dates carry dismiss/unsubscribe links in their description:
-  // keeping them needs no action, dropping one is a click. Same token
-  // pattern as the candidate review entries.
+  function seriesTitleOf(seriesId: unknown): string | null {
+    const id = seriesId as ObjectId | undefined;
+    return seriesTitleById.get(id?.toString() ?? '') ?? null;
+  }
+  // Approved dates carry styled info plus dismiss/unsubscribe buttons in
+  // their description: keeping them needs no action, dropping one is a
+  // click. Same token pattern as the candidate review entries.
   const events: IcsFeedEvent[] = [];
   for (const r of eventRows) {
     const eventId = r._id as ObjectId;
     const queryId = r.query_id as ObjectId;
-    const seriesTitle = seriesTitleById.get((r.series_id as ObjectId | undefined)?.toString() ?? '') ?? null;
     const triageToken = await getOrCreateReviewToken(deps.db, eventId, queryId, tokenRow.user_id);
     const triage = buildApprovedEntryContent({
       publicBaseUrl: deps.publicBaseUrl,
       token: triageToken,
       label: r.label as string,
-      seriesTitle,
+      startDate: r.start_date as string,
+      endDate: r.end_date as string,
+      sourceUrl: r.source_url as string,
+      seriesTitle: seriesTitleOf(r.series_id),
     });
     events.push({
       id: eventId.toString(),
@@ -144,6 +150,7 @@ async function serveFeed(deps: FeedRouteDeps, token: string, ext: FeedExt, reply
       startDate: row.start_date as string,
       endDate: row.end_date as string,
       sourceUrl: row.source_url as string,
+      seriesTitle: seriesTitleOf(row.series_id),
     });
     const reviewId = `review-${eventId.toString()}`;
     const reviewLabel = reviewEntryTitle(row.label as string);
