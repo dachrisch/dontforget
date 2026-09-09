@@ -4,9 +4,11 @@ export interface ReviewEntryContent {
   // Plain-text fallback for calendar clients that strip HTML (Outlook).
   // Carries the raw action URLs so triage still works without links.
   text: string;
-  // Minimal inline-styled HTML for clients that render <a> tags in
-  // descriptions (Google Calendar, Apple Calendar). Kept to <p>/<a>/<br>
-  // with inline styles, matching the magicLinkHtml pattern.
+  // Inline-styled HTML for clients that render descriptions as HTML
+  // (Google Calendar, Apple Calendar): a styled info block plus real
+  // button links. Kept to <p>/<b>/<a>/<br> with inline styles only —
+  // calendar renderers sanitize aggressively (<style> blocks, classes, and
+  // external CSS never survive), matching the magicLinkHtml pattern.
   html: string;
 }
 
@@ -18,6 +20,45 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
+const FONT_STACK = `-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif`;
+
+// A button that survives calendar HTML sanitizers: a plain link styled
+// inline (no classes, no <style>). Primary is filled, secondary is an
+// outline in the same hue; danger shifts both toward the brand accent.
+function actionButton(url: string, label: string, kind: 'primary' | 'secondary' | 'danger' = 'secondary'): string {
+  const base =
+    `display:inline-block;text-decoration:none;font-family:${FONT_STACK};font-size:14px;font-weight:600;` +
+    `line-height:1.2;padding:8px 16px;border-radius:8px;margin:2px 6px 2px 0;`;
+  const style =
+    kind === 'primary'
+      ? `background-color:#1a1a2e;color:#ffffff;border:1px solid #1a1a2e;`
+      : kind === 'danger'
+        ? `background-color:transparent;color:#a4302a;border:1px solid #a4302a;`
+        : `background-color:transparent;color:#2563eb;border:1px solid #2563eb;`;
+  return `<a href="${url}" style="${base}${style}">${label}</a>`;
+}
+
+function infoBlock(lines: string[]): string {
+  return (
+    `<p style="font-family:${FONT_STACK};font-size:14px;color:#1a1a2e;line-height:1.6;">` +
+    lines.join('<br>') +
+    `</p>`
+  );
+}
+
+function copyFallbackBlock(urls: string[]): string {
+  return (
+    `<p style="font-family:${FONT_STACK};font-size:12px;color:#888888;line-height:1.5;">` +
+    `Buttons not working? Copy a link into your browser:<br>` +
+    urls.join('<br>') +
+    `</p>`
+  );
+}
+
+function formatDateRange(startDate: string, endDate: string): string {
+  return startDate === endDate ? startDate : `${startDate} to ${endDate}`;
+}
+
 export function buildReviewEntryContent(args: {
   publicBaseUrl: string;
   token: string;
@@ -26,10 +67,15 @@ export function buildReviewEntryContent(args: {
   startDate: string;
   endDate: string;
   sourceUrl: string;
+  // A candidate date of a subscribed series unsubscribes the series on
+  // "not interested at all" (not the whole search) — name it when known.
+  seriesTitle?: string | null;
 }): ReviewEntryContent {
   const urls = buildReviewActionUrls(args.publicBaseUrl, args.token);
-  const dateRange =
-    args.startDate === args.endDate ? args.startDate : `${args.startDate} to ${args.endDate}`;
+  const dateRange = formatDateRange(args.startDate, args.endDate);
+  const unsubscribeLabel = args.seriesTitle
+    ? `Unsubscribe from "${args.seriesTitle}"`
+    : 'Not interested at all';
 
   const text =
     `New candidate date for "${args.queryText}": ${args.label} (${dateRange}).\n` +
@@ -37,26 +83,26 @@ export function buildReviewEntryContent(args: {
     `Source: ${args.sourceUrl}\n\n` +
     `Approve (add to your feed): ${urls.approveUrl}\n` +
     `Not interested this time (dismiss this date): ${urls.dismissUrl}\n` +
-    `Not interested at all (delete this search and its events): ${urls.suppressUrl}`;
+    `${unsubscribeLabel} (${args.seriesTitle ? 'removes its dates from your feed' : 'delete this search and its events'}): ${urls.suppressUrl}`;
 
   const safeLabel = escapeHtml(args.label);
   const safeQuery = escapeHtml(args.queryText);
   const safeRange = escapeHtml(dateRange);
   const safeSource = escapeHtml(args.sourceUrl);
+  const safeSeries = args.seriesTitle ? escapeHtml(args.seriesTitle) : null;
 
   const html =
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a2e;line-height:1.5;">` +
-    `New candidate date for &quot;${safeQuery}&quot;: <b>${safeLabel}</b> (${safeRange}). ` +
-    `Review it here instead of opening the app.</p>` +
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;">` +
-    `<a href="${urls.approveUrl}" style="color:#2563eb;font-weight:600;">Approve</a> — add this date to your feed.<br>` +
-    `<a href="${urls.dismissUrl}" style="color:#2563eb;">Not interested this time</a> — dismiss this date.<br>` +
-    `<a href="${urls.suppressUrl}" style="color:#2563eb;">Not interested at all</a> — delete this search and its events.</p>` +
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:13px;color:#555;line-height:1.5;">` +
-    `Source: <a href="${safeSource}" style="color:#2563eb;">${safeSource}</a></p>` +
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#888;line-height:1.5;">` +
-    `Links not clickable? Copy one into your browser:<br>` +
-    `${urls.approveUrl}<br>${urls.dismissUrl}<br>${urls.suppressUrl}</p>`;
+    infoBlock([
+      `<b>${safeLabel}</b>`,
+      `<span style="color:#555555;">${safeRange} · ${safeSeries ? `Series &quot;${safeSeries}&quot; · ` : ''}Search &quot;${safeQuery}&quot;</span>`,
+      `Source: <a href="${safeSource}" style="color:#2563eb;">${safeSource}</a>`,
+    ]) +
+    `<p style="font-family:${FONT_STACK};font-size:14px;line-height:1.5;">` +
+    actionButton(urls.approveUrl, '✓ Approve', 'primary') +
+    actionButton(urls.dismissUrl, 'Not this time') +
+    actionButton(urls.suppressUrl, safeSeries ? `Unsubscribe` : 'Not at all', 'danger') +
+    `</p>` +
+    copyFallbackBlock([urls.approveUrl, urls.dismissUrl, urls.suppressUrl]);
 
   return { text, html };
 }
@@ -75,34 +121,39 @@ export function buildApprovedEntryContent(args: {
   publicBaseUrl: string;
   token: string;
   label: string;
+  startDate: string;
+  endDate: string;
+  sourceUrl: string;
   seriesTitle: string | null;
 }): ReviewEntryContent {
   const urls = buildReviewActionUrls(args.publicBaseUrl, args.token);
+  const dateRange = formatDateRange(args.startDate, args.endDate);
   const unsubscribeLine = args.seriesTitle
     ? `Unsubscribe from the series "${args.seriesTitle}" (removes its dates from your feed): ${urls.suppressUrl}`
     : `Not interested at all (delete this search and its events): ${urls.suppressUrl}`;
 
   const text =
-    `"${args.label}" is on your calendar via dontforget. Nothing to do to keep it.\n\n` +
+    `"${args.label}" (${dateRange}) is on your calendar via dontforget. Nothing to do to keep it.\n\n` +
+    `Source: ${args.sourceUrl}\n\n` +
     `Not interested in this date: ${urls.dismissUrl}\n` +
     `${unsubscribeLine}`;
 
   const safeLabel = escapeHtml(args.label);
-  const safeUnsubscribe = args.seriesTitle
-    ? `Unsubscribe from the series &quot;${escapeHtml(args.seriesTitle)}&quot;`
-    : `Not interested at all`;
+  const safeRange = escapeHtml(dateRange);
+  const safeSource = escapeHtml(args.sourceUrl);
+  const safeSeries = args.seriesTitle ? escapeHtml(args.seriesTitle) : null;
 
   const html =
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;color:#1a1a2e;line-height:1.5;">` +
-    `&quot;${safeLabel}&quot; is on your calendar via dontforget. Nothing to do to keep it.</p>` +
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.5;">` +
-    `<a href="${urls.dismissUrl}" style="color:#2563eb;">Not interested in this date</a> — remove just this one.<br>` +
-    `<a href="${urls.suppressUrl}" style="color:#2563eb;">${safeUnsubscribe}</a> — ${
-      args.seriesTitle ? 'remove all its dates from your feed.' : 'delete this search and its events.'
-    }</p>` +
-    `<p style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;color:#888;line-height:1.5;">` +
-    `Links not clickable? Copy one into your browser:<br>` +
-    `${urls.dismissUrl}<br>${urls.suppressUrl}</p>`;
+    infoBlock([
+      `<b>${safeLabel}</b>`,
+      `<span style="color:#555555;">${safeRange}${safeSeries ? ` · Series &quot;${safeSeries}&quot;` : ''} · On your calendar ✓</span>`,
+      `Source: <a href="${safeSource}" style="color:#2563eb;">${safeSource}</a>`,
+    ]) +
+    `<p style="font-family:${FONT_STACK};font-size:14px;line-height:1.5;">` +
+    actionButton(urls.dismissUrl, 'Not this date') +
+    actionButton(urls.suppressUrl, safeSeries ? 'Unsubscribe series' : 'Not at all', 'danger') +
+    `</p>` +
+    copyFallbackBlock([urls.dismissUrl, urls.suppressUrl]);
 
   return { text, html };
 }

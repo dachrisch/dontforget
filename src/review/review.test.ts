@@ -78,6 +78,29 @@ describe('review entry content', () => {
     expect(content.text).toContain('http://localhost:3000/api/review/callback?token=tok123');
   });
 
+  it('renders a styled info block with button links', () => {
+    const content = buildReviewEntryContent({
+      publicBaseUrl: 'http://localhost:3000',
+      token: 'tok123',
+      queryText: 'Auer Dult Munich',
+      label: 'Frühjahrsdult',
+      startDate: '2026-04-11',
+      endDate: '2026-05-11',
+      sourceUrl: 'https://auerdult.de',
+      seriesTitle: 'Auer Dult',
+    });
+
+    // Info block names the date, its range, and its series.
+    expect(content.html).toContain('Frühjahrsdult');
+    expect(content.html).toContain('2026-04-11 to 2026-05-11');
+    expect(content.html).toContain('Auer Dult');
+    // Buttons are inline-styled links (calendar sanitizers strip classes).
+    expect(content.html).toContain('display:inline-block');
+    expect(content.html).toContain('✓ Approve');
+    expect(content.text).not.toContain('delete this search');
+    expect(content.text).toContain('Unsubscribe from "Auer Dult"');
+  });
+
   it('escapes user-controlled text in the HTML variant', () => {
     const content = buildReviewEntryContent({
       publicBaseUrl: 'http://localhost:3000',
@@ -248,19 +271,26 @@ describe('review callback', () => {
     expect(await db.collection('queries').countDocuments({ _id: new ObjectId(query.queryId) })).toBe(1);
   });
 
-  it('approved dates carry dismiss/unsubscribe links and no approve link', async () => {
+  it('approved dates carry styled info with dismiss/unsubscribe buttons and no approve link', async () => {
     const { buildApprovedEntryContent } = await import('./reviewDescription.js');
     const content = buildApprovedEntryContent({
       publicBaseUrl: 'http://localhost:3000',
       token: 'tok',
       label: 'Frühjahrsdult',
+      startDate: '2026-04-11',
+      endDate: '2026-05-11',
+      sourceUrl: 'https://auerdult.de',
       seriesTitle: 'Auer Dult',
     });
     expect(content.text).toContain('action=dismiss');
     expect(content.text).toContain('action=suppress');
     expect(content.text).not.toContain('action=approve');
     expect(content.text).toContain('Auer Dult');
-    expect(content.html).toContain('Not interested in this date');
+    expect(content.html).toContain('display:inline-block');
+    expect(content.html).toContain('2026-04-11 to 2026-05-11');
+    expect(content.html).toContain('https://auerdult.de');
+    expect(content.html).toContain('Unsubscribe series');
+    expect(content.html).not.toContain('action=approve');
   });
 
   it('reports already-acted when the event left candidate via the in-app flow', async () => {
@@ -461,6 +491,9 @@ describe('review entries in the feed', () => {
     expect(ics.body).toContain('action=dismiss');
     expect(ics.body).toContain('action=suppress');
     expect(ics.body).not.toContain('action=approve');
+    // Styled HTML variant travels as X-ALT-DESC.
+    expect(ics.body).toContain('X-ALT-DESC');
+    expect(ics.body).toContain('display:inline-block');
   });
 
   it('removes all review entries once the query is suppressed', async () => {
