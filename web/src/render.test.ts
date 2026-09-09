@@ -775,6 +775,18 @@ describe('series nesting', () => {
     expect(container.querySelector('.query-series-row[data-series-id="s1"]')).not.toBeNull();
   });
 
+  it('renders the series title in a wrapping element, not a nowrap ledger label', () => {
+    // Regression: the first series layout reused .ledger-label
+    // (white-space: nowrap) for identity + description, pushing the card
+    // into horizontal scroll on a 360px viewport.
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'A very long description that must wrap instead of overflowing', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+    ]);
+    const row = container.querySelector('.query-series-row[data-series-id="s1"]')!;
+    expect(row.querySelector('.query-series-title')).not.toBeNull();
+    expect(row.querySelector('.ledger-label')).toBeNull();
+  });
+
   it('offers subscribe for unsubscribed series and unsubscribe for subscribed ones', () => {
     const { container, handlers } = seriesDashboard([
       { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },

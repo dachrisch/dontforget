@@ -537,6 +537,76 @@ h1, h2 {
   justify-content: flex-end;
 }
 
+/* Series subscription rows. Unlike .ledger-row/.ledger-label (nowrap
+   single-line entries), every line here must wrap: a series identity plus
+   description plus source links never fits one 360px line, and reusing the
+   ledger classes pushed the whole card into horizontal scroll on mobile.
+   The head is a wrapping flex row so the status drops below the title on
+   narrow screens instead of squeezing it. */
+.query-series {
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+}
+
+.query-series-row {
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.85rem;
+  min-width: 0;
+}
+
+.query-series-row:last-child {
+  border-bottom: none;
+}
+
+.query-series-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.25rem 1rem;
+}
+
+.query-series-title {
+  flex: 1 1 10rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+}
+
+.query-series-status {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+  text-align: right;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.query-series-preview {
+  margin-top: 0.35rem;
+  min-width: 0;
+}
+
+.query-series-preview-label {
+  font-size: 0.75rem;
+  color: var(--ink-muted);
+}
+
+.query-series-date {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.query-series-source {
+  display: inline;
+  margin-top: 0;
+}
+
+.query-series-actions {
+  margin-top: 0.25rem;
+}
+
 .feed-action {
   display: inline-flex;
   align-items: center;

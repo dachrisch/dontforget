@@ -881,6 +881,10 @@ function seriesStatusLabel(status: SeriesSummary['status']): string {
   return t('series.statusCandidate');
 }
 
+// Series rows deliberately avoid the .ledger-row/.ledger-label classes: those
+// are nowrap single-line ledger entries, and a series identity plus
+// description never fits one 360px line — reusing them pushed the whole
+// card (and page) into horizontal scroll on mobile. Everything here wraps.
 function renderSeriesRow(s: SeriesSummary): string {
   const identity = s.appliesTo && s.appliesTo !== s.title
     ? `${s.title} · ${s.appliesTo}`
@@ -890,24 +894,25 @@ function renderSeriesRow(s: SeriesSummary): string {
     : '';
   const sources = (s.sourceUrls ?? [])
     .slice(0, 2)
-    .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
+    .map(u => `<a class="day-tile-source query-series-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
     .join(' ');
+  const previewDates = (s.previewEvents ?? [])
+    .map(p => `<div class="query-series-date">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</div>`)
+    .join('');
   const preview = (s.previewEvents ?? []).length > 0
-    ? `<div class="query-series-preview" aria-label="${escapeHtml(t('series.upcomingDates'))}"><span class="ledger-label">${escapeHtml(t('series.upcomingDates'))}</span> ` +
-      (s.previewEvents ?? [])
-        .map(p => `<span class="ledger-value">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</span>`)
-        .join('<br>') +
-      `</div>`
-    : `<div class="query-series-preview"><span class="ledger-value">${escapeHtml(t('series.noDates'))}</span></div>`;
+    ? `<div class="query-series-preview" aria-label="${escapeHtml(t('series.upcomingDates'))}"><div class="query-series-preview-label">${escapeHtml(t('series.upcomingDates'))}</div>${previewDates}</div>`
+    : `<div class="query-series-preview"><div class="query-series-date">${escapeHtml(t('series.noDates'))}</div></div>`;
   const action = s.status === 'approved'
     ? `<button type="button" class="link-button" data-action="unsubscribe-series" data-series-id="${s.id}">${t('series.unsubscribe')}</button>`
     : `<button type="button" class="link-button" data-action="subscribe-series" data-series-id="${s.id}">${t('series.subscribe')}</button>`;
-  return `<div class="ledger-row query-series-row" data-series-id="${s.id}">
-      <span class="ledger-label">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
-      <span class="ledger-value">${escapeHtml(seriesStatusLabel(s.status))}${escapeHtml(counts)}</span>
-    </div>
-    ${preview}
-    <div class="query-series-actions">${action}</div>`;
+  return `<div class="query-series-row" data-series-id="${s.id}">
+      <div class="query-series-head">
+        <span class="query-series-title">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
+        <span class="query-series-status">${escapeHtml(seriesStatusLabel(s.status))}${escapeHtml(counts)}</span>
+      </div>
+      ${preview}
+      <div class="query-series-actions">${action}</div>
+    </div>`;
 }
 
 function renderReviewCard(reviewing: ReviewingDraft): string {
