@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.24.2](https://github.com/dachrisch/dontforget/compare/v0.24.1...v0.24.2) (2026-09-09)
+
+
+### Bug Fixes
+
+* stop series rows overflowing on mobile ([a56c133](https://github.com/dachrisch/dontforget/commit/a56c1335a79a5365dfd4793698a87719a8acb1ba))
+* use block comments in style.css so the CSS minifier parses ([7426705](https://github.com/dachrisch/dontforget/commit/7426705b0b2b35a1359eb27885654200306edd79))
+
 ## [0.24.1](https://github.com/dachrisch/dontforget/compare/v0.24.0...v0.24.1) (2026-09-09)
 
 
