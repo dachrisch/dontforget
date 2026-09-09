@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.23.0](https://github.com/dachrisch/dontforget/compare/v0.22.1...v0.23.0) (2026-09-09)
+
+
+### Features
+
+* group free-form queries into event series before fetching ([aba3b00](https://github.com/dachrisch/dontforget/commit/aba3b003ea9c9073df067a83f4f0ca4782bc2839))
+* group free-form queries into event series before fetching ([00a4b92](https://github.com/dachrisch/dontforget/commit/00a4b92a52648949dd5fbef73ac39ab7e0ebda86))
+* resolve what each series applies to before fetching its dates ([4641084](https://github.com/dachrisch/dontforget/commit/4641084259643e1b8bfe454523a27397ac8480f1))
+* subscribe to series in app, triage single dates in calendar ([b5b09ef](https://github.com/dachrisch/dontforget/commit/b5b09ef3d30c7566e8e29b67f67d83f0fc3dd999))
+
+
+### Bug Fixes
+
+* cover series migrations in migrate test ([6cb483a](https://github.com/dachrisch/dontforget/commit/6cb483a949062074e51c8a8ba6795418bbac72a6))
+
 ## [0.22.1](https://github.com/dachrisch/dontforget/compare/v0.22.0...v0.22.1) (2026-09-07)
 
 
