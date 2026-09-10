@@ -46,6 +46,35 @@ describe('reducer', () => {
     expect(next).toMatchObject({ reviewing: { queryId: 'q1', recurrenceInterval: 'yearly', events: [] } });
   });
 
+  it('toggles which series row shows its details', () => {
+    const state = dashboard([query('q1')]);
+    const opened = reducer(state, { type: 'TOGGLE_SERIES_EXPAND', seriesId: 's1' });
+    expect(opened).toMatchObject({ expandedSeriesId: 's1' });
+    const closed = reducer(opened, { type: 'TOGGLE_SERIES_EXPAND', seriesId: 's1' });
+    expect(closed).toMatchObject({ expandedSeriesId: null });
+    const switched = reducer(opened, { type: 'TOGGLE_SERIES_EXPAND', seriesId: 's2' });
+    expect(switched).toMatchObject({ expandedSeriesId: 's2' });
+  });
+
+  it('keeps the expanded series across a refresh while it still exists', () => {
+    const withSeries = {
+      ...query('q1'),
+      series: [{ id: 's1', title: 'A', appliesTo: 'A, Munich', description: '', searchKeywords: 'A', sourceUrls: [], status: 'candidate' as const, eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] }],
+    };
+    const state: WorkspaceState = {
+      kind: 'dashboard',
+      queries: [withSeries],
+      feed: null,
+      editing: null,
+      reviewing: null,
+      expandedSeriesId: 's1',
+    };
+    const kept = reducer(state, { type: 'DASHBOARD_LOADED', queries: [withSeries], feed: null });
+    expect(kept).toMatchObject({ expandedSeriesId: 's1' });
+    const dropped = reducer(state, { type: 'DASHBOARD_LOADED', queries: [query('q1')], feed: null });
+    expect(dropped).toMatchObject({ expandedSeriesId: null });
+  });
+
   it('drops an open review card when a dashboard refresh no longer lists its query', () => {
     const state: WorkspaceState = {
       kind: 'dashboard',

@@ -227,23 +227,25 @@ function paint() {
       clearError();
       startReview(queryId);
     },
-    onSubscribeSeries: (queryId, seriesId) => {
+    onToggleSeries: (queryId, seriesId) => {
+      if (state.kind !== 'dashboard') return;
+      // The toggle is the action: an approved (subscribed) series row
+      // unsubscribes, anything else subscribes. Subscribing kicks off a
+      // background expansion while the card stays `ready`, so the
+      // running-card poll won't pick the new dates up — re-poll on a bounded
+      // schedule instead so the preview lands.
+      const series = state.queries.find(q => q.id === queryId)?.series?.find(s => s.id === seriesId);
+      const subscribing = series?.status !== 'approved';
       clearError();
-      // Subscribing kicks off a background expansion — the query card stays
-      // `ready`, so the running-card poll won't pick the new dates up. Re-
-      // poll on a bounded schedule instead so the dates preview lands.
-      reviewSeries(queryId, [seriesId])
+      reviewSeries(queryId, subscribing ? [seriesId] : [], subscribing ? [] : [seriesId])
         .then(() => {
           refreshDashboard();
-          scheduleSeriesPreviewPoll();
+          if (subscribing) scheduleSeriesPreviewPoll();
         })
         .catch(err => showError('error.subscribing', err));
     },
-    onUnsubscribeSeries: (queryId, seriesId) => {
-      clearError();
-      reviewSeries(queryId, [], [seriesId])
-        .then(() => refreshDashboard())
-        .catch(err => showError('error.subscribing', err));
+    onExpandSeries: seriesId => {
+      setState(reducer(state, { type: 'TOGGLE_SERIES_EXPAND', seriesId }));
     },
     onToggleReviewEvent: id => {
       setState(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id }));

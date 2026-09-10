@@ -34,6 +34,10 @@ interface DashboardState {
   feed: FeedSummary | null;
   editing: EditingDraft | null;
   reviewing: ReviewingDraft | null;
+  // Which series row shows its details (description, sources, all dates).
+  // Subscription itself needs no draft — tapping a row flips it immediately.
+  // Optional so older state literals stay valid; absent means none expanded.
+  expandedSeriesId?: string | null;
 }
 
 export interface AdminState {
@@ -69,6 +73,7 @@ export type WorkspaceEvent =
   | { type: 'CANCEL_EDIT' }
   | { type: 'QUERY_DELETED'; queryId: string }
   | { type: 'FEED_ROTATED'; icsUrl: string; rssUrl: string }
+  | { type: 'TOGGLE_SERIES_EXPAND'; seriesId: string }
   | { type: 'START_REVIEW'; queryId: string }
   | { type: 'REVIEW_EVENTS_LOADED'; queryId: string; events: EventDetail[] }
   | { type: 'TOGGLE_REVIEW_EVENT'; id: string }
@@ -97,7 +102,20 @@ export function reducer(state: WorkspaceState, event: WorkspaceEvent): Workspace
         state.kind === 'dashboard' && state.reviewing && event.queries.some(q => q.id === state.reviewing!.queryId)
           ? state.reviewing
           : null;
-      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing, reviewing };
+      const expandedSeriesId =
+        state.kind === 'dashboard' && state.expandedSeriesId && event.queries.some(q => q.series?.some(s => s.id === state.expandedSeriesId))
+          ? state.expandedSeriesId
+          : null;
+      return { kind: 'dashboard', queries: event.queries, feed: event.feed, editing, reviewing, expandedSeriesId };
+    }
+
+    case 'TOGGLE_SERIES_EXPAND': {
+      if (state.kind !== 'dashboard') return state;
+      const current = state.expandedSeriesId ?? null;
+      return {
+        ...state,
+        expandedSeriesId: current === event.seriesId ? null : event.seriesId,
+      };
     }
 
     case 'START_EDIT': {
