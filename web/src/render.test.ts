@@ -840,6 +840,46 @@ describe('series nesting', () => {
     expect(container.querySelector('button[data-action=review]')).toBeNull();
   });
 
+  it('groups the edit card by series with toggles and read-only dates', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 1, candidate: 0 }, previewEvents: [] },
+      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
+    ];
+    const container = document.createElement('div');
+    const handlers = noopHandlers();
+    renderWorkspace(
+      container,
+      {
+        kind: 'dashboard',
+        queries: [query({ text: 'events in munich', series })],
+        feed: null,
+        editing: {
+          queryId: 'q1',
+          text: 'events in munich',
+          recurrenceInterval: 'weekly',
+          events: [
+            { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'none', seriesId: 's1', seriesTitle: 'Auer Dult', seriesStatus: 'approved' },
+            { id: 'e2', label: 'Wiesn', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u2', status: 'candidate', decision: 'none', seriesId: 's2', seriesTitle: 'Oktoberfest', seriesStatus: 'candidate' },
+          ],
+        },
+        reviewing: null,
+      },
+      handlers
+    );
+
+    const groups = container.querySelectorAll('.edit-series-group[data-series-id]');
+    expect(groups).toHaveLength(2);
+    // Group toggles flip the subscription; dates carry no decisions.
+    const toggle = container.querySelector<HTMLButtonElement>('.edit-series-group[data-series-id="s2"] button[data-action=toggle-series]')!;
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
+    toggle.click();
+    expect(handlers.onToggleSeries).toHaveBeenCalledWith('q1', 's2');
+    expect(container.querySelector('.edit-form .day-tile input[type=checkbox]')).toBeNull();
+    expect(container.querySelector('.day-tile-readonly')).not.toBeNull();
+    // Save is text/interval only — no approve count.
+    expect(container.querySelector('button[data-action=save]')?.textContent).toBe('Save');
+  });
+
   it('keeps the per-event review button for queries without series', () => {
     const container = document.createElement('div');
     renderWorkspace(

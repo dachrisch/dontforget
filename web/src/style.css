@@ -644,6 +644,26 @@ h1, h2 {
   cursor: pointer;
 }
 
+/* Series groups inside the edit card reuse the toggle row; their dates are
+   read-only tiles (no checkbox, no decision styling). */
+.edit-series-group {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--rule);
+  min-width: 0;
+}
+
+.edit-series-group:first-of-type {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+.day-tile-readonly {
+  cursor: default;
+  color: var(--ink-muted);
+}
+
 .query-series-details {
   padding: 0.25rem 0 0.35rem 1.45rem;
   min-width: 0;

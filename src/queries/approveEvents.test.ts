@@ -41,6 +41,8 @@ describe('approveEvents', () => {
     expect(result).not.toBeNull();
     expect(result!.icsUrl).toMatch(/^http:\/\/localhost:3000\/f\/.+\.ics$/);
     expect(result!.rssUrl).toMatch(/^http:\/\/localhost:3000\/f\/.+\.rss$/);
+    // Series-less events subscribe nothing.
+    expect(result!.subscribedSeriesIds).toEqual([]);
 
     const statuses = await db
       .collection('events')
@@ -110,10 +112,11 @@ describe('approveEvents', () => {
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
     ]);
 
-    await approveEvents(db, userId, query.queryId, [inserted[0].id], 'http://localhost:3000');
+    const result = await approveEvents(db, userId, query.queryId, [inserted[0].id], 'http://localhost:3000');
 
     const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
     expect(row?.status).toBe('approved');
+    expect(result?.subscribedSeriesIds).toEqual([series.id]);
   });
 
   it('does not subscribe to the parent series for dismissed dates', async () => {
@@ -125,10 +128,11 @@ describe('approveEvents', () => {
       { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
     ]);
 
-    await approveEvents(db, userId, query.queryId, [], 'http://localhost:3000', undefined, [inserted[0].id]);
+    const result = await approveEvents(db, userId, query.queryId, [], 'http://localhost:3000', undefined, [inserted[0].id]);
 
     const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
     expect(row?.status).toBe('candidate');
+    expect(result?.subscribedSeriesIds).toEqual([]);
   });
 
   it('approves and dismisses different events in the same call', async () => {

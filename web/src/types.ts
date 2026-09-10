@@ -86,6 +86,8 @@ export interface EventDetail {
   sourceUrl: string;
   status: 'candidate' | 'approved' | 'dismissed';
   seriesId?: string;
+  seriesTitle?: string;
+  seriesStatus?: SeriesStatus;
 }
 
 export type UserRole = 'admin' | 'user';

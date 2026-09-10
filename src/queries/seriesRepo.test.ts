@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { ObjectId, type Db, type MongoClient } from 'mongodb';
-import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
+import { setupTestDb, cleanTestDb, teardownTestDb, createQueryWithCandidates } from '../testSupport';
 import { createQuery, completeSeriesExpansion, listQueriesForUser } from './queriesRepo';
 import { insertDiscoveredSeries, listSeriesForQuery, reviewSeries } from './seriesRepo';
 import { MAX_SERIES } from '../search/opencodeClient';
@@ -229,6 +229,27 @@ describe('series repo', () => {
 
     const row = await db.collection('events').findOne({ query_id: _id });
     expect(row?.status).toBe('dismissed');
+  });
+
+  it('keeps a candidate series untrusted even when other events are approved', async () => {
+    // Strict per-series trust: a legacy approved event elsewhere in the
+    // query must not auto-approve a new, unsubscribed series' dates.
+    const { approveEvents } = await import('./approveEvents');
+    const legacy = await createQueryWithCandidates(db, userId, 'events in munich', [
+      { label: 'Legacy approved', startDate: '2026-01-01', endDate: '2026-01-01', sourceUrl: 'https://a.example' },
+    ]);
+    await approveEvents(db, userId, legacy.queryId, [legacy.candidates[0].id], 'http://localhost:3000');
+    const queryObjectId = new ObjectId(legacy.queryId);
+    const [series] = await insertDiscoveredSeries(db, queryObjectId, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+
+    const inserted = await completeSeriesExpansion(db, queryObjectId, new ObjectId(series.id), [
+      { label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'https://a.example' },
+    ]);
+
+    expect(inserted).toHaveLength(1);
+    expect(inserted[0].status).toBe('candidate');
   });
 
   it('keeps the same calendar date for two different subscribed series', async () => {

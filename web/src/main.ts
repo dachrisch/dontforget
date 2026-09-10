@@ -305,6 +305,12 @@ function paint() {
     },
     onSaveEdit: (queryId, patch) => {
       clearError();
+      // Series queries triage per series (toggles) and per date (calendar),
+      // so saving only persists text/interval — never per-event decisions.
+      // Legacy series-less queries keep the approve-on-save path below.
+      const hasSeries =
+        state.kind === 'dashboard' &&
+        (state.queries.find(q => q.id === queryId)?.series?.length ?? 0) > 0;
       // Snapshot the decided candidates at save time; the edit card stays
       // interactive while the PATCH + approve round-trips, and we reload the
       // dashboard once both have settled so counts and feed links refresh.
@@ -314,7 +320,7 @@ function paint() {
       const dismissIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'dismiss').map(e => e.id);
       updateQuery(queryId, patch)
         .then(() => {
-          if (approveIds.length > 0 || dismissIds.length > 0) {
+          if (!hasSeries && (approveIds.length > 0 || dismissIds.length > 0)) {
             return approveEvents(queryId, approveIds, undefined, dismissIds);
           }
           return undefined;
