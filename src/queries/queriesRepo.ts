@@ -55,6 +55,12 @@ interface EventCounts {
   candidate: number;
 }
 
+// A series flagged as expanding whose timestamp is older than this is
+// treated as finished: the process that set it must have died mid-run, and
+// letting the dashboard pulse forever (and poll forever) is worse than
+// dropping the indicator early.
+const EXPANDING_TTL_MS = 15 * 60 * 1000;
+
 export async function createQuery(
   db: Db,
   userId: string,
@@ -384,6 +390,10 @@ async function seriesSummariesByQuery(
 
   for (const row of seriesRows) {
     const counts = eventCounts.get(row._id.toString()) ?? { approved: 0, candidate: 0 };
+    const expanding =
+      row.expanding === true &&
+      !!row.expanding_since &&
+      Date.now() - row.expanding_since.getTime() < EXPANDING_TTL_MS;
     byQuery.get(row.query_id.toString())?.push({
       id: row._id.toString(),
       title: row.title,
@@ -394,6 +404,7 @@ async function seriesSummariesByQuery(
       status: row.status,
       eventCounts: counts,
       previewEvents: previews.get(row._id.toString()) ?? [],
+      expanding,
     });
   }
   return byQuery;

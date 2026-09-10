@@ -126,16 +126,23 @@ async function boot(): Promise<void> {
   }
 }
 
-// While any query is mid-search the dashboard polls itself so the running
-// card flips to its results without a reload. One timer at a time, and it
-// only exists while something is actually running.
+// While any query is mid-search (or a subscribed series' dates are still
+// being expanded) the dashboard polls itself so the running card flips to its
+// results and the pulsing status dot clears without a reload. One timer at a
+// time, and it only exists while something is actually in flight.
 const POLL_INTERVAL_MS = 4000;
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
+function hasInFlightWork(): boolean {
+  if (state.kind !== 'dashboard') return false;
+  return state.queries.some(
+    q => q.status === 'running' || (q.series?.some(s => s.expanding) ?? false)
+  );
+}
+
 function scheduleDashboardPoll(): void {
   if (pollTimer) return;
-  if (state.kind !== 'dashboard') return;
-  if (!state.queries.some(q => q.status === 'running')) return;
+  if (!hasInFlightWork()) return;
   pollTimer = setTimeout(() => {
     pollTimer = null;
     void refreshDashboard();
@@ -179,10 +186,11 @@ async function refreshDashboard(): Promise<void> {
   }
 }
 
-// After subscribing, the series expansion (search + extraction) lands in
-// the background with no `running` state to drive the normal poll. Refresh
-// a few times on a fixed schedule so the dates preview appears without a
-// manual reload; each tick is skipped once the user leaves the dashboard.
+// The backend flags a subscribed series as `expanding` for the duration of
+// its date lookup, which already drives the normal poll. Keep a short,
+// bounded fallback sweep too: it covers the gap before the first refresh
+// observes the flag, and deployments where the flag never arrives. Each tick
+// is skipped once the user leaves the dashboard.
 let seriesPollTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleSeriesPreviewPoll(remaining = 3): void {

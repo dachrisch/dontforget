@@ -13,15 +13,17 @@ import { rotateFeedToken } from '../feed/feedToken.js';
 import { buildFeedUrls } from '../feed/feedUrl.js';
 import { enqueueSearch } from './searchQueue.js';
 import { runInitialQuery } from './initialRun.js';
-import { getSeriesById, insertDiscoveredSeries, listSeriesForQuery, reviewSeries } from './seriesRepo.js';
+import { getSeriesById, insertDiscoveredSeries, listSeriesForQuery, reviewSeries, setSeriesExpanding } from './seriesRepo.js';
 import {
   DEFAULT_RECURRENCE_INTERVAL,
   isRecurrenceInterval,
   type ExtractionResult,
   type QueryStatus,
+  type RecurrenceInterval,
   type SeriesExtractionResult,
 } from '../types.js';
 import type { SeriesScope } from '../search/opencodeClient.js';
+import { plausibleDateWindow } from '../scheduler/recurrence.js';
 
 export interface QueryRouteDeps {
   db: Db;
@@ -37,15 +39,32 @@ export interface QueryRouteDeps {
 
 // Expands one series into dates that are occurrences of what the series
 // applies to. Prefers the series-scoped path; older callers without it fall
-// back to the generic query path on the series' keywords.
+// back to the generic query path on the series' keywords. The lookup is
+// bounded to the query's current cadence period and the next, so the model
+// cannot return stale or speculative dates.
 async function expandSeries(
   deps: QueryRouteDeps,
-  series: { title: string; appliesTo: string; description: string; searchKeywords: string }
+  series: { title: string; appliesTo: string; description: string; searchKeywords: string },
+  recurrenceInterval: RecurrenceInterval
 ): Promise<ExtractionResult> {
   if (deps.runSeriesExpansion) {
-    return deps.runSeriesExpansion(series);
+    const scope: SeriesScope = {
+      title: series.title,
+      appliesTo: series.appliesTo,
+      description: series.description,
+      searchKeywords: series.searchKeywords,
+      window: plausibleDateWindow(recurrenceInterval),
+    };
+    return deps.runSeriesExpansion(scope);
   }
   return deps.runQuery(series.searchKeywords);
+}
+
+async function queryRecurrenceInterval(db: Db, queryId: ObjectId): Promise<RecurrenceInterval> {
+  const row = await db
+    .collection<{ recurrence_interval?: RecurrenceInterval }>('queries')
+    .findOne({ _id: queryId }, { projection: { recurrence_interval: 1 } });
+  return row?.recurrence_interval ?? DEFAULT_RECURRENCE_INTERVAL;
 }
 
 export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps): void {
@@ -232,15 +251,26 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     if (!updated) {
       return reply.code(403).send({ error: 'not your query' });
     }
+    const recurrenceInterval = await queryRecurrenceInterval(deps.db, queryObjectId);
     const newlyApproved = updated.filter(s => (request.body?.approveIds ?? []).includes(s.id));
+    // Mark every newly subscribed series as expanding before the background
+    // work is queued so the dashboard's status dots pulse immediately.
+    await setSeriesExpanding(
+      deps.db,
+      queryObjectId,
+      newlyApproved.map(s => new ObjectId(s.id)),
+      true
+    );
     for (const series of newlyApproved) {
       const seriesObjectId = new ObjectId(series.id);
       enqueueSearch(async () => {
         try {
-          const extracted = await expandSeries(deps, series);
+          const extracted = await expandSeries(deps, series, recurrenceInterval);
           await completeSeriesExpansion(deps.db, queryObjectId, seriesObjectId, extracted.events);
         } catch (err) {
           console.error(`Series expansion failed for series ${series.id}:`, err);
+        } finally {
+          await setSeriesExpanding(deps.db, queryObjectId, [seriesObjectId], false).catch(() => undefined);
         }
       });
     }
@@ -264,18 +294,22 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (series.status === 'dismissed') {
         return reply.code(409).send({ error: 'series dismissed' });
       }
+      const recurrenceInterval = await queryRecurrenceInterval(deps.db, queryObjectId);
+      await setSeriesExpanding(deps.db, queryObjectId, [series._id], true);
       try {
         const extracted = await expandSeries(deps, {
           title: series.title,
           appliesTo: series.applies_to ?? series.title,
           description: series.description,
           searchKeywords: series.search_keywords,
-        });
+        }, recurrenceInterval);
         const inserted = await completeSeriesExpansion(deps.db, queryObjectId, series._id, extracted.events);
         return reply.send(inserted);
       } catch (err) {
         console.error(`Series expansion failed for series ${series._id.toString()}:`, err);
         return reply.code(502).send({ error: 'expansion failed' });
+      } finally {
+        await setSeriesExpanding(deps.db, queryObjectId, [series._id], false).catch(() => undefined);
       }
     }
   );

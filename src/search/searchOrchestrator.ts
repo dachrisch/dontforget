@@ -1,4 +1,4 @@
-import type { ExtractedEvent, ExtractedSeries, ExtractionResult, SearchResult, SeriesExtractionResult } from '../types.js';
+import type { DateWindow, ExtractedEvent, ExtractedSeries, ExtractionResult, SearchResult, SeriesExtractionResult } from '../types.js';
 import { MAX_SERIES, seriesIdentityKey } from './opencodeClient.js';
 import type { SeriesScope } from './opencodeClient.js';
 import type { MetricsService } from './metrics.js';
@@ -153,6 +153,21 @@ export function createSeriesExpansionOrchestrator(
       return { events: [], cadence: null };
     }
     const extracted = await deps.extractSeriesDates(series, results);
-    return { events: dedupeEvents(extracted.events), cadence: extracted.cadence };
+    const bounded = series.window ? filterByWindow(extracted.events, series.window) : extracted.events;
+    return { events: dedupeEvents(bounded), cadence: extracted.cadence };
   };
+}
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// Guardrail behind the prompt's window instruction: the model sometimes
+// ignores it and returns a stale past edition or a speculative date years
+// out. Keep events that overlap the window; malformed dates (which the
+// prompt shouldn't produce) pass through untouched rather than being
+// silently dropped.
+function filterByWindow(events: ExtractedEvent[], window: DateWindow): ExtractedEvent[] {
+  return events.filter(event => {
+    if (!ISO_DATE_RE.test(event.startDate) || !ISO_DATE_RE.test(event.endDate)) return true;
+    return event.endDate >= window.from && event.startDate <= window.to;
+  });
 }

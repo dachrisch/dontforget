@@ -796,6 +796,17 @@ describe('series nesting', () => {
     expect(handlers.onToggleSeries).toHaveBeenCalledWith('q1', 's1');
   });
 
+  it('flags a series as expanding while its dates are being searched', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [], expanding: true },
+      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+    ]);
+    const expanding = container.querySelector('.query-series-row[data-series-id="s1"]')!;
+    const idle = container.querySelector('.query-series-row[data-series-id="s2"]')!;
+    expect(expanding.getAttribute('data-expanding')).toBe('true');
+    expect(idle.getAttribute('data-expanding')).toBeNull();
+  });
+
   it('shows next date and count on the collapsed row, full dates behind the chevron', () => {
     const series: SeriesSummary[] = [
       { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'Thrice-yearly fair', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11' }, { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03' }] },

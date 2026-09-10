@@ -187,4 +187,21 @@ describe('createSeriesExpansionOrchestrator', () => {
     expect(extractSeriesDates).not.toHaveBeenCalled();
     expect(result).toEqual({ events: [], cadence: null });
   });
+
+  it('drops dates outside the series cadence window and keeps overlapping ones', async () => {
+    const searxngSearch = vi.fn().mockResolvedValue([{ title: 't', url: 'u', content: 'c' }]);
+    const extractSeriesDates = vi.fn().mockResolvedValue({
+      events: [
+        { label: 'stale', startDate: '2020-01-01', endDate: '2020-01-02', sourceUrl: 'u' },
+        { label: 'current', startDate: '2026-08-10', endDate: '2026-08-12', sourceUrl: 'u' },
+        { label: 'speculative', startDate: '2030-01-01', endDate: '2030-01-02', sourceUrl: 'u' },
+      ],
+      cadence: null,
+    });
+
+    const expand = createSeriesExpansionOrchestrator({ searxngSearch, extractSeriesDates });
+    const result = await expand({ ...auerDult, window: { from: '2026-08-01', to: '2026-08-15' } });
+
+    expect(result.events.map(e => e.label)).toEqual(['current']);
+  });
 });

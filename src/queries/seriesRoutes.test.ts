@@ -194,7 +194,11 @@ describe('series review routes', () => {
     await flushSearches();
     // Series-scoped path: called with the series identity, not bare keywords.
     expect(runSeriesExpansion).toHaveBeenCalledWith(
-      expect.objectContaining({ appliesTo: 'Auer Dult, Munich', searchKeywords: 'Auer Dult Munich Termine' })
+      expect.objectContaining({
+        appliesTo: 'Auer Dult, Munich',
+        searchKeywords: 'Auer Dult Munich Termine',
+        window: expect.objectContaining({ from: expect.any(String), to: expect.any(String) }),
+      })
     );
     expect(runQuery).not.toHaveBeenCalled();
     const events = await db.collection('events').find({ query_id: query._id }).toArray();
@@ -202,6 +206,29 @@ describe('series review routes', () => {
     expect(events[0].series_id.toString()).toBe(series.id);
     // Subscribed series land as approved without per-event re-approval.
     expect(events[0].status).toBe('approved');
+  });
+
+  it('flags a series as expanding while its lookup runs, then clears it', async () => {
+    const runSeriesExpansion = vi.fn().mockResolvedValue({ events: [], cadence: null });
+    const { app, userId, sessionId } = await authenticatedUser(db, { runSeriesExpansion });
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich Termine', sourceUrls: ['https://a.example'] },
+    ]);
+
+    await app.inject({
+      method: 'POST',
+      url: `/api/queries/${query.queryId}/series/review`,
+      headers: authHeaders(sessionId),
+      payload: { approveIds: [series.id] },
+    });
+    await flushSearches();
+
+    // Once the expansion lands the flag is gone, so the dashboard dot stops
+    // pulsing and the poll can stop.
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.expanding).toBeUndefined();
+    expect(row?.expanding_since).toBeUndefined();
   });
 
   it('POST expand returns dated events linked via series_id', async () => {

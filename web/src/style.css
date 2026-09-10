@@ -614,6 +614,31 @@ h1, h2 {
   border-color: var(--accent);
 }
 
+/* The dot throbs while the series' dates are being searched, so a slow
+   searxng/LLM round-trip reads as work in flight rather than a dead tap. */
+.query-series-row[data-expanding='true'] .series-toggle-dot {
+  border-color: var(--accent);
+  animation: series-dot-search 1s ease-in-out infinite;
+}
+
+@keyframes series-dot-search {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .query-series-row[data-expanding='true'] .series-toggle-dot {
+    animation: none;
+    background: var(--accent);
+  }
+}
+
 .query-series-row[data-subscribed='true'] .query-series-title {
   color: var(--ink);
 }

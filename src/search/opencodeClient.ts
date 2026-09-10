@@ -1,5 +1,5 @@
 import { Agent, fetch as undiciFetch } from 'undici';
-import { isRecurrenceInterval, type ExtractionResult, type SearchResult, type SeriesExtractionResult } from '../types.js';
+import { isRecurrenceInterval, type DateWindow, type ExtractionResult, type SearchResult, type SeriesExtractionResult } from '../types.js';
 import type { ActiveModel } from './models.js';
 import type { MetricsService } from './metrics.js';
 
@@ -331,6 +331,10 @@ export interface SeriesScope {
   appliesTo: string;
   description: string;
   searchKeywords: string;
+  // Inclusive date range the lookup may return. Set by the caller from the
+  // query's cadence (see plausibleDateWindow); omit to leave the lookup
+  // unbounded (older callers/tests).
+  window?: DateWindow;
 }
 
 // Series-scoped date extraction (stage 2 of the two-stage pipeline): the
@@ -361,6 +365,9 @@ function buildSeriesDatesPrompt(series: SeriesScope, results: SearchResult[]): s
     .map((r, i) => `${i + 1}. ${r.title}\n${r.url}\n${r.content}`)
     .join('\n\n');
   const identity = series.appliesTo.trim() || series.title;
+  const windowLine = series.window
+    ? `Only include dates between ${series.window.from} and ${series.window.to} (the current cadence and the next). Omit any date outside that range, even if the result mentions it.`
+    : '';
   return [
     `This series applies to "${identity}"${series.title && series.title !== identity ? ` (shown as "${series.title}")` : ''}${series.description ? `: ${series.description}` : ''}.`,
     `Extract only concrete dates that are occurrences of THIS series from these search results (e.g. its editions, shows, or match dates).`,
@@ -369,6 +376,7 @@ function buildSeriesDatesPrompt(series: SeriesScope, results: SearchResult[]): s
     `If a result gives a single day, set startDate and endDate to the same date. Label each event as an occurrence of "${identity}" (e.g. its edition or season name).`,
     `Also judge how often "${identity}" recurs as a whole: set cadence to "weekly", "monthly", "quarterly", or "yearly". If it does not recur on a predictable cadence, set "cadence":null.`,
     `If no dates of this series are found, respond {"events":[],"cadence":null}.`,
+    ...(windowLine ? [windowLine] : []),
     '',
     resultsBlock,
   ].join('\n');
