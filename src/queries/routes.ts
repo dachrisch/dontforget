@@ -103,6 +103,24 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!updated) {
         return reply.code(403).send({ error: 'not your query' });
       }
+      // A new text means new series: re-run discovery in the background so
+      // the subscription list reflects what the query asks now. Identity
+      // dedupe merges fresh candidates in — dismissed titles are never
+      // re-created, existing approvals are kept. Interval-only patches skip
+      // this; the series are text-derived, not cadence-derived.
+      if (body.text !== undefined && deps.discoverSeries && ObjectId.isValid(request.params.id)) {
+        const queryObjectId = new ObjectId(request.params.id);
+        const newText = body.text.trim();
+        await deps.db.collection('queries').updateOne({ _id: queryObjectId }, { $set: { status: 'running' as const } });
+        enqueueSearch(() =>
+          runInitialQuery(
+            deps.db,
+            { _id: queryObjectId, query_text: newText },
+            { runQuery: deps.runQuery, discoverSeries: deps.discoverSeries, applyCadence: false, userId: request.userId! }
+          )
+        );
+        return reply.send({ ...updated, status: 'running' as const });
+      }
       return reply.send(updated);
     }
   );

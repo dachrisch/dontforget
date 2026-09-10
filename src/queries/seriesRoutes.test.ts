@@ -106,6 +106,57 @@ describe('series review routes', () => {
     ]);
   });
 
+  it('PATCH text re-runs discovery in the background, keeping approvals', async () => {
+    const discoverSeries = vi.fn().mockResolvedValue({
+      series: [
+        { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'd', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://c.example'] },
+      ],
+    });
+    const { app, userId, sessionId } = await authenticatedUser(db, { discoverSeries });
+    const query = await createQuery(db, userId, 'events in minden');
+    const { reviewSeries } = await import('./seriesRepo');
+    const [old] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, query.queryId, [old.id]);
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/queries/${query.queryId}`,
+      headers: authHeaders(sessionId),
+      payload: { text: 'Stadtfest Minden' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ text: 'Stadtfest Minden', status: 'running' });
+
+    await flushSearches();
+    expect(discoverSeries).toHaveBeenCalledWith('Stadtfest Minden');
+
+    const rows = await db.collection('series').find({ query_id: query._id }).toArray();
+    expect(rows).toHaveLength(2);
+    const byTitle = Object.fromEntries(rows.map(r => [r.title, r.status]));
+    // Old approval kept, fresh candidate merged in.
+    expect(byTitle).toMatchObject({ Oktoberfest: 'approved', 'Stadtfest Minden': 'candidate' });
+    const row = await db.collection('queries').findOne({ _id: query._id });
+    expect(row?.status).toBe('ready');
+  });
+
+  it('PATCH interval-only does not trigger discovery', async () => {
+    const discoverSeries = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { discoverSeries });
+    const query = await createQuery(db, userId, 'events in minden');
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/queries/${query.queryId}`,
+      headers: authHeaders(sessionId),
+      payload: { recurrenceInterval: 'monthly' },
+    });
+    expect(response.statusCode).toBe(200);
+    await flushSearches();
+    expect(discoverSeries).not.toHaveBeenCalled();
+  });
+
   it('GET returns 403 for a query the user does not own', async () => {
     const { app, sessionId } = await authenticatedUser(db, {});
     const { insertedId } = await db.collection('users').insertOne({ email: 'other@example.com' });

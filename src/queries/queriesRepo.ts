@@ -168,8 +168,8 @@ export async function completeSeriesDiscoveryRun(db: Db, queryId: ObjectId): Pro
 // run by the caller; this only lands the results). An approved series is
 // trusted: new dates land as `approved` without per-event re-approval —
 // the user subscribes to the series, not to its events individually. A
-// non-approved series falls back to the query trust rule (approved only if
-// the query already has an approved event).
+// non-approved series lands its dates as `candidate` for calendar triage —
+// there is no query-level trust fallback.
 // Events keep their query_id link and gain a series_id back-pointer.
 // Dedupe is per-series (this series' dates plus legacy rows without any
 // series), so two subscribed series sharing a calendar date both keep it.
@@ -193,8 +193,10 @@ export async function completeSeriesExpansion(
   if (newEvents.length === 0) return [];
 
   const series = await db.collection<SeriesRow>('series').findOne({ _id: seriesId, query_id: queryId });
-  const isTrusted = series?.status === 'approved' || existing.some(e => e.status === 'approved');
-  const status = isTrusted ? 'approved' : 'candidate';
+  // Strict per-series trust: only an approved (subscribed) series lands its
+  // dates as approved. A query-level approved event no longer confers trust
+  // on other series — each series needs its own subscription.
+  const status = series?.status === 'approved' ? 'approved' : 'candidate';
   const now = new Date();
   const docs = newEvents.map(event => ({
     _id: new ObjectId(),
@@ -460,15 +462,33 @@ export async function getQueryEvents(
     .sort({ start_date: 1 })
     .toArray();
 
-  return rows.map(row => ({
-    id: row._id.toString(),
-    label: row.label,
-    startDate: row.start_date,
-    endDate: row.end_date,
-    sourceUrl: row.source_url,
-    status: row.status,
-    ...(row.series_id ? { seriesId: row.series_id.toString() } : {}),
-  }));
+  // Parent-series context for grouping a query's mixed events client-side.
+  const seriesById = new Map<string, { title: string; status: SeriesRow['status'] }>();
+  const seriesIds = [...new Set(rows.map(r => r.series_id?.toString()).filter((id): id is string => !!id))];
+  if (seriesIds.length > 0) {
+    const seriesRows = await db
+      .collection<SeriesRow>('series')
+      .find(
+        { _id: { $in: seriesIds.map(id => new ObjectId(id)) } },
+        { projection: { title: 1, status: 1 } }
+      )
+      .toArray();
+    for (const s of seriesRows) seriesById.set(s._id.toString(), { title: s.title, status: s.status });
+  }
+
+  return rows.map(row => {
+    const series = row.series_id ? seriesById.get(row.series_id.toString()) : undefined;
+    return {
+      id: row._id.toString(),
+      label: row.label,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      sourceUrl: row.source_url,
+      status: row.status,
+      ...(row.series_id ? { seriesId: row.series_id.toString() } : {}),
+      ...(series ? { seriesTitle: series.title, seriesStatus: series.status } : {}),
+    };
+  });
 }
 
 export async function deleteQuery(db: Db, userId: string, queryId: string): Promise<boolean> {

@@ -23,6 +23,10 @@ export interface CandidateEvent extends ExtractedEvent {
   id: string;
   status: 'candidate' | 'approved' | 'dismissed';
   seriesId?: string;
+  // Denormalized parent-series context so clients can group a query's mixed
+  // events by series without extra calls. Absent for series-less events.
+  seriesTitle?: string;
+  seriesStatus?: SeriesStatus;
 }
 
 // A coherent event series discovered from a broad free-form query

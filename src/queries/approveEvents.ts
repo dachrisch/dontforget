@@ -3,6 +3,15 @@ import { getOrCreateFeedToken } from '../feed/feedToken.js';
 import { buildFeedUrls } from '../feed/feedUrl.js';
 import type { RecurrenceInterval } from '../types.js';
 
+export interface ApproveEventsResult {
+  icsUrl: string;
+  rssUrl: string;
+  // Parent series that this call subscribed by approving their dates. Lets
+  // callers (and the UI) see the series-level effect of a per-event batch —
+  // dismissals never appear here, they stay strictly per-event.
+  subscribedSeriesIds: string[];
+}
+
 export async function approveEvents(
   db: Db,
   userId: string,
@@ -11,7 +20,7 @@ export async function approveEvents(
   publicBaseUrl: string,
   recurrenceInterval?: RecurrenceInterval,
   dismissEventIds: string[] = []
-): Promise<{ icsUrl: string; rssUrl: string } | null> {
+): Promise<ApproveEventsResult | null> {
   const queryObjectId = toObjectId(queryId);
   if (!queryObjectId) {
     return null;
@@ -42,10 +51,10 @@ export async function approveEvents(
   // up by scheduled re-runs without further approval. Dismissing dates
   // stays per-event — the subscription itself is only dropped by
   // dismissing the series.
-  await approveParentSeriesOfEvents(db, queryObjectId, eventIds, dismissEventIds);
+  const subscribedSeriesIds = await approveParentSeriesOfEvents(db, queryObjectId, eventIds, dismissEventIds);
 
   const token = await getOrCreateFeedToken(db, userId);
-  return buildFeedUrls(publicBaseUrl, token);
+  return { ...buildFeedUrls(publicBaseUrl, token), subscribedSeriesIds };
 }
 
 async function approveParentSeriesOfEvents(
@@ -53,9 +62,9 @@ async function approveParentSeriesOfEvents(
   queryObjectId: ObjectId,
   approvedIds: string[],
   dismissedIds: string[]
-): Promise<void> {
+): Promise<string[]> {
   const approved = approvedIds.map(toObjectId).filter((id): id is ObjectId => id !== null);
-  if (approved.length === 0) return;
+  if (approved.length === 0) return [];
   // Dismiss wins on overlap: events approved AND dismissed stay dismissed,
   // so their series must not be subscribed.
   const dismissed = new Set(
@@ -72,10 +81,11 @@ async function approveParentSeriesOfEvents(
         .map(r => r.series_id as ObjectId)
     ),
   ];
-  if (seriesIds.length === 0) return;
+  if (seriesIds.length === 0) return [];
   await db
     .collection('series')
     .updateMany({ query_id: queryObjectId, _id: { $in: seriesIds } }, { $set: { status: 'approved' } });
+  return seriesIds.map(id => id.toString());
 }
 
 async function setEventStatus(

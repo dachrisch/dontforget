@@ -427,7 +427,7 @@ function renderDashboard(
     .map(query => {
       const isEditing = editing?.queryId === query.id;
       const isReviewing = reviewing?.queryId === query.id;
-      if (isEditing) return renderEditCard(editing);
+      if (isEditing) return renderEditCard(editing, query);
       if (isReviewing) return renderReviewCard(reviewing);
       return renderQueryCard(query, expandedSeriesId);
     })
@@ -973,8 +973,15 @@ function renderReviewCard(reviewing: ReviewingDraft): string {
 }
 
 function renderEditCard(
-  editing: EditingDraft
+  editing: EditingDraft,
+  query?: QuerySummary
 ): string {
+  // Queries with series triage one level above: groups carry the subscribe
+  // toggle, dates are read-only here (their triage is the toggle + the
+  // calendar). Only series-less legacy queries keep per-event decisions.
+  if (query?.series && query.series.length > 0) {
+    return renderSeriesEditCard(editing);
+  }
   const approved = editing.events.filter(e => e.status === 'approved');
   const pending = editing.events.filter(e => e.status === 'candidate');
   const selectedCount = pending.filter(e => e.decision === 'approve').length;
@@ -1015,6 +1022,81 @@ function renderEditCard(
       </form>
     </article>
   `;
+}
+
+// Edit card for a series query: the search text/interval form plus one
+// read-only group per series, each headed by its subscribe toggle. Group
+// order follows the query card (subscribed first). Dates carry no decisions
+// — approving or dismissing single dates happens in the calendar.
+function renderSeriesEditCard(editing: EditingDraft): string {
+  const groups = new Map<string, { title: string; subscribed: boolean; events: SelectableEditEvent[] }>();
+  const legacy: SelectableEditEvent[] = [];
+  for (const event of editing.events) {
+    if (event.status === 'dismissed') continue;
+    if (!event.seriesId) {
+      legacy.push(event);
+      continue;
+    }
+    const key = event.seriesId;
+    const group = groups.get(key) ?? {
+      title: event.seriesTitle ?? event.seriesId,
+      subscribed: event.seriesStatus === 'approved',
+      events: [],
+    };
+    group.events.push(event);
+    groups.set(key, group);
+  }
+
+  const groupHtml = [...groups.entries()]
+    .map(([seriesId, group]) => {
+      const toggleLabel = `${group.title}, ${t(group.subscribed ? 'series.unsubscribe' : 'series.subscribe')}`;
+      const tiles = group.events.map(e => renderSeriesDateTile(e)).join('');
+      return `<div class="edit-series-group" data-series-id="${seriesId}">` +
+        `<button type="button" class="series-toggle" data-action="toggle-series" data-series-id="${seriesId}" aria-pressed="${group.subscribed}" aria-label="${escapeHtml(toggleLabel)}">` +
+        `<span class="series-toggle-dot" aria-hidden="true"></span>` +
+        `<span class="query-series-title">${escapeHtml(group.title)}</span>` +
+        `</button>` +
+        `<div class="tile-grid edit-tile-grid">${tiles}</div>` +
+        `</div>`;
+    })
+    .join('');
+  const legacyHtml = legacy.length > 0
+    ? `<div class="edit-series-group"><div class="query-series-title">${escapeHtml(t('edit.legacyDates'))}</div>` +
+      `<div class="tile-grid edit-tile-grid">${legacy.map(e => renderSeriesDateTile(e)).join('')}</div></div>`
+    : '';
+
+  return `
+    <article class="query-card query-card-editing" data-id="${editing.queryId}">
+      <form class="edit-form ruled-form">
+        <label class="entry-label" for="edit-text">${t('edit.query')}</label>
+        <input class="ruled-input" id="edit-text" name="editText" value="${escapeHtml(editing.text)}" required />
+        <div class="interval-wrap">
+          <label class="interval-label" for="edit-interval">${t('review.checkAgain')}</label>
+          ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
+        </div>
+        ${groupHtml || legacyHtml
+          ? `<div class="edit-events"><label class="entry-label">${t('edit.events')}</label>${groupHtml}${legacyHtml}` +
+            `<p class="subtext">${t('edit.seriesHint')}</p></div>`
+          : `<p class="subtext">${t('edit.noEvents')}</p>`}
+        <div class="edit-actions">
+          <button class="stamp-button" type="submit" data-action="save">${t('edit.save')}</button>
+          <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">${t('edit.cancel')}</button>
+        </div>
+      </form>
+    </article>
+  `;
+}
+
+// Read-only date tile for series groups: month/day/caption/source, no
+// checkbox, no decision styling — triage lives one level above.
+function renderSeriesDateTile(event: SelectableEditEvent): string {
+  return `
+    <span class="day-tile day-tile-readonly" data-id="${event.id}">
+      <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
+      <span class="day-tile-day">${dayNumber(event.startDate)}</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)}</span>
+      <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
+    </span>`;
 }
 
 function renderSelectableTile(event: SelectableEditEvent): string {
