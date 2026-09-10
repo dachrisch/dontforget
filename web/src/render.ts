@@ -15,8 +15,8 @@ export interface WorkspaceHandlers {
   onSignOut: () => void;
   onDeleteAccount: () => void;
   onStartReview: (queryId: string) => void;
-  onSubscribeSeries: (queryId: string, seriesId: string) => void;
-  onUnsubscribeSeries: (queryId: string, seriesId: string) => void;
+  onToggleSeries: (queryId: string, seriesId: string) => void;
+  onExpandSeries: (seriesId: string) => void;
   onToggleReviewEvent: (id: string) => void;
   onSetReviewInterval: (interval: RecurrenceInterval) => void;
   onApproveReview: (queryId: string) => void;
@@ -91,7 +91,7 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'empty':
       return renderEmpty(handlers);
     case 'dashboard':
-      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, handlers);
+      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, state.expandedSeriesId ?? null, handlers);
     case 'admin':
       return renderAdmin(state, handlers);
   }
@@ -418,6 +418,7 @@ function renderDashboard(
   feed: FeedSummary | null,
   editing: EditingDraft | null,
   reviewing: ReviewingDraft | null,
+  expandedSeriesId: string | null,
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
@@ -428,7 +429,7 @@ function renderDashboard(
       const isReviewing = reviewing?.queryId === query.id;
       if (isEditing) return renderEditCard(editing);
       if (isReviewing) return renderReviewCard(reviewing);
-      return renderQueryCard(query);
+      return renderQueryCard(query, expandedSeriesId);
     })
     .join('');
 
@@ -500,17 +501,17 @@ function renderDashboard(
     });
   });
 
-  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=subscribe-series]').forEach(button => {
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=toggle-series]').forEach(button => {
     button.addEventListener('click', () => {
       const card = button.closest<HTMLElement>('.query-card')!;
-      handlers.onSubscribeSeries(card.dataset.id!, button.dataset.seriesId!);
+      handlers.onToggleSeries(card.dataset.id!, button.dataset.seriesId!);
     });
   });
 
-  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=unsubscribe-series]').forEach(button => {
-    button.addEventListener('click', () => {
-      const card = button.closest<HTMLElement>('.query-card')!;
-      handlers.onUnsubscribeSeries(card.dataset.id!, button.dataset.seriesId!);
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=expand-series]').forEach(button => {
+    button.addEventListener('click', e => {
+      e.stopPropagation();
+      handlers.onExpandSeries(button.dataset.seriesId!);
     });
   });
 
@@ -788,7 +789,7 @@ function renderAdmin(state: AdminState, handlers: WorkspaceHandlers): HTMLElemen
   return wrapper;
 }
 
-function renderQueryCard(query: QuerySummary): string {
+function renderQueryCard(query: QuerySummary, expandedSeriesId: string | null): string {
   if (query.status === 'running') {
     return `
       <article class="query-card query-card-running" data-id="${query.id}">
@@ -837,15 +838,16 @@ function renderQueryCard(query: QuerySummary): string {
   const reviewAction = query.candidateCount > 0 && !hasSeries
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
-  // Series nested under their parent query (issue #143): one subscription
-  // row per series — what it applies to, a dates preview, subscribe state,
-  // and a subscribe/unsubscribe button. Approving individual dates happens
+  // Series nested under their parent query (issue #143): one compact
+  // toggle row per series, subscribed first. Tapping flips the
+  // subscription (the toggle is the action — no separate status text or
+  // button); the chevron opens details. Approving individual dates happens
   // in the calendar, not here.
   const seriesSection = hasSeries
     ? `<div class="query-series" aria-label="series">
       <p class="subtext">${t('series.hint')}</p>
-      ${query.series!
-        .map(s => renderSeriesRow(s))
+      ${sortSeries(query.series!)
+        .map(s => renderSeriesRow(s, s.id === expandedSeriesId))
         .join('')}</div>`
     : '';
   return `
@@ -875,44 +877,68 @@ function renderQueryCard(query: QuerySummary): string {
   `;
 }
 
-function seriesStatusLabel(status: SeriesSummary['status']): string {
-  if (status === 'approved') return t('series.statusApproved');
-  if (status === 'dismissed') return t('series.statusDismissed');
-  return t('series.statusCandidate');
+// Subscribed series first, then candidates, dismissed last — the eye lands
+// on what's already flowing into the calendar. Stable within each group.
+function sortSeries(series: SeriesSummary[]): SeriesSummary[] {
+  const rank = (status: SeriesSummary['status']) =>
+    status === 'approved' ? 0 : status === 'candidate' ? 1 : 2;
+  return [...series].sort((a, b) => rank(a.status) - rank(b.status));
 }
 
-// Series rows deliberately avoid the .ledger-row/.ledger-label classes: those
-// are nowrap single-line ledger entries, and a series identity plus
-// description never fits one 360px line — reusing them pushed the whole
-// card (and page) into horizontal scroll on mobile. Everything here wraps.
-function renderSeriesRow(s: SeriesSummary): string {
+// Short "next date" fragment for the collapsed row ("APR 11" / "11. APR").
+// Full ranges live in the expanded details.
+function formatShortDate(iso: string): string {
+  const parsed = parseIsoDate(iso);
+  if (!parsed) return iso;
+  const abbrev = MONTH_ABBREVS[getLocale()][parsed.month - 1];
+  return getLocale() === 'de' ? `${parsed.day}. ${abbrev}` : `${abbrev} ${parsed.day}`;
+}
+
+// One toggle row per series: the toggle is the subscribe action (no
+// separate status text or button — like tapping an event tile), the chevron
+// opens details. Title truncates with ellipsis; the full identity lives in
+// the expanded view, so a 360px viewport never scrolls sideways.
+function renderSeriesRow(s: SeriesSummary, expanded: boolean): string {
+  const subscribed = s.status === 'approved';
   const identity = s.appliesTo && s.appliesTo !== s.title
     ? `${s.title} · ${s.appliesTo}`
     : s.appliesTo || s.title;
-  const counts = s.eventCounts
-    ? ` · ${s.eventCounts.approved} in feed${s.eventCounts.candidate > 0 ? ` · ${s.eventCounts.candidate} pending` : ''}`
+  const previews = s.previewEvents ?? [];
+  const next = previews.length > 0
+    ? escapeHtml(t('series.next', { date: formatShortDate(previews[0].startDate) })) +
+      (previews.length > 1 ? ` · ${escapeHtml(t('series.dateCount', { count: previews.length }))}` : '')
     : '';
+  const toggleLabel = `${identity}, ${t(subscribed ? 'series.unsubscribe' : 'series.subscribe')}`;
+  const detailsLabel = `${identity}, ${t('series.details')}`;
+  return `<div class="query-series-row" data-series-id="${s.id}"${subscribed ? ' data-subscribed="true"' : ''}>` +
+    `<div class="query-series-main">` +
+    `<button type="button" class="series-toggle" data-action="toggle-series" data-series-id="${s.id}" aria-pressed="${subscribed}" aria-label="${escapeHtml(toggleLabel)}">` +
+    `<span class="series-toggle-dot" aria-hidden="true"></span>` +
+    `<span class="query-series-title">${escapeHtml(identity)}</span>` +
+    (next ? `<span class="query-series-next">${next}</span>` : '') +
+    `</button>` +
+    `<button type="button" class="series-expand" data-action="expand-series" data-series-id="${s.id}" aria-expanded="${expanded}" aria-label="${escapeHtml(detailsLabel)}">›</button>` +
+    `</div>` +
+    (expanded ? renderSeriesDetails(s) : '') +
+    `</div>`;
+}
+
+function renderSeriesDetails(s: SeriesSummary): string {
+  const identity = s.appliesTo && s.appliesTo !== s.title
+    ? `${s.title} · ${s.appliesTo}`
+    : s.appliesTo || s.title;
   const sources = (s.sourceUrls ?? [])
     .slice(0, 2)
-    .map(u => `<a class="day-tile-source query-series-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
+    .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
     .join(' ');
-  const previewDates = (s.previewEvents ?? [])
+  const dates = (s.previewEvents ?? [])
     .map(p => `<div class="query-series-date">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</div>`)
     .join('');
-  const preview = (s.previewEvents ?? []).length > 0
-    ? `<div class="query-series-preview" aria-label="${escapeHtml(t('series.upcomingDates'))}"><div class="query-series-preview-label">${escapeHtml(t('series.upcomingDates'))}</div>${previewDates}</div>`
-    : `<div class="query-series-preview"><div class="query-series-date">${escapeHtml(t('series.noDates'))}</div></div>`;
-  const action = s.status === 'approved'
-    ? `<button type="button" class="link-button" data-action="unsubscribe-series" data-series-id="${s.id}">${t('series.unsubscribe')}</button>`
-    : `<button type="button" class="link-button" data-action="subscribe-series" data-series-id="${s.id}">${t('series.subscribe')}</button>`;
-  return `<div class="query-series-row" data-series-id="${s.id}">
-      <div class="query-series-head">
-        <span class="query-series-title">${escapeHtml(identity)}${s.description ? ` — ${escapeHtml(s.description)}` : ''}${sources ? ` ${sources}` : ''}</span>
-        <span class="query-series-status">${escapeHtml(seriesStatusLabel(s.status))}${escapeHtml(counts)}</span>
-      </div>
-      ${preview}
-      <div class="query-series-actions">${action}</div>
-    </div>`;
+  return `<div class="query-series-details">` +
+    `<div class="query-series-identity">${escapeHtml(identity)}</div>` +
+    (s.description ? `<div class="query-series-description">${escapeHtml(s.description)}${sources ? ` ${sources}` : ''}</div>` : sources ? `<div class="query-series-description">${sources}</div>` : '') +
+    (dates ? `<div class="query-series-dates">${dates}</div>` : `<div class="query-series-date">${escapeHtml(t('series.noDates'))}</div>`) +
+    `</div>`;
 }
 
 function renderReviewCard(reviewing: ReviewingDraft): string {

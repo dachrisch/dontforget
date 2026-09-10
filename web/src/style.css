@@ -537,19 +537,18 @@ h1, h2 {
   justify-content: flex-end;
 }
 
-/* Series subscription rows. Unlike .ledger-row/.ledger-label (nowrap
-   single-line entries), every line here must wrap: a series identity plus
-   description plus source links never fits one 360px line, and reusing the
-   ledger classes pushed the whole card into horizontal scroll on mobile.
-   The head is a wrapping flex row so the status drops below the title on
-   narrow screens instead of squeezing it. */
+/* Series subscription rows: one compact toggle row per series. The row is
+   a single line (title truncates with ellipsis, never wraps) so even a
+   dozen series stay scannable on a 360px viewport — details live behind
+   the chevron. The toggle button is the subscribe action, like tapping an
+   event tile; the filled dot marks a subscribed series. */
 .query-series {
   margin-top: 0.5rem;
   border-top: 1px solid var(--rule);
 }
 
 .query-series-row {
-  padding: 0.6rem 0;
+  padding: 0.35rem 0;
   border-bottom: 1px solid var(--rule);
   font-size: 0.85rem;
   min-width: 0;
@@ -559,52 +558,98 @@ h1, h2 {
   border-bottom: none;
 }
 
-.query-series-head {
+.query-series-main {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.series-toggle {
+  flex: 1 1 auto;
+  display: flex;
   align-items: baseline;
-  gap: 0.25rem 1rem;
+  gap: 0.5rem;
+  min-width: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.45rem 0.25rem;
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  text-align: left;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.series-toggle-dot {
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+  border: 1px solid var(--ink-muted);
+  align-self: center;
+}
+
+.query-series-row[data-subscribed='true'] .series-toggle-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.query-series-row[data-subscribed='true'] .query-series-title {
+  color: var(--ink);
 }
 
 .query-series-title {
-  flex: 1 1 10rem;
+  flex: 1 1 auto;
   min-width: 0;
-  overflow-wrap: anywhere;
-  color: var(--ink-muted);
-}
-
-.query-series-status {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  overflow-wrap: anywhere;
-  text-align: right;
-  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.query-series-preview {
-  margin-top: 0.35rem;
-  min-width: 0;
+.query-series-next {
+  flex: none;
+  font-size: 0.75rem;
+  white-space: nowrap;
 }
 
-.query-series-preview-label {
-  font-size: 0.75rem;
+.series-expand {
+  flex: none;
+  background: none;
+  border: none;
+  padding: 0.45rem 0.5rem;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+
+.query-series-details {
+  padding: 0.25rem 0 0.35rem 1.45rem;
+  min-width: 0;
+  font-size: 0.8rem;
   color: var(--ink-muted);
 }
 
+.query-series-identity {
+  overflow-wrap: anywhere;
+}
+
+.query-series-description {
+  margin-top: 0.2rem;
+  overflow-wrap: anywhere;
+}
+
+.query-series-dates {
+  margin-top: 0.25rem;
+}
+
 .query-series-date {
-  font-size: 0.8rem;
   overflow-wrap: anywhere;
   min-width: 0;
-}
-
-.query-series-source {
-  display: inline;
-  margin-top: 0;
-}
-
-.query-series-actions {
-  margin-top: 0.25rem;
 }
 
 .feed-action {

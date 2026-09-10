@@ -91,20 +91,31 @@ describe('style.css', () => {
     expect(Number(width) * 16).toBeGreaterThanOrEqual(32);
   });
 
-  it('lets .query-series-title wrap so a long series identity cannot force the card wider than its container', () => {
-    // Series rows must never reuse the nowrap .ledger-label: identity plus
-    // description plus source links never fits one 360px line. The head is
-    // a wrapping flex row and the title takes a wrapping flex share with
-    // min-width: 0, so the status drops below instead of squeezing (or
-    // overflowing) the title on mobile.
-    const head = css.match(/\.query-series-head\s*\{([\s\S]*?)\}/)?.[1];
-    expect(head).toBeDefined();
-    expect(head).toMatch(/flex-wrap:\s*wrap;?/);
-    const title = css.match(/\.query-series-title\s*\{([\s\S]*?)\}/)?.[1];
+  it('keeps each series row on a single truncating line so a long identity cannot force the card wider than its container', () => {
+    // One toggle row per series: the title truncates with ellipsis inside a
+    // min-width: 0 flex item (full identity lives behind the chevron), so
+    // even a dozen series stay scannable on a 360px viewport with no
+    // horizontal scroll. No nowrap ledger classes anywhere in the row.
+    const main = css.match(/\.query-series-main\s*\{([\s\S]*?)\}/)?.[1];
+    expect(main).toBeDefined();
+    expect(main).toMatch(/display:\s*flex;?/);
+    expect(main).toMatch(/min-width:\s*0;?/);
+    const title = css.match(/^\.query-series-title\s*\{([\s\S]*?)\}/m)?.[1];
     expect(title).toBeDefined();
-    expect(title).not.toMatch(/white-space:\s*nowrap/);
+    expect(title).toMatch(/overflow:\s*hidden;?/);
+    expect(title).toMatch(/text-overflow:\s*ellipsis;?/);
+    expect(title).toMatch(/white-space:\s*nowrap;?/);
     expect(title).toMatch(/min-width:\s*0;?/);
-    expect(title).toMatch(/overflow-wrap:\s*anywhere;?/);
+  });
+
+  it('gives .series-toggle enough height for the WCAG 2.5.8 touch-target floor', () => {
+    // The whole toggle row is the tap target: vertical padding alone must
+    // clear 24px (12px font ≈ 13.6px line box, same math as .link-button).
+    const rule = css.match(/\.series-toggle\s*\{([\s\S]*?)\}/)?.[1];
+    expect(rule).toBeDefined();
+    const padding = rule!.match(/padding:\s*([\d.]+)rem\s+[\d.]+rem;/)?.[1];
+    expect(padding).toBeDefined();
+    expect(Number(padding) * 2 * 16 + 13.6).toBeGreaterThanOrEqual(24);
   });
 
   it('ships the actual Latin-subset font file, not a stripped/wrong subset', () => {
