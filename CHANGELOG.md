@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.27.0](https://github.com/dachrisch/dontforget/compare/v0.26.1...v0.27.0) (2026-09-10)
+
+
+### Features
+
+* bound series date lookups to the cadence window and pulse while searching ([#186](https://github.com/dachrisch/dontforget/issues/186)) ([1ff47cb](https://github.com/dachrisch/dontforget/commit/1ff47cb24be7111ff8957f61e64a06c42db8bf0e))
+
+
+### Bug Fixes
+
+* **deps:** update dependency vite to v8.3.0 ([#188](https://github.com/dachrisch/dontforget/issues/188)) ([a2ec95e](https://github.com/dachrisch/dontforget/commit/a2ec95e0643d946ab9d9b875e201434d8bd33df8))
+
 ## [0.26.1](https://github.com/dachrisch/dontforget/compare/v0.26.0...v0.26.1) (2026-09-10)
 
 
