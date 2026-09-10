@@ -61,6 +61,15 @@ body {
   border-radius: var(--radius);
 }
 
+/* On phones the desktop padding eats a fifth of the viewport — give the
+   content room back instead of squeezing every card into ~290px. */
+@media (max-width: 480px) {
+  #root {
+    margin: 0.5rem auto;
+    padding: 1rem;
+  }
+}
+
 .error-banner {
   max-width: 640px;
   margin: 1rem auto 0;
@@ -270,14 +279,22 @@ h1, h2 {
   margin-top: 1.5rem;
 }
 
+/* Same blowout class as .query-list: a bare `1fr` minimums to the email's
+   max-content (and the email cell reuses nowrap .ledger-label), stretching
+   the row past narrow viewports. */
 .admin-user-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   gap: 0.75rem;
   align-items: baseline;
   padding: 0.6rem 0;
   border-bottom: 1px solid var(--rule);
   font-size: 0.85rem;
+}
+
+.admin-user-row > :first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .admin-user-row:last-child {
@@ -769,8 +786,14 @@ h1, h2 {
   padding-bottom: 1.5rem;
 }
 
+/* The single implicit grid column defaults to `auto`, which sizes to the
+   widest item's max-content (e.g. a nowrap series title) — the track, and
+   with it the whole page, blows out to 1000px+ on mobile. minmax(0, 1fr)
+   caps the track at the container so inner shrink chains (ellipsis,
+   wrapping) actually engage. */
 .query-list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   margin-bottom: 1.5rem;
 }
@@ -780,6 +803,7 @@ h1, h2 {
   border-radius: var(--radius);
   background: var(--paper-alt);
   padding: 0.75rem 1rem;
+  min-width: 0;
 }
 
 .query-card-head {
