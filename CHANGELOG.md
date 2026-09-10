@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.26.0](https://github.com/dachrisch/dontforget/compare/v0.25.1...v0.26.0) (2026-09-10)
+
+
+### Features
+
+* fold approve and edit into series logic ([7b45a7b](https://github.com/dachrisch/dontforget/commit/7b45a7bf3eed4ab914cf95053f48669da1f4337b))
+* fold approve and edit into series logic ([47b5354](https://github.com/dachrisch/dontforget/commit/47b53543478e8e3f9dfbe1d5922839b7e32b7f93))
+
 ## [0.25.1](https://github.com/dachrisch/dontforget/compare/v0.25.0...v0.25.1) (2026-09-10)
 
 
