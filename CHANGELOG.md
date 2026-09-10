@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.0](https://github.com/dachrisch/dontforget/compare/v0.24.3...v0.25.0) (2026-09-10)
+
+
+### Features
+
+* one-line series toggle rows with details behind chevron ([5d17712](https://github.com/dachrisch/dontforget/commit/5d17712a7101626016a79ca2b0836f87f55b5ab5))
+* one-line series toggle rows with details behind chevron ([66a269f](https://github.com/dachrisch/dontforget/commit/66a269feb161e9f86d0963e939100c264eb60ce3))
+
 ## [0.24.3](https://github.com/dachrisch/dontforget/compare/v0.24.2...v0.24.3) (2026-09-10)
 
 
