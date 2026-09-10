@@ -16,6 +16,11 @@ export interface SeriesRow {
   source_urls: string[];
   status: SeriesStatus;
   created_at: Date;
+  // Set while a date lookup for this series is in flight, cleared when it
+  // lands. `expanding_since` bounds how long a crashed run can leave the
+  // dashboard's status dot pulsing (see seriesSummariesByQuery).
+  expanding?: boolean;
+  expanding_since?: Date;
 }
 
 // Identity dedupe key: what the series applies to (falling back to title
@@ -136,6 +141,22 @@ export async function getSeriesById(
 
 export async function getApprovedSeriesForQuery(db: Db, queryId: ObjectId): Promise<SeriesRow[]> {
   return db.collection<SeriesRow>('series').find({ query_id: queryId, status: 'approved' }).toArray();
+}
+
+// Flags a set of a query's series as "searching dates right now" (or clears
+// the flag). Only the dashboard's status dot reads it, but it is persisted
+// so a page reload mid-expansion still shows the work in flight.
+export async function setSeriesExpanding(
+  db: Db,
+  queryId: ObjectId,
+  seriesIds: ObjectId[],
+  expanding: boolean
+): Promise<void> {
+  if (seriesIds.length === 0) return;
+  const update = expanding
+    ? { $set: { expanding: true, expanding_since: new Date() } }
+    : { $unset: { expanding: '', expanding_since: '' } };
+  await db.collection('series').updateMany({ query_id: queryId, _id: { $in: seriesIds } }, update);
 }
 
 // Approves/dismisses series for a query the user owns. Dismiss wins on

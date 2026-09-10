@@ -56,6 +56,9 @@ export interface SeriesSummary {
   status: SeriesStatus;
   eventCounts: { approved: number; candidate: number };
   previewEvents: SeriesDatePreview[];
+  // True while the backend is searching dates for this series. Drives the
+  // pulsing status dot; optional so older payloads omit it.
+  expanding?: boolean;
 }
 
 export interface FeedSummary {

@@ -128,6 +128,11 @@ describe('style.css', () => {
     expect(media).toContain('#root');
   });
 
+  it('pulses the series status dot while its dates are being searched', () => {
+    expect(css).toMatch(/@keyframes\s+series-dot-search/);
+    expect(css).toMatch(/\.query-series-row\[data-expanding='true'\]\s+\.series-toggle-dot/);
+  });
+
   it('gives .series-toggle enough height for the WCAG 2.5.8 touch-target floor', () => {
     // The whole toggle row is the tap target: vertical padding alone must
     // clear 24px (12px font ≈ 13.6px line box, same math as .link-button).

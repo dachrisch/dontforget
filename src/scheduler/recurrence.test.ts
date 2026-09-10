@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nextRunAt, isDue } from './recurrence';
+import { nextRunAt, isDue, plausibleDateWindow } from './recurrence';
 
 describe('nextRunAt', () => {
   it('adds 7 days for weekly', () => {
@@ -44,5 +44,25 @@ describe('isDue', () => {
     const lastRunAt = new Date('2026-01-01T00:00:00Z');
     const now = new Date('2026-08-01T00:00:00Z');
     expect(isDue(lastRunAt, 'monthly', now)).toBe(true);
+  });
+});
+
+describe('plausibleDateWindow', () => {
+  const now = new Date('2026-08-01T12:00:00Z');
+
+  it('spans today through the end of the next weekly period', () => {
+    expect(plausibleDateWindow('weekly', now)).toEqual({ from: '2026-08-01', to: '2026-08-15' });
+  });
+
+  it('spans two calendar months for monthly', () => {
+    expect(plausibleDateWindow('monthly', now)).toEqual({ from: '2026-08-01', to: '2026-10-01' });
+  });
+
+  it('spans two quarters for quarterly', () => {
+    expect(plausibleDateWindow('quarterly', now)).toEqual({ from: '2026-08-01', to: '2027-02-01' });
+  });
+
+  it('spans two years for yearly', () => {
+    expect(plausibleDateWindow('yearly', now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
   });
 });

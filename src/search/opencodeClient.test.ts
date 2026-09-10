@@ -434,4 +434,28 @@ describe('extractSeriesDates', () => {
       cadence: 'yearly',
     });
   });
+
+  it('bounds the lookup to the supplied cadence window', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_window'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
+
+    await extractSeriesDates(
+      'https://code.lehel.xyz',
+      'test-key',
+      {
+        title: 'Auer Dult',
+        appliesTo: 'Auer Dult, Munich',
+        description: 'Thrice-yearly fair',
+        searchKeywords: 'Auer Dult Munich Termine',
+        window: { from: '2026-08-01', to: '2026-08-15' },
+      },
+      []
+    );
+
+    const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(promptBody.prompt.text).toMatch(/between 2026-08-01 and 2026-08-15/);
+    expect(promptBody.prompt.text).toMatch(/current cadence and the next/i);
+  });
 });

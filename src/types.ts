@@ -19,6 +19,14 @@ export interface ExtractionResult {
   cadence: RecurrenceInterval | null;
 }
 
+// Inclusive YYYY-MM-DD range a date lookup is restricted to. Only the
+// current cadence period and the next are plausible: anything before is
+// stale, anything far after is not a real occurrence of the series yet.
+export interface DateWindow {
+  from: string;
+  to: string;
+}
+
 export interface CandidateEvent extends ExtractedEvent {
   id: string;
   status: 'candidate' | 'approved' | 'dismissed';
@@ -77,6 +85,9 @@ export interface SeriesSummary {
   status: SeriesStatus;
   eventCounts: { approved: number; candidate: number };
   previewEvents: SeriesDatePreview[];
+  // True while a date lookup for this series is in flight. Drives the
+  // pulsing status dot on the dashboard; optional so older payloads omit it.
+  expanding?: boolean;
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';

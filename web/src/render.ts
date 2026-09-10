@@ -910,7 +910,7 @@ function renderSeriesRow(s: SeriesSummary, expanded: boolean): string {
     : '';
   const toggleLabel = `${identity}, ${t(subscribed ? 'series.unsubscribe' : 'series.subscribe')}`;
   const detailsLabel = `${identity}, ${t('series.details')}`;
-  return `<div class="query-series-row" data-series-id="${s.id}"${subscribed ? ' data-subscribed="true"' : ''}>` +
+  return `<div class="query-series-row" data-series-id="${s.id}"${subscribed ? ' data-subscribed="true"' : ''}${s.expanding ? ' data-expanding="true"' : ''}>` +
     `<div class="query-series-main">` +
     `<button type="button" class="series-toggle" data-action="toggle-series" data-series-id="${s.id}" aria-pressed="${subscribed}" aria-label="${escapeHtml(toggleLabel)}">` +
     `<span class="series-toggle-dot" aria-hidden="true"></span>` +
