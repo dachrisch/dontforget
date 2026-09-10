@@ -108,6 +108,26 @@ describe('style.css', () => {
     expect(title).toMatch(/min-width:\s*0;?/);
   });
 
+  it('caps .query-list tracks so nowrap content cannot stretch the page past the viewport', () => {
+    // Reproduced live at 360px: the implicit single grid column defaults to
+    // `auto`, which sizes to the widest item's max-content (a nowrap series
+    // title measured 1000px+) — the track, card, and whole page blew out to
+    // ~1290px. minmax(0, 1fr) caps the track at the container so the inner
+    // shrink chains (ellipsis, wrapping) actually engage.
+    const rule = css.match(/^\.query-list\s*\{([\s\S]*?)\}/m)?.[1];
+    expect(rule).toBeDefined();
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\);?/);
+    const card = css.match(/^\.query-card\s*\{([\s\S]*?)\}/m)?.[1];
+    expect(card).toBeDefined();
+    expect(card).toMatch(/min-width:\s*0;?/);
+  });
+
+  it('gives #root breathing room on phones instead of squeezing cards into ~290px', () => {
+    const media = css.match(/@media \(max-width:\s*480px\)\s*\{([\s\S]*?)\n\}/)?.[1];
+    expect(media).toBeDefined();
+    expect(media).toContain('#root');
+  });
+
   it('gives .series-toggle enough height for the WCAG 2.5.8 touch-target floor', () => {
     // The whole toggle row is the tap target: vertical padding alone must
     // clear 24px (12px font ≈ 13.6px line box, same math as .link-button).
