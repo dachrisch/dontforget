@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.1](https://github.com/dachrisch/dontforget/compare/v0.25.0...v0.25.1) (2026-09-10)
+
+
+### Bug Fixes
+
+* cap grid tracks so mobile cannot spill past the viewport ([2dd0ba2](https://github.com/dachrisch/dontforget/commit/2dd0ba2c4ee8876e32cda25362a757ce07207738))
+* cap grid tracks so mobile cannot spill past the viewport ([3a97ad2](https://github.com/dachrisch/dontforget/commit/3a97ad2b04bcbd11964e5295658c84c438a0efc0))
+
 ## [0.25.0](https://github.com/dachrisch/dontforget/compare/v0.24.3...v0.25.0) (2026-09-10)
 
 
