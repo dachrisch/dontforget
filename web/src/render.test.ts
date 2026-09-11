@@ -15,8 +15,8 @@ function noopHandlers(): WorkspaceHandlers {
     onSignOut: vi.fn(),
     onDeleteAccount: vi.fn(),
     onStartReview: vi.fn(),
-    onToggleSeries: vi.fn(),
-    onExpandSeries: vi.fn(),
+    onToggleEditSeries: vi.fn(),
+    onToggleEditSeriesExpand: vi.fn(),
     onToggleReviewEvent: vi.fn(),
     onSetReviewInterval: vi.fn(),
     onApproveReview: vi.fn(),
@@ -561,7 +561,7 @@ describe('renderWorkspace', () => {
         kind: 'dashboard',
         queries: [query()],
         feed: null,
-        editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [] },
+        editing: { queryId: 'q1', text: 'Auer Dult Munich', recurrenceInterval: 'quarterly', events: [], series: [] },
         reviewing: null,
       },
       handlers
@@ -598,6 +598,7 @@ describe('renderWorkspace', () => {
             { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'none' },
             { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', decision: 'approve' },
           ],
+          series: [],
         },
         reviewing: null,
       },
@@ -767,95 +768,18 @@ describe('series nesting', () => {
     return { container, handlers };
   }
 
-  it('shows one toggle row per series, subscribed first', () => {
-    const { container } = seriesDashboard([
-      { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
-      { id: 's2', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [] },
-    ]);
-    const rows = container.querySelectorAll('.query-series-row[data-series-id]');
-    expect(rows).toHaveLength(2);
-    // Subscribed first regardless of discovery order.
-    expect(rows[0].getAttribute('data-series-id')).toBe('s2');
-    expect(rows[1].getAttribute('data-series-id')).toBe('s1');
-    expect(rows[0].querySelector('.series-toggle')?.getAttribute('aria-pressed')).toBe('true');
-    expect(rows[1].querySelector('.series-toggle')?.getAttribute('aria-pressed')).toBe('false');
-  });
+  function editDraft(overrides: Partial<import('./state').EditingDraft> = {}): import('./state').EditingDraft {
+    return {
+      queryId: 'q1',
+      text: 'events in munich',
+      recurrenceInterval: 'weekly',
+      events: [],
+      series: [],
+      ...overrides,
+    };
+  }
 
-  it('toggles the subscription with one tap, no separate status text or button', () => {
-    const { container, handlers } = seriesDashboard([
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
-    ]);
-    const row = container.querySelector('.query-series-row[data-series-id="s1"]')!;
-    // No duplicated status/action widgets — the toggle is the action.
-    expect(row.querySelector('[data-action=subscribe-series]')).toBeNull();
-    expect(row.querySelector('[data-action=unsubscribe-series]')).toBeNull();
-    expect(row.textContent).not.toMatch(/Not subscribed|Subscribed/);
-
-    const toggle = row.querySelector<HTMLButtonElement>('button[data-action=toggle-series]')!;
-    toggle.click();
-    expect(handlers.onToggleSeries).toHaveBeenCalledWith('q1', 's1');
-  });
-
-  it('flags a series as expanding while its dates are being searched', () => {
-    const { container } = seriesDashboard([
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [], expanding: true },
-      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
-    ]);
-    const expanding = container.querySelector('.query-series-row[data-series-id="s1"]')!;
-    const idle = container.querySelector('.query-series-row[data-series-id="s2"]')!;
-    expect(expanding.getAttribute('data-expanding')).toBe('true');
-    expect(idle.getAttribute('data-expanding')).toBeNull();
-  });
-
-  it('shows next date and count on the collapsed row, full dates behind the chevron', () => {
-    const series: SeriesSummary[] = [
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'Thrice-yearly fair', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [{ label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11' }, { label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03' }] },
-    ];
-    const container = document.createElement('div');
-    renderWorkspace(
-      container,
-      {
-        kind: 'dashboard',
-        queries: [query({ text: 'events in munich', series })],
-        feed: null,
-        editing: null,
-        reviewing: null,
-        expandedSeriesId: 's1',
-      },
-      noopHandlers()
-    );
-    // Collapsed fragment: short next-date, no full ranges, no detail labels.
-    expect(container.textContent).toContain('next');
-    expect(container.textContent).toContain('2 dates');
-    // Expanded details: description, source, full ranges.
-    expect(container.textContent).toContain('Thrice-yearly fair');
-    expect(container.textContent).toContain('Frühjahrsdult');
-    expect(container.textContent).toContain('Jakobidult');
-    expect(container.querySelector('.query-series-details')).not.toBeNull();
-  });
-
-  it('expands details through the chevron handler', () => {
-    const { container, handlers } = seriesDashboard([
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
-    ]);
-    expect(container.querySelector('.query-series-details')).toBeNull();
-    container.querySelector<HTMLButtonElement>('button[data-action=expand-series]')!.click();
-    expect(handlers.onExpandSeries).toHaveBeenCalledWith('s1');
-  });
-
-  it('hides the per-event review button while series own the card', () => {
-    const { container } = seriesDashboard([
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
-    ]);
-    // candidates exist, but triage moved one level up (series) + calendar.
-    expect(container.querySelector('button[data-action=review]')).toBeNull();
-  });
-
-  it('groups the edit card by series with toggles and read-only dates', () => {
-    const series: SeriesSummary[] = [
-      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 1, candidate: 0 }, previewEvents: [] },
-      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
-    ];
+  function seriesEditCard(series: SeriesSummary[], editing: import('./state').EditingDraft) {
     const container = document.createElement('div');
     const handlers = noopHandlers();
     renderWorkspace(
@@ -864,31 +788,156 @@ describe('series nesting', () => {
         kind: 'dashboard',
         queries: [query({ text: 'events in munich', series })],
         feed: null,
-        editing: {
-          queryId: 'q1',
-          text: 'events in munich',
-          recurrenceInterval: 'weekly',
-          events: [
-            { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'none', seriesId: 's1', seriesTitle: 'Auer Dult', seriesStatus: 'approved' },
-            { id: 'e2', label: 'Wiesn', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u2', status: 'candidate', decision: 'none', seriesId: 's2', seriesTitle: 'Oktoberfest', seriesStatus: 'candidate' },
-          ],
-        },
+        editing,
         reviewing: null,
       },
       handlers
     );
+    return { container, handlers };
+  }
 
-    const groups = container.querySelectorAll('.edit-series-group[data-series-id]');
-    expect(groups).toHaveLength(2);
-    // Group toggles flip the subscription; dates carry no decisions.
-    const toggle = container.querySelector<HTMLButtonElement>('.edit-series-group[data-series-id="s2"] button[data-action=toggle-series]')!;
-    expect(toggle.getAttribute('aria-pressed')).toBe('false');
-    toggle.click();
-    expect(handlers.onToggleSeries).toHaveBeenCalledWith('q1', 's2');
-    expect(container.querySelector('.edit-form .day-tile input[type=checkbox]')).toBeNull();
-    expect(container.querySelector('.day-tile-readonly')).not.toBeNull();
-    // Save is text/interval only — no approve count.
+  it('shows series stats and only subscribed titles on the card, with no triage controls', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'Beer festival', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+      { id: 's2', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [] },
+    ]);
+    // Stats row, subscribed titles — but no toggle rows, chevrons, or hints.
+    expect(container.textContent).toContain('2 series · 1 subscribed');
+    expect(container.textContent).toContain('Auer Dult · Auer Dult, Munich');
+    expect(container.textContent).not.toContain('Oktoberfest, Munich');
+    expect(container.querySelector('.query-series-row')).toBeNull();
+    expect(container.querySelector('button[data-action=toggle-series]')).toBeNull();
+    expect(container.querySelector('button[data-action=expand-series]')).toBeNull();
+  });
+
+  it('omits the subscribed-titles row when nothing is subscribed yet', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+    ]);
+    expect(container.textContent).toContain('1 series · 0 subscribed');
+    expect(container.textContent).not.toContain('Oktoberfest, Munich');
+  });
+
+  it('hides the per-event review button while series own the query', () => {
+    const { container } = seriesDashboard([
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
+    ]);
+    // candidates exist, but triage moved into the edit card + calendar.
+    expect(container.querySelector('button[data-action=review]')).toBeNull();
+  });
+
+  it('lists one selectable row per discovered series in the edit card, selected first', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+      { id: 's2', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 2, candidate: 0 }, previewEvents: [] },
+    ];
+    const { container } = seriesEditCard(series, editDraft({
+      series: [
+        { id: 's1', title: 'Oktoberfest · Oktoberfest, Munich', description: 'd', sourceUrls: [], status: 'candidate', selected: false, expanded: false, expanding: false, preview: [] },
+        { id: 's2', title: 'Auer Dult · Auer Dult, Munich', description: 'd', sourceUrls: [], status: 'approved', selected: true, expanded: true, expanding: false, preview: [] },
+      ],
+    }));
+    const rows = container.querySelectorAll('.query-card-editing .query-series-row[data-series-id]');
+    expect(rows).toHaveLength(2);
+    // Selected first regardless of discovery order.
+    expect(rows[0].getAttribute('data-series-id')).toBe('s2');
+    expect(rows[1].getAttribute('data-series-id')).toBe('s1');
+    expect(rows[0].querySelector('.series-toggle')?.getAttribute('aria-pressed')).toBe('true');
+    expect(rows[1].querySelector('.series-toggle')?.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('selects a series and expands its accordion through the edit handlers', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [] },
+    ];
+    const { container, handlers } = seriesEditCard(series, editDraft({
+      series: [
+        { id: 's1', title: 'Auer Dult · Auer Dult, Munich', description: 'd', sourceUrls: [], status: 'candidate', selected: false, expanded: false, expanding: false, preview: [] },
+      ],
+    }));
+    container.querySelector<HTMLButtonElement>('button[data-action=toggle-edit-series]')!.click();
+    expect(handlers.onToggleEditSeries).toHaveBeenCalledWith('q1', 's1');
+    container.querySelector<HTMLButtonElement>('button[data-action=expand-edit-series]')!.click();
+    expect(handlers.onToggleEditSeriesExpand).toHaveBeenCalledWith('s1');
+  });
+
+  it('flags the selected series while its dates are being searched', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 0 }, previewEvents: [], expanding: true },
+    ];
+    const { container } = seriesEditCard(series, editDraft({
+      series: [
+        { id: 's1', title: 'Auer Dult · Auer Dult, Munich', description: 'Thrice-yearly fair', sourceUrls: [], status: 'candidate', selected: true, expanded: true, expanding: true, preview: [] },
+      ],
+    }));
+    const row = container.querySelector('.query-series-row[data-series-id="s1"]')!;
+    expect(row.getAttribute('data-expanding')).toBe('true');
+    expect(container.textContent).toMatch(/searching dates/i);
+  });
+
+  it('shows checkable next dates in the open accordion and deselected rows stay dateless', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'Thrice-yearly fair', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://a.example'], status: 'approved', eventCounts: { approved: 1, candidate: 1 }, previewEvents: [] },
+      { id: 's2', title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: [], status: 'candidate', eventCounts: { approved: 0, candidate: 1 }, previewEvents: [] },
+    ];
+    const { container, handlers } = seriesEditCard(series, editDraft({
+      events: [
+        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'none', seriesId: 's1' },
+        { id: 'e2', label: 'Jakobidult', startDate: '2026-07-25', endDate: '2026-08-03', sourceUrl: 'u2', status: 'candidate', decision: 'approve', seriesId: 's1' },
+        { id: 'e3', label: 'Wiesn', startDate: '2026-09-19', endDate: '2026-10-04', sourceUrl: 'u2', status: 'candidate', decision: 'none', seriesId: 's2' },
+      ],
+      series: [
+        { id: 's1', title: 'Auer Dult · Auer Dult, Munich', description: 'Thrice-yearly fair', sourceUrls: ['https://a.example'], status: 'approved', selected: true, expanded: true, expanding: false, preview: [] },
+        { id: 's2', title: 'Oktoberfest · Oktoberfest, Munich', description: 'd', sourceUrls: [], status: 'candidate', selected: false, expanded: false, expanding: false, preview: [] },
+      ],
+    }));
+    // Open accordion: description, source, both dates as checked tiles.
+    expect(container.textContent).toContain('Thrice-yearly fair');
+    const accordion = container.querySelector('.query-series-row[data-series-id="s1"] .query-series-details')!;
+    const checkboxes = accordion.querySelectorAll<HTMLInputElement>('.day-tile input[type=checkbox]');
+    expect(checkboxes).toHaveLength(2);
+    expect(checkboxes[0].checked).toBe(true);
+    expect(checkboxes[1].checked).toBe(true);
+    checkboxes[0].click();
+    expect(handlers.onToggleEditEvent).toHaveBeenCalledWith('e1');
+    // Deselected series: collapsed row only, its dates hidden.
+    expect(container.querySelector('.query-series-row[data-series-id="s2"] .query-series-details')).toBeNull();
+    expect(container.textContent).not.toContain('Wiesn');
+    // Save persists text/interval plus staged series and dates — plain Save.
     expect(container.querySelector('button[data-action=save]')?.textContent).toBe('Save');
+  });
+
+  it('leaves a dismissed date unticked with a dismissing label', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 1, candidate: 0 }, previewEvents: [] },
+    ];
+    const { container } = seriesEditCard(series, editDraft({
+      events: [
+        { id: 'e1', label: 'Frühjahrsdult', startDate: '2026-04-11', endDate: '2026-05-11', sourceUrl: 'u1', status: 'approved', decision: 'dismiss', seriesId: 's1' },
+      ],
+      series: [
+        { id: 's1', title: 'Auer Dult · Auer Dult, Munich', description: 'd', sourceUrls: [], status: 'approved', selected: true, expanded: true, expanding: false, preview: [] },
+      ],
+    }));
+    const checkbox = container.querySelector<HTMLInputElement>('.query-series-row[data-series-id="s1"] .day-tile input[type=checkbox]')!;
+    expect(checkbox.checked).toBe(false);
+    expect(container.textContent).toContain('Dismissing');
+  });
+
+  it('keeps ungrouped older dates read-only below the series list', () => {
+    const series: SeriesSummary[] = [
+      { id: 's1', title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: [], status: 'approved', eventCounts: { approved: 1, candidate: 0 }, previewEvents: [] },
+    ];
+    const { container } = seriesEditCard(series, editDraft({
+      events: [
+        { id: 'e9', label: 'Old fair', startDate: '2025-04-11', endDate: '2025-04-11', sourceUrl: 'u9', status: 'approved', decision: 'none' },
+      ],
+      series: [
+        { id: 's1', title: 'Auer Dult · Auer Dult, Munich', description: 'd', sourceUrls: [], status: 'approved', selected: true, expanded: false, expanding: false, preview: [] },
+      ],
+    }));
+    expect(container.querySelector('.day-tile-readonly')).not.toBeNull();
+    expect(container.querySelector('.edit-form .day-tile input[type=checkbox]')).toBeNull();
   });
 
   it('keeps the per-event review button for queries without series', () => {

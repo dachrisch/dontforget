@@ -1,4 +1,4 @@
-import type { AdminState, WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft } from './state';
+import type { AdminState, WorkspaceState, SelectableEditEvent, ReviewingDraft, EditingDraft, EditingSeriesDraft } from './state';
 import { RECURRENCE_INTERVALS } from './types';
 import type { EventDetail, FeedSummary, QuerySummary, RecurrenceInterval, SeriesSummary } from './types';
 import { getLocale, MONTH_ABBREVS, t, type MessageKey } from './i18n';
@@ -15,8 +15,8 @@ export interface WorkspaceHandlers {
   onSignOut: () => void;
   onDeleteAccount: () => void;
   onStartReview: (queryId: string) => void;
-  onToggleSeries: (queryId: string, seriesId: string) => void;
-  onExpandSeries: (seriesId: string) => void;
+  onToggleEditSeries: (queryId: string, seriesId: string) => void;
+  onToggleEditSeriesExpand: (seriesId: string) => void;
   onToggleReviewEvent: (id: string) => void;
   onSetReviewInterval: (interval: RecurrenceInterval) => void;
   onApproveReview: (queryId: string) => void;
@@ -91,7 +91,7 @@ function render(state: WorkspaceState, handlers: WorkspaceHandlers): HTMLElement
     case 'empty':
       return renderEmpty(handlers);
     case 'dashboard':
-      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, state.expandedSeriesId ?? null, handlers);
+      return renderDashboard(state.queries, state.feed, state.editing, state.reviewing, handlers);
     case 'admin':
       return renderAdmin(state, handlers);
   }
@@ -418,7 +418,6 @@ function renderDashboard(
   feed: FeedSummary | null,
   editing: EditingDraft | null,
   reviewing: ReviewingDraft | null,
-  expandedSeriesId: string | null,
   handlers: WorkspaceHandlers
 ): HTMLElement {
   const wrapper = document.createElement('div');
@@ -429,7 +428,7 @@ function renderDashboard(
       const isReviewing = reviewing?.queryId === query.id;
       if (isEditing) return renderEditCard(editing, query);
       if (isReviewing) return renderReviewCard(reviewing);
-      return renderQueryCard(query, expandedSeriesId);
+      return renderQueryCard(query);
     })
     .join('');
 
@@ -501,17 +500,17 @@ function renderDashboard(
     });
   });
 
-  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=toggle-series]').forEach(button => {
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card-editing button[data-action=toggle-edit-series]').forEach(button => {
     button.addEventListener('click', () => {
       const card = button.closest<HTMLElement>('.query-card')!;
-      handlers.onToggleSeries(card.dataset.id!, button.dataset.seriesId!);
+      handlers.onToggleEditSeries(card.dataset.id!, button.dataset.seriesId!);
     });
   });
 
-  wrapper.querySelectorAll<HTMLButtonElement>('.query-card button[data-action=expand-series]').forEach(button => {
+  wrapper.querySelectorAll<HTMLButtonElement>('.query-card-editing button[data-action=expand-edit-series]').forEach(button => {
     button.addEventListener('click', e => {
       e.stopPropagation();
-      handlers.onExpandSeries(button.dataset.seriesId!);
+      handlers.onToggleEditSeriesExpand(button.dataset.seriesId!);
     });
   });
 
@@ -789,7 +788,7 @@ function renderAdmin(state: AdminState, handlers: WorkspaceHandlers): HTMLElemen
   return wrapper;
 }
 
-function renderQueryCard(query: QuerySummary, expandedSeriesId: string | null): string {
+function renderQueryCard(query: QuerySummary): string {
   if (query.status === 'running') {
     return `
       <article class="query-card query-card-running" data-id="${query.id}">
@@ -838,18 +837,10 @@ function renderQueryCard(query: QuerySummary, expandedSeriesId: string | null): 
   const reviewAction = query.candidateCount > 0 && !hasSeries
     ? `<button type="button" class="link-button" data-action="review">${t('queryCard.review')}</button>`
     : '';
-  // Series nested under their parent query (issue #143): one compact
-  // toggle row per series, subscribed first. Tapping flips the
-  // subscription (the toggle is the action — no separate status text or
-  // button); the chevron opens details. Approving individual dates happens
-  // in the calendar, not here.
-  const seriesSection = hasSeries
-    ? `<div class="query-series" aria-label="series">
-      <p class="subtext">${t('series.hint')}</p>
-      ${sortSeries(query.series!)
-        .map(s => renderSeriesRow(s, s.id === expandedSeriesId))
-        .join('')}</div>`
-    : '';
+  // Series triage lives in the edit card — the dashboard card only
+  // summarizes: how many series were discovered, how many are subscribed,
+  // and the subscribed titles. No toggles, no accordions here.
+  const seriesSection = hasSeries ? renderSeriesSummary(query.series!) : '';
   return `
     <article class="query-card" data-id="${query.id}">
       <div class="query-card-head">
@@ -877,14 +868,6 @@ function renderQueryCard(query: QuerySummary, expandedSeriesId: string | null): 
   `;
 }
 
-// Subscribed series first, then candidates, dismissed last — the eye lands
-// on what's already flowing into the calendar. Stable within each group.
-function sortSeries(series: SeriesSummary[]): SeriesSummary[] {
-  const rank = (status: SeriesSummary['status']) =>
-    status === 'approved' ? 0 : status === 'candidate' ? 1 : 2;
-  return [...series].sort((a, b) => rank(a.status) - rank(b.status));
-}
-
 // Short "next date" fragment for the collapsed row ("APR 11" / "11. APR").
 // Full ranges live in the expanded details.
 function formatShortDate(iso: string): string {
@@ -894,50 +877,83 @@ function formatShortDate(iso: string): string {
   return getLocale() === 'de' ? `${parsed.day}. ${abbrev}` : `${abbrev} ${parsed.day}`;
 }
 
-// One toggle row per series: the toggle is the subscribe action (no
-// separate status text or button — like tapping an event tile), the chevron
-// opens details. Title truncates with ellipsis; the full identity lives in
-// the expanded view, so a 360px viewport never scrolls sideways.
-function renderSeriesRow(s: SeriesSummary, expanded: boolean): string {
-  const subscribed = s.status === 'approved';
-  const identity = s.appliesTo && s.appliesTo !== s.title
+function seriesIdentity(s: Pick<SeriesSummary, 'title' | 'appliesTo'>): string {
+  return s.appliesTo && s.appliesTo !== s.title
     ? `${s.title} · ${s.appliesTo}`
     : s.appliesTo || s.title;
-  const previews = s.previewEvents ?? [];
-  const next = previews.length > 0
-    ? escapeHtml(t('series.next', { date: formatShortDate(previews[0].startDate) })) +
-      (previews.length > 1 ? ` · ${escapeHtml(t('series.dateCount', { count: previews.length }))}` : '')
-    : '';
-  const toggleLabel = `${identity}, ${t(subscribed ? 'series.unsubscribe' : 'series.subscribe')}`;
-  const detailsLabel = `${identity}, ${t('series.details')}`;
-  return `<div class="query-series-row" data-series-id="${s.id}"${subscribed ? ' data-subscribed="true"' : ''}${s.expanding ? ' data-expanding="true"' : ''}>` +
-    `<div class="query-series-main">` +
-    `<button type="button" class="series-toggle" data-action="toggle-series" data-series-id="${s.id}" aria-pressed="${subscribed}" aria-label="${escapeHtml(toggleLabel)}">` +
-    `<span class="series-toggle-dot" aria-hidden="true"></span>` +
-    `<span class="query-series-title">${escapeHtml(identity)}</span>` +
-    (next ? `<span class="query-series-next">${next}</span>` : '') +
-    `</button>` +
-    `<button type="button" class="series-expand" data-action="expand-series" data-series-id="${s.id}" aria-expanded="${expanded}" aria-label="${escapeHtml(detailsLabel)}">›</button>` +
+}
+
+// Read-only series summary for the dashboard card: discovery stats plus the
+// subscribed titles. Triage (subscribe, dates) lives in the edit card.
+function renderSeriesSummary(series: SeriesSummary[]): string {
+  const subscribed = series.filter(s => s.status === 'approved');
+  const stats = t('queryCard.seriesStats', { found: series.length, subscribed: subscribed.length });
+  const titles = subscribed.map(s => seriesIdentity(s)).join(', ');
+  return `<div class="ledger-row">` +
+    `<span class="ledger-label">${t('queryCard.series')}</span>` +
+    `<span class="ledger-value">${escapeHtml(stats)}</span>` +
     `</div>` +
-    (expanded ? renderSeriesDetails(s) : '') +
+    (titles
+      ? `<div class="ledger-row">` +
+        `<span class="ledger-label">${t('queryCard.subscribed')}</span>` +
+        `<span class="ledger-value" title="${escapeHtml(titles)}">${escapeHtml(titles)}</span>` +
+        `</div>`
+      : '');
+}
+
+// Selected series first, then the rest — the eye lands on what's already
+// flowing into the calendar. Stable within each group.
+function sortEditDrafts(drafts: EditingSeriesDraft[]): EditingSeriesDraft[] {
+  return [...drafts].sort((a, b) => Number(b.selected) - Number(a.selected));
+}
+
+// Short "next date" fragment for a collapsed edit row ("APR 11" / "11. APR").
+function previewSummary(preview: EditingSeriesDraft['preview']): string {
+  if (preview.length === 0) return '';
+  return escapeHtml(t('series.next', { date: formatShortDate(preview[0].startDate) })) +
+    (preview.length > 1 ? ` · ${escapeHtml(t('series.dateCount', { count: preview.length }))}` : '');
+}
+
+// One selectable row per discovered series inside the edit card. Selecting
+// subscribes (persisted on save) and kicks off the date search; the chevron
+// opens the accordion with the next dates. Title truncates with ellipsis;
+// the full identity lives in the accordion, so a 360px viewport never
+// scrolls sideways.
+function renderEditSeriesRow(draft: EditingSeriesDraft, tileHtml: string, loadedCount: number): string {
+  const summary = loadedCount > 0
+    ? escapeHtml(t('series.dateCount', { count: loadedCount }))
+    : previewSummary(draft.preview);
+  const toggleLabel = `${draft.title}, ${t(draft.selected ? 'series.unsubscribe' : 'series.subscribe')}`;
+  const detailsLabel = `${draft.title}, ${t('series.details')}`;
+  return `<div class="query-series-row" data-series-id="${draft.id}"${draft.selected ? ' data-subscribed="true"' : ''}${draft.expanding ? ' data-expanding="true"' : ''}>` +
+    `<div class="query-series-main">` +
+    `<button type="button" class="series-toggle" data-action="toggle-edit-series" data-series-id="${draft.id}" aria-pressed="${draft.selected}" aria-label="${escapeHtml(toggleLabel)}">` +
+    `<span class="series-toggle-dot" aria-hidden="true"></span>` +
+    `<span class="query-series-title">${escapeHtml(draft.title)}</span>` +
+    (summary ? `<span class="query-series-next">${summary}</span>` : '') +
+    `</button>` +
+    `<button type="button" class="series-expand" data-action="expand-edit-series" data-series-id="${draft.id}" aria-expanded="${draft.expanded}" aria-label="${escapeHtml(detailsLabel)}">›</button>` +
+    `</div>` +
+    (draft.expanded ? renderEditSeriesAccordion(draft, tileHtml) : '') +
     `</div>`;
 }
 
-function renderSeriesDetails(s: SeriesSummary): string {
-  const identity = s.appliesTo && s.appliesTo !== s.title
-    ? `${s.title} · ${s.appliesTo}`
-    : s.appliesTo || s.title;
-  const sources = (s.sourceUrls ?? [])
+function renderEditSeriesAccordion(draft: EditingSeriesDraft, tileHtml: string): string {
+  const sources = draft.sourceUrls
     .slice(0, 2)
     .map(u => `<a class="day-tile-source" href="${escapeHtml(u)}" target="_blank" rel="noopener">${escapeHtml(t('common.source'))}</a>`)
     .join(' ');
-  const dates = (s.previewEvents ?? [])
-    .map(p => `<div class="query-series-date">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</div>`)
-    .join('');
+  const dates = tileHtml
+    ? `<div class="tile-grid edit-tile-grid">${tileHtml}</div>`
+    : draft.expanding
+      ? `<div class="query-series-date">${escapeHtml(t('edit.searchingDates'))}</div>`
+      : draft.preview.length > 0
+        ? `<div class="query-series-dates">${draft.preview.map(p => `<div class="query-series-date">${escapeHtml(formatRange(p.startDate, p.endDate))} · ${escapeHtml(p.label)}</div>`).join('')}</div>`
+        : `<div class="query-series-date">${escapeHtml(t('series.noDates'))}</div>`;
   return `<div class="query-series-details">` +
-    `<div class="query-series-identity">${escapeHtml(identity)}</div>` +
-    (s.description ? `<div class="query-series-description">${escapeHtml(s.description)}${sources ? ` ${sources}` : ''}</div>` : sources ? `<div class="query-series-description">${sources}</div>` : '') +
-    (dates ? `<div class="query-series-dates">${dates}</div>` : `<div class="query-series-date">${escapeHtml(t('series.noDates'))}</div>`) +
+    `<div class="query-series-identity">${escapeHtml(draft.title)}</div>` +
+    (draft.description ? `<div class="query-series-description">${escapeHtml(draft.description)}${sources ? ` ${sources}` : ''}</div>` : sources ? `<div class="query-series-description">${sources}</div>` : '') +
+    dates +
     `</div>`;
 }
 
@@ -976,12 +992,17 @@ function renderEditCard(
   editing: EditingDraft,
   query?: QuerySummary
 ): string {
-  // Queries with series triage one level above: groups carry the subscribe
-  // toggle, dates are read-only here (their triage is the toggle + the
-  // calendar). Only series-less legacy queries keep per-event decisions.
-  if (query?.series && query.series.length > 0) {
+  // Series queries triage in the series card above (one selectable row per
+  // discovered series, next dates in the accordion) as soon as the series
+  // list has loaded. Until then — and for series-less legacy queries —
+  // the flat per-event tiles below apply (saving approves selected dates
+  // and auto-subscribes their parent series).
+  if (query?.series && query.series.length > 0 && editing.series && editing.series.length > 0) {
     return renderSeriesEditCard(editing);
   }
+  const seriesNote = query?.series && query.series.length > 0 && editing.series === null
+    ? `<p class="subtext">${t('edit.seriesLoading')}</p>`
+    : '';
   const approved = editing.events.filter(e => e.status === 'approved');
   const pending = editing.events.filter(e => e.status === 'candidate');
   const selectedCount = pending.filter(e => e.decision === 'approve').length;
@@ -1014,6 +1035,7 @@ function renderEditCard(
           <label class="interval-label" for="edit-interval">${t('review.checkAgain')}</label>
           ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
         </div>
+        ${seriesNote}
         ${eventsSection}
         <div class="edit-actions">
           <button class="stamp-button" type="submit" data-action="save">${t('edit.saveAndApprove', { count: selectedCount })}</button>
@@ -1025,41 +1047,21 @@ function renderEditCard(
 }
 
 // Edit card for a series query: the search text/interval form plus one
-// read-only group per series, each headed by its subscribe toggle. Group
-// order follows the query card (subscribed first). Dates carry no decisions
-// — approving or dismissing single dates happens in the calendar.
+// selectable row per discovered series, selected first. Selecting a series
+// subscribes it (persisted on save) and searches its dates; the accordion
+// shows the next dates with checkboxes — unticking stages a dismissal that
+// Save persists alongside the subscription. Single dates can also be
+// removed later from the calendar feed itself.
 function renderSeriesEditCard(editing: EditingDraft): string {
-  const groups = new Map<string, { title: string; subscribed: boolean; events: SelectableEditEvent[] }>();
-  const legacy: SelectableEditEvent[] = [];
-  for (const event of editing.events) {
-    if (event.status === 'dismissed') continue;
-    if (!event.seriesId) {
-      legacy.push(event);
-      continue;
-    }
-    const key = event.seriesId;
-    const group = groups.get(key) ?? {
-      title: event.seriesTitle ?? event.seriesId,
-      subscribed: event.seriesStatus === 'approved',
-      events: [],
-    };
-    group.events.push(event);
-    groups.set(key, group);
-  }
-
-  const groupHtml = [...groups.entries()]
-    .map(([seriesId, group]) => {
-      const toggleLabel = `${group.title}, ${t(group.subscribed ? 'series.unsubscribe' : 'series.subscribe')}`;
-      const tiles = group.events.map(e => renderSeriesDateTile(e)).join('');
-      return `<div class="edit-series-group" data-series-id="${seriesId}">` +
-        `<button type="button" class="series-toggle" data-action="toggle-series" data-series-id="${seriesId}" aria-pressed="${group.subscribed}" aria-label="${escapeHtml(toggleLabel)}">` +
-        `<span class="series-toggle-dot" aria-hidden="true"></span>` +
-        `<span class="query-series-title">${escapeHtml(group.title)}</span>` +
-        `</button>` +
-        `<div class="tile-grid edit-tile-grid">${tiles}</div>` +
-        `</div>`;
+  const drafts = editing.series ?? [];
+  const rows = sortEditDrafts(drafts)
+    .map(draft => {
+      const seriesEvents = editing.events.filter(e => e.seriesId === draft.id);
+      const tiles = draft.selected ? seriesEvents.map(e => renderEditSeriesTile(e)).join('') : '';
+      return renderEditSeriesRow(draft, tiles, seriesEvents.length);
     })
     .join('');
+  const legacy = editing.events.filter(e => !e.seriesId);
   const legacyHtml = legacy.length > 0
     ? `<div class="edit-series-group"><div class="query-series-title">${escapeHtml(t('edit.legacyDates'))}</div>` +
       `<div class="tile-grid edit-tile-grid">${legacy.map(e => renderSeriesDateTile(e)).join('')}</div></div>`
@@ -1074,10 +1076,12 @@ function renderSeriesEditCard(editing: EditingDraft): string {
           <label class="interval-label" for="edit-interval">${t('review.checkAgain')}</label>
           ${renderIntervalSelect('editInterval', editing.recurrenceInterval)}
         </div>
-        ${groupHtml || legacyHtml
-          ? `<div class="edit-events"><label class="entry-label">${t('edit.events')}</label>${groupHtml}${legacyHtml}` +
-            `<p class="subtext">${t('edit.seriesHint')}</p></div>`
-          : `<p class="subtext">${t('edit.noEvents')}</p>`}
+        <div class="edit-events">
+          <label class="entry-label">${t('edit.series')}</label>
+          <div class="query-series" aria-label="series">${rows}</div>
+          ${legacyHtml}
+          <p class="subtext">${t('edit.seriesHint')}</p>
+        </div>
         <div class="edit-actions">
           <button class="stamp-button" type="submit" data-action="save">${t('edit.save')}</button>
           <button class="stamp-button stamp-button-quiet" type="button" data-action="cancel">${t('edit.cancel')}</button>
@@ -1085,6 +1089,29 @@ function renderSeriesEditCard(editing: EditingDraft): string {
       </form>
     </article>
   `;
+}
+
+// Checkbox tile inside a selected series' accordion. Everything counts as
+// "in the calendar" unless explicitly unticked: selected dates are approved
+// on save via the series subscribe cascade, already-approved dates stay
+// unless dismissed.
+function renderEditSeriesTile(event: SelectableEditEvent): string {
+  const dismissed = event.decision === 'dismiss';
+  const stateClass = dismissed ? 'day-tile-decision-dismiss' : event.decision === 'approve' ? 'day-tile-decision-approve' : '';
+  const decisionLabel = dismissed
+    ? t('edit.decisionDismiss')
+    : event.decision === 'approve'
+      ? t('edit.decisionApprove')
+      : event.status === 'approved' ? t('common.approved') : '';
+  return `
+    <label class="day-tile ${stateClass}" data-id="${event.id}">
+      <input type="checkbox" ${dismissed ? '' : 'checked'} />
+      <span class="day-tile-month">${monthAbbrev(event.startDate)}</span>
+      <span class="day-tile-day">${dayNumber(event.startDate)}</span>
+      <span class="day-tile-caption">${escapeHtml(formatRange(event.startDate, event.endDate))} · ${escapeHtml(event.label)}</span>
+      ${decisionLabel ? `<span class="day-tile-decision-label">${escapeHtml(decisionLabel)}</span>` : ''}
+      <a class="day-tile-source" href="${escapeHtml(event.sourceUrl)}" target="_blank" rel="noopener">${t('common.source')}</a>
+    </label>`;
 }
 
 // Read-only date tile for series groups: month/day/caption/source, no
