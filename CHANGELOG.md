@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.0](https://github.com/dachrisch/dontforget/compare/v0.27.0...v0.28.0) (2026-09-11)
+
+
+### Features
+
+* move series triage into the edit card ([1ab0b3c](https://github.com/dachrisch/dontforget/commit/1ab0b3c77cd063b8bf35a3e6c52971a3d1b5cce4))
+* move series triage into the edit card ([6617a2f](https://github.com/dachrisch/dontforget/commit/6617a2f31dc667db5d5662f462ef96dbeb2042bf))
+
 ## [0.27.0](https://github.com/dachrisch/dontforget/compare/v0.26.1...v0.27.0) (2026-09-10)
 
 
