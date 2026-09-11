@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.1](https://github.com/dachrisch/dontforget/compare/v0.28.0...v0.28.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **deps:** update dependency fastify to v5.12.4 ([#192](https://github.com/dachrisch/dontforget/issues/192)) ([cf478d2](https://github.com/dachrisch/dontforget/commit/cf478d2a50ea7ccf63ce60a9c1638c4c4f1f9dd4))
+* **deps:** update dependency nodemailer to v10.0.8 ([#193](https://github.com/dachrisch/dontforget/issues/193)) ([d245639](https://github.com/dachrisch/dontforget/commit/d245639697d056f6d7a62d7ad766e82f85a24eec))
+
 ## [0.28.0](https://github.com/dachrisch/dontforget/compare/v0.27.0...v0.28.0) (2026-09-11)
 
 
