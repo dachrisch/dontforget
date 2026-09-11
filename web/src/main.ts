@@ -9,6 +9,8 @@ import {
   listQueries,
   updateQuery,
   getQueryEvents,
+  listSeries,
+  expandSeries,
   deleteQuery,
   rotateFeedToken,
   runQuery,
@@ -186,22 +188,6 @@ async function refreshDashboard(): Promise<void> {
   }
 }
 
-// The backend flags a subscribed series as `expanding` for the duration of
-// its date lookup, which already drives the normal poll. Keep a short,
-// bounded fallback sweep too: it covers the gap before the first refresh
-// observes the flag, and deployments where the flag never arrives. Each tick
-// is skipped once the user leaves the dashboard.
-let seriesPollTimer: ReturnType<typeof setTimeout> | null = null;
-
-function scheduleSeriesPreviewPoll(remaining = 3): void {
-  if (seriesPollTimer || remaining <= 0) return;
-  seriesPollTimer = setTimeout(() => {
-    seriesPollTimer = null;
-    if (!canRefreshDashboard(state)) return;
-    refreshDashboard().finally(() => scheduleSeriesPreviewPoll(remaining - 1));
-  }, 8000);
-}
-
 function startReview(queryId: string): void {
   setState(reducer(state, { type: 'START_REVIEW', queryId }));
   // The card opens immediately; the events for it load async. Which
@@ -235,25 +221,28 @@ function paint() {
       clearError();
       startReview(queryId);
     },
-    onToggleSeries: (queryId, seriesId) => {
-      if (state.kind !== 'dashboard') return;
-      // The toggle is the action: an approved (subscribed) series row
-      // unsubscribes, anything else subscribes. Subscribing kicks off a
-      // background expansion while the card stays `ready`, so the
-      // running-card poll won't pick the new dates up — re-poll on a bounded
-      // schedule instead so the preview lands.
-      const series = state.queries.find(q => q.id === queryId)?.series?.find(s => s.id === seriesId);
-      const subscribing = series?.status !== 'approved';
+    onToggleEditSeries: (queryId, seriesId) => {
+      if (state.kind !== 'dashboard' || state.editing?.queryId !== queryId) return;
+      const wasSelected = state.editing.series?.find(s => s.id === seriesId)?.selected ?? false;
       clearError();
-      reviewSeries(queryId, subscribing ? [seriesId] : [], subscribing ? [] : [seriesId])
-        .then(() => {
-          refreshDashboard();
-          if (subscribing) scheduleSeriesPreviewPoll();
-        })
-        .catch(err => showError('error.subscribing', err));
+      setState(reducer(state, { type: 'TOGGLE_EDIT_SERIES', seriesId }));
+      // Selecting a series searches its dates right away — the accordion
+      // shows a spinner until they land. The subscription itself is only
+      // staged and persisted on save.
+      if (!wasSelected) {
+        expandSeries(queryId, seriesId)
+          .then(events => {
+            setState(reducer(state, { type: 'EDIT_SERIES_EVENTS_LOADED', queryId, seriesId, events }));
+          })
+          .catch(err => {
+            showError('error.loadingEvents', err);
+            // Clear the spinner; the accordion falls back to the preview.
+            setState(reducer(state, { type: 'EDIT_SERIES_EVENTS_LOADED', queryId, seriesId, events: [] }));
+          });
+      }
     },
-    onExpandSeries: seriesId => {
-      setState(reducer(state, { type: 'TOGGLE_SERIES_EXPAND', seriesId }));
+    onToggleEditSeriesExpand: seriesId => {
+      setState(reducer(state, { type: 'TOGGLE_EDIT_SERIES_EXPAND', seriesId }));
     },
     onToggleReviewEvent: id => {
       setState(reducer(state, { type: 'TOGGLE_REVIEW_EVENT', id }));
@@ -304,6 +293,18 @@ function paint() {
           setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events }));
         })
         .catch(err => showError('error.loadingEvents', err));
+      // Series queries additionally load their triage list; selecting a row
+      // searches its dates (see onToggleEditSeries).
+      const hasSeries =
+        state.kind === 'dashboard' &&
+        (state.queries.find(q => q.id === queryId)?.series?.length ?? 0) > 0;
+      if (hasSeries) {
+        listSeries(queryId)
+          .then(series => {
+            setState(reducer(state, { type: 'EDIT_SERIES_LOADED', queryId, series }));
+          })
+          .catch(err => showError('error.loadingSeries', err));
+      }
     },
     onToggleEditEvent: id => {
       setState(reducer(state, { type: 'TOGGLE_EDIT_EVENT', id }));
@@ -313,27 +314,46 @@ function paint() {
     },
     onSaveEdit: (queryId, patch) => {
       clearError();
-      // Series queries triage per series (toggles) and per date (calendar),
-      // so saving only persists text/interval — never per-event decisions.
-      // Legacy series-less queries keep the approve-on-save path below.
-      const hasSeries =
-        state.kind === 'dashboard' &&
-        (state.queries.find(q => q.id === queryId)?.series?.length ?? 0) > 0;
-      // Snapshot the decided candidates at save time; the edit card stays
-      // interactive while the PATCH + approve round-trips, and we reload the
-      // dashboard once both have settled so counts and feed links refresh.
-      const editingEvents =
-        state.kind === 'dashboard' && state.editing?.queryId === queryId ? state.editing.events : [];
-      const approveIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'approve').map(e => e.id);
-      const dismissIds = editingEvents.filter(e => e.status === 'candidate' && e.decision === 'dismiss').map(e => e.id);
+      // Snapshot the staged decisions at save time — the edit card stays
+      // interactive while the round-trips run, and we reload once everything
+      // has settled so counts and feed links refresh.
+      const editing =
+        state.kind === 'dashboard' && state.editing?.queryId === queryId ? state.editing : null;
+      const drafts = editing?.series ?? [];
+      const hasSeriesDrafts = drafts.length > 0;
+      // Series delta: staged selection vs last known server status.
+      // Dismissing a series cascades to its events server-side, so per-event
+      // decisions are only sent for dates of selected series.
+      const approveSeries = drafts.filter(s => s.selected && s.status !== 'approved').map(s => s.id);
+      const dismissSeries = drafts.filter(s => !s.selected && s.status === 'approved').map(s => s.id);
+      const selectedIds = new Set(drafts.filter(s => s.selected).map(s => s.id));
+      const inScope = (editing?.events ?? []).filter(e => !hasSeriesDrafts || !e.seriesId || selectedIds.has(e.seriesId));
+      const approveIds = inScope.filter(e => e.status === 'candidate' && e.decision === 'approve').map(e => e.id);
+      const dismissIds = inScope.filter(e => e.decision === 'dismiss').map(e => e.id);
       updateQuery(queryId, patch)
         .then(() => {
-          if (!hasSeries && (approveIds.length > 0 || dismissIds.length > 0)) {
+          if (hasSeriesDrafts && (approveSeries.length > 0 || dismissSeries.length > 0)) {
+            // Newly approved series expand into dates in the background via
+            // the existing per-series path; the open card picks them up on
+            // its next poll. Re-seed the drafts from the review response so
+            // staged selections settle against the server status.
+            return reviewSeries(queryId, approveSeries, dismissSeries).then(updated => {
+              setState(reducer(state, { type: 'EDIT_SERIES_LOADED', queryId, series: updated }));
+            });
+          }
+          return undefined;
+        })
+        .then(() => {
+          if (approveIds.length > 0 || dismissIds.length > 0) {
             return approveEvents(queryId, approveIds, undefined, dismissIds);
           }
           return undefined;
         })
-        .then(() => refreshDashboard())
+        .then(() => getQueryEvents(queryId))
+        .then(events => {
+          setState(reducer(state, { type: 'EDIT_EVENTS_LOADED', queryId, events }));
+          refreshDashboard();
+        })
         .catch(err => showError('error.saving', err));
     },
     onDeleteQuery: queryId => {
