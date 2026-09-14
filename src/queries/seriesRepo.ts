@@ -1,5 +1,5 @@
 import { ObjectId, type Db } from 'mongodb';
-import type { CandidateSeries, ExtractedSeries, SeriesStatus } from '../types.js';
+import type { CandidateSeries, ExtractedSeries, RecurrenceInterval, SeriesStatus } from '../types.js';
 import { MAX_SERIES, seriesIdentityKey } from '../search/opencodeClient.js';
 
 export interface SeriesRow {
@@ -16,6 +16,10 @@ export interface SeriesRow {
   source_urls: string[];
   status: SeriesStatus;
   created_at: Date;
+  // The series' own judged recurrence, learned from series-dates
+  // extractions (issue #199). Absent until an expansion reports one;
+  // sizes the date lookup window via plausibleDateWindowForSeries.
+  cadence?: RecurrenceInterval;
   // Set while a date lookup for this series is in flight, cleared when it
   // lands. `expanding_since` bounds how long a crashed run can leave the
   // dashboard's status dot pulsing (see seriesSummariesByQuery).
@@ -43,6 +47,7 @@ function toCandidateSeries(row: SeriesRow): CandidateSeries {
     searchKeywords: row.search_keywords,
     sourceUrls: row.source_urls,
     status: row.status,
+    cadence: row.cadence ?? null,
   };
 }
 

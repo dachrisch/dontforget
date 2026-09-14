@@ -59,6 +59,9 @@ export interface SeriesSummary {
   // True while the backend is searching dates for this series. Drives the
   // pulsing status dot; optional so older payloads omit it.
   expanding?: boolean;
+  // The series' own judged recurrence (issue #199), once an expansion has
+  // reported one. Optional so older payloads omit it.
+  cadence?: RecurrenceInterval | null;
 }
 
 export interface FeedSummary {

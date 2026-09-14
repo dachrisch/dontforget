@@ -366,7 +366,7 @@ function buildSeriesDatesPrompt(series: SeriesScope, results: SearchResult[]): s
     .join('\n\n');
   const identity = series.appliesTo.trim() || series.title;
   const windowLine = series.window
-    ? `Only include dates between ${series.window.from} and ${series.window.to} (the current cadence and the next). Omit any date outside that range, even if the result mentions it.`
+    ? `Only include dates between ${series.window.from} and ${series.window.to} (the current cadence and the next). Omit any date outside that range, even if the result mentions it. This range limits events only — still judge the series' own cadence below from the results as a whole.`
     : '';
   return [
     `This series applies to "${identity}"${series.title && series.title !== identity ? ` (shown as "${series.title}")` : ''}${series.description ? `: ${series.description}` : ''}.`,
@@ -374,8 +374,8 @@ function buildSeriesDatesPrompt(series: SeriesScope, results: SearchResult[]): s
     `Ignore dates belonging to any other event, fair, or town mentioned in the results, even if the wording overlaps.`,
     `Respond with only JSON, no prose: {"events":[{"label":string,"startDate":"YYYY-MM-DD","endDate":"YYYY-MM-DD","sourceUrl":string}],"cadence":"weekly"|"monthly"|"quarterly"|"yearly"|null}`,
     `If a result gives a single day, set startDate and endDate to the same date. Label each event as an occurrence of "${identity}" (e.g. its edition or season name).`,
-    `Also judge how often "${identity}" recurs as a whole: set cadence to "weekly", "monthly", "quarterly", or "yearly". If it does not recur on a predictable cadence, set "cadence":null.`,
-    `If no dates of this series are found, respond {"events":[],"cadence":null}.`,
+    `Also judge how often "${identity}" recurs as a whole from the results (e.g. an annual festival is "yearly" even when its next date falls outside the range above): set cadence to "weekly", "monthly", "quarterly", or "yearly". If it does not recur on a predictable cadence, set "cadence":null.`,
+    `If no dates of this series fall inside the range above, respond {"events":[],"cadence":<the judged cadence or null>} — never force cadence to null just because the events list is empty.`,
     ...(windowLine ? [windowLine] : []),
     '',
     resultsBlock,

@@ -179,12 +179,25 @@ export async function completeSeriesDiscoveryRun(db: Db, queryId: ObjectId): Pro
 // Events keep their query_id link and gain a series_id back-pointer.
 // Dedupe is per-series (this series' dates plus legacy rows without any
 // series), so two subscribed series sharing a calendar date both keep it.
+//
+// `cadence` is the series' own judged recurrence from the same extraction
+// (issue #199). A non-null value is persisted onto the series row even when
+// zero events were found, so the next lookup can size its window from the
+// series cadence instead of the query's check-again interval. Null leaves a
+// previously learned cadence untouched.
 export async function completeSeriesExpansion(
   db: Db,
   queryId: ObjectId,
   seriesId: ObjectId,
-  events: ExtractedEvent[]
+  events: ExtractedEvent[],
+  cadence?: RecurrenceInterval | null
 ): Promise<CandidateEvent[]> {
+  if (cadence) {
+    await db
+      .collection<SeriesRow>('series')
+      .updateOne({ _id: seriesId, query_id: queryId }, { $set: { cadence } })
+      .catch(() => undefined);
+  }
   const existing = await db
     .collection<EventRow>('events')
     .find(
@@ -405,6 +418,7 @@ async function seriesSummariesByQuery(
       eventCounts: counts,
       previewEvents: previews.get(row._id.toString()) ?? [],
       expanding,
+      cadence: row.cadence ?? null,
     });
   }
   return byQuery;

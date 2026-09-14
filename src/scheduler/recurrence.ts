@@ -46,3 +46,28 @@ export function plausibleDateWindow(interval: RecurrenceInterval, now: Date = ne
   else to.setUTCFullYear(to.getUTCFullYear() + doubled);
   return { from: isoDate(from), to: isoDate(to) };
 }
+
+// Series expansions are bounded by the LONGER of the query's check-again
+// cadence and the series' own judged cadence (issue #199). A weekly-polled
+// annual festival must still look a year+ ahead, or its date is outside the
+// window on every run and the series sits at "No dates yet" for months.
+// Before a cadence has been learned (null/undefined) we fall back to the
+// query interval alone; once learned via completeSeriesExpansion we never
+// narrow below the query interval, only widen.
+const INTERVAL_RANK: Record<RecurrenceInterval, number> = {
+  weekly: 0,
+  monthly: 1,
+  quarterly: 2,
+  yearly: 3,
+};
+
+export function plausibleDateWindowForSeries(
+  queryInterval: RecurrenceInterval,
+  seriesCadence?: RecurrenceInterval | null,
+  now: Date = new Date()
+): DateWindow {
+  if (!seriesCadence) return plausibleDateWindow(queryInterval, now);
+  const wider =
+    INTERVAL_RANK[seriesCadence] >= INTERVAL_RANK[queryInterval] ? seriesCadence : queryInterval;
+  return plausibleDateWindow(wider, now);
+}

@@ -118,6 +118,45 @@ describe('series repo', () => {
     expect(row?.query_id.toString()).toBe(_id.toString());
   });
 
+  it('persists the judged series cadence even when zero events were found (issue #199)', async () => {
+    const { _id } = await createQuery(db, userId, 'Stadtfest Minden');
+    const [series] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'annual city festival', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, _id.toString(), [series.id]);
+
+    // Annual festival outside the weekly window: no dates, but the model
+    // still judges the series cadence — that must be stored so the next
+    // lookup widens its window.
+    const inserted = await completeSeriesExpansion(db, _id, new ObjectId(series.id), [], 'yearly');
+    expect(inserted).toHaveLength(0);
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.cadence).toBe('yearly');
+
+    const listed = await listSeriesForQuery(db, userId, _id.toString());
+    expect(listed?.[0]).toMatchObject({ id: series.id, cadence: 'yearly' });
+  });
+
+  it('leaves a previously learned cadence untouched when an expansion reports null', async () => {
+    const { _id } = await createQuery(db, userId, 'Stadtfest Minden');
+    const [series] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'annual city festival', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://a.example'] },
+    ]);
+    await db.collection('series').updateOne({ _id: new ObjectId(series.id) }, { $set: { cadence: 'yearly' } });
+
+    await completeSeriesExpansion(
+      db,
+      _id,
+      new ObjectId(series.id),
+      [{ label: 'Stadtfest Minden 2026', startDate: '2026-06-12', endDate: '2026-06-14', sourceUrl: 'https://a.example' }],
+      null
+    );
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.cadence).toBe('yearly');
+  });
+
   it('lands candidate events for a non-approved series when the query is untrusted', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [series] = await insertDiscoveredSeries(db, _id, userId, [

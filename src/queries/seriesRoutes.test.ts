@@ -251,6 +251,36 @@ describe('series review routes', () => {
     expect(response.json()[0]).toMatchObject({ label: 'Oktoberfest', seriesId: series.id });
   });
 
+  it('POST expand sizes the window from the stored series cadence and persists the judged cadence (issue #199)', async () => {
+    const runSeriesExpansion = vi.fn().mockResolvedValue({
+      events: [{ label: 'Stadtfest Minden 2026', startDate: '2026-06-12', endDate: '2026-06-14', sourceUrl: 'https://c.example' }],
+      cadence: 'yearly',
+    });
+    const { app, userId, sessionId } = await authenticatedUser(db, { runSeriesExpansion });
+    // Weekly query (default) with a series already judged yearly.
+    const query = await createQuery(db, userId, 'Stadtfest Minden');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'annual city festival', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://c.example'] },
+    ]);
+    await db.collection('series').updateOne({ _id: new ObjectId(series.id) }, { $set: { cadence: 'yearly' } });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/queries/${query.queryId}/series/${series.id}/expand`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(200);
+
+    // Yearly window (≈2 years), not the weekly fortnight.
+    const scope = runSeriesExpansion.mock.calls[0][0] as { window: { from: string; to: string } };
+    const spanMs =
+      new Date(`${scope.window.to}T00:00:00Z`).getTime() - new Date(`${scope.window.from}T00:00:00Z`).getTime();
+    expect(spanMs).toBeGreaterThan(600 * 24 * 60 * 60 * 1000);
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.cadence).toBe('yearly');
+  });
+
   it('POST expand refuses a dismissed series', async () => {
     const runQuery = vi.fn();
     const { app, userId, sessionId } = await authenticatedUser(db, { runQuery });

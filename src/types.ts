@@ -64,6 +64,10 @@ export type SeriesStatus = 'candidate' | 'approved' | 'dismissed';
 export interface CandidateSeries extends ExtractedSeries {
   id: string;
   status: SeriesStatus;
+  // The series' own judged recurrence, learned from series-dates
+  // extractions (issue #199). Null/omitted before the first expansion
+  // reports one. Used to size the date lookup window.
+  cadence?: RecurrenceInterval | null;
 }
 
 // A taste of what subscribing to a series gets you: its next few dates.
@@ -88,6 +92,9 @@ export interface SeriesSummary {
   // True while a date lookup for this series is in flight. Drives the
   // pulsing status dot on the dashboard; optional so older payloads omit it.
   expanding?: boolean;
+  // The series' own judged recurrence (issue #199), once an expansion has
+  // reported one. Optional so older payloads omit it.
+  cadence?: RecurrenceInterval | null;
 }
 
 export type RecurrenceInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly';
