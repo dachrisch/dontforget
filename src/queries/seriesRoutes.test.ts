@@ -81,6 +81,7 @@ describe('series review routes', () => {
         searchKeywords: 'Oktoberfest Munich',
         sourceUrls: ['https://a.example'],
         status: 'candidate',
+        cadence: null,
       },
     ]);
   });
