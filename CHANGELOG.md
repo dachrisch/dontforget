@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.5](https://github.com/dachrisch/dontforget/compare/v0.28.4...v0.28.5) (2026-09-15)
+
+
+### Bug Fixes
+
+* size series date window from series cadence, not query cadence ([#200](https://github.com/dachrisch/dontforget/issues/200)) ([f7da369](https://github.com/dachrisch/dontforget/commit/f7da36965f528dff785a7f359fa18a0f89a8aa64))
+
 ## [0.28.4](https://github.com/dachrisch/dontforget/compare/v0.28.3...v0.28.4) (2026-09-15)
 
 
