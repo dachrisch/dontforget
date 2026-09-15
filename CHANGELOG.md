@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.6](https://github.com/dachrisch/dontforget/compare/v0.28.5...v0.28.6) (2026-09-15)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24.13.5 ([#204](https://github.com/dachrisch/dontforget/issues/204)) ([9ff5150](https://github.com/dachrisch/dontforget/commit/9ff51500661fa41de432347659a1780bf4a125c3))
+* **deps:** update dependency @types/nodemailer to v8.0.2 ([#205](https://github.com/dachrisch/dontforget/issues/205)) ([23f760c](https://github.com/dachrisch/dontforget/commit/23f760c5ded08652da2c82d38c295639d978fd73))
+
 ## [0.28.5](https://github.com/dachrisch/dontforget/compare/v0.28.4...v0.28.5) (2026-09-15)
 
 
