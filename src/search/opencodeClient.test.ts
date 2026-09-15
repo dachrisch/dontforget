@@ -458,4 +458,31 @@ describe('extractSeriesDates', () => {
     expect(promptBody.prompt.text).toMatch(/between 2026-08-01 and 2026-08-15/);
     expect(promptBody.prompt.text).toMatch(/current cadence and the next/i);
   });
+
+  it('still asks for the series cadence even when no dates fall in the window (issue #199)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_cadence'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":"yearly"}'));
+
+    const result = await extractSeriesDates(
+      'https://code.lehel.xyz',
+      'test-key',
+      {
+        title: 'Stadtfest Minden',
+        appliesTo: 'Stadtfest Minden, Minden',
+        description: "Annual city festival in Minden's city center",
+        searchKeywords: 'Stadtfest Minden Termine',
+        window: { from: '2026-08-01', to: '2026-08-15' },
+      },
+      [{ title: 'Stadtfest Minden', url: 'https://stadtfest-minden.de', content: '20th edition, held annually' }]
+    );
+
+    const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    // The window limits events only — cadence is judged from the results as
+    // a whole, even when the events list is empty.
+    expect(promptBody.prompt.text).toMatch(/still judge the series' own cadence|judge how often/i);
+    expect(promptBody.prompt.text).toMatch(/never force cadence to null just because the events list is empty/i);
+    expect(result).toEqual({ events: [], cadence: 'yearly' });
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { nextRunAt, isDue, plausibleDateWindow } from './recurrence';
+import { nextRunAt, isDue, plausibleDateWindow, plausibleDateWindowForSeries } from './recurrence';
 
 describe('nextRunAt', () => {
   it('adds 7 days for weekly', () => {
@@ -64,5 +64,30 @@ describe('plausibleDateWindow', () => {
 
   it('spans two years for yearly', () => {
     expect(plausibleDateWindow('yearly', now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+  });
+});
+
+describe('plausibleDateWindowForSeries', () => {
+  const now = new Date('2026-08-01T12:00:00Z');
+
+  it('falls back to the query interval before a series cadence is learned', () => {
+    expect(plausibleDateWindowForSeries('weekly', null, now)).toEqual({ from: '2026-08-01', to: '2026-08-15' });
+    expect(plausibleDateWindowForSeries('weekly', undefined, now)).toEqual({ from: '2026-08-01', to: '2026-08-15' });
+  });
+
+  it('widens to the series cadence when it outlasts the query interval (annual under weekly)', () => {
+    // Stadtfest Minden under "Every week": without this the window is 14
+    // days and the annual date is missed on every run (issue #199).
+    expect(plausibleDateWindowForSeries('weekly', 'yearly', now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+    expect(plausibleDateWindowForSeries('monthly', 'yearly', now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+  });
+
+  it('never narrows below the query interval when the series is more frequent', () => {
+    expect(plausibleDateWindowForSeries('yearly', 'weekly', now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+    expect(plausibleDateWindowForSeries('quarterly', 'monthly', now)).toEqual({ from: '2026-08-01', to: '2027-02-01' });
+  });
+
+  it('matches the query window when both cadences agree', () => {
+    expect(plausibleDateWindowForSeries('monthly', 'monthly', now)).toEqual(plausibleDateWindow('monthly', now));
   });
 });

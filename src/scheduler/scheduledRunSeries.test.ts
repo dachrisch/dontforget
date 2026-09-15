@@ -164,4 +164,45 @@ describe('runScheduledQuery with series', () => {
     expect(emailSender.sent).toHaveLength(1);
     expect(emailSender.sent[0].subject).toMatch(/Auer Dult, Munich/);
   });
+
+  it('sizes the lookup window from the series cadence, not the query cadence (issue #199)', async () => {
+    const { query, inserted } = await setupQueryWithSeries('events in munich');
+    await reviewSeries(db, userId, query.queryId, [inserted[1].id], [inserted[0].id]);
+    // The series was judged yearly on a previous run while the query polls weekly.
+    await db.collection('series').updateOne({ _id: new ObjectId(inserted[1].id) }, { $set: { cadence: 'yearly' } });
+
+    const runSeriesExpansion = vi.fn().mockResolvedValue({ events: [], cadence: 'yearly' });
+    const deps: ScheduledRunDeps = {
+      runQuery: vi.fn(),
+      runSeriesExpansion,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+    };
+
+    await runScheduledQuery(db, dueQueryFrom(query.queryId, 'events in munich'), deps);
+
+    expect(runSeriesExpansion).toHaveBeenCalledTimes(1);
+    const scope = runSeriesExpansion.mock.calls[0][0] as { window: { from: string; to: string } };
+    // Yearly window spans two years, not the weekly fortnight.
+    const from = new Date(`${scope.window.from}T00:00:00Z`).getTime();
+    const to = new Date(`${scope.window.to}T00:00:00Z`).getTime();
+    expect(to - from).toBeGreaterThan(600 * 24 * 60 * 60 * 1000);
+  });
+
+  it('persists the judged cadence from a scheduled expansion for the next run', async () => {
+    const { query, inserted } = await setupQueryWithSeries('events in munich');
+    await reviewSeries(db, userId, query.queryId, [inserted[1].id], [inserted[0].id]);
+
+    const deps: ScheduledRunDeps = {
+      runQuery: vi.fn(),
+      runSeriesExpansion: vi.fn().mockResolvedValue({ events: [], cadence: 'yearly' }),
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+    };
+
+    await runScheduledQuery(db, dueQueryFrom(query.queryId, 'events in munich'), deps);
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(inserted[1].id) });
+    expect(row?.cadence).toBe('yearly');
+  });
 });

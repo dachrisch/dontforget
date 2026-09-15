@@ -7,7 +7,7 @@ import { getOrCreateFeedToken } from '../feed/feedToken.js';
 import { completeSeriesExpansion } from '../queries/queriesRepo.js';
 import { setSeriesExpanding, type SeriesRow } from '../queries/seriesRepo.js';
 import type { SeriesScope } from '../search/opencodeClient.js';
-import { plausibleDateWindow } from './recurrence.js';
+import { plausibleDateWindowForSeries } from './recurrence.js';
 
 export interface ScheduledRunDeps {
   runQuery: (query: string) => Promise<ExtractionResult>;
@@ -68,7 +68,7 @@ async function runScheduledSeriesExpansion(
         appliesTo: series.applies_to ?? series.title,
         description: series.description,
         searchKeywords: series.search_keywords,
-        window: plausibleDateWindow(query.recurrence_interval),
+        window: plausibleDateWindowForSeries(query.recurrence_interval, series.cadence ?? null),
       };
       // Flag the series while its lookup runs so the dashboard dot pulses;
       // cleared in `finally` even when the expansion throws.
@@ -77,7 +77,7 @@ async function runScheduledSeriesExpansion(
         const extracted = deps.runSeriesExpansion
           ? await deps.runSeriesExpansion(scope)
           : await deps.runQuery(series.search_keywords);
-        const inserted = await completeSeriesExpansion(db, query._id, series._id, extracted.events);
+        const inserted = await completeSeriesExpansion(db, query._id, series._id, extracted.events, extracted.cadence);
         if (inserted.length > 0) {
           totalNew += inserted.length;
           expandedNames.push(series.applies_to ?? series.title);

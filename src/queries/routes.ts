@@ -23,7 +23,7 @@ import {
   type SeriesExtractionResult,
 } from '../types.js';
 import type { SeriesScope } from '../search/opencodeClient.js';
-import { plausibleDateWindow } from '../scheduler/recurrence.js';
+import { plausibleDateWindowForSeries } from '../scheduler/recurrence.js';
 
 export interface QueryRouteDeps {
   db: Db;
@@ -40,11 +40,12 @@ export interface QueryRouteDeps {
 // Expands one series into dates that are occurrences of what the series
 // applies to. Prefers the series-scoped path; older callers without it fall
 // back to the generic query path on the series' keywords. The lookup is
-// bounded to the query's current cadence period and the next, so the model
-// cannot return stale or speculative dates.
+// bounded to the longer of the query's check-again cadence and the series'
+// own judged cadence (issue #199), so an annual festival under a weekly
+// query still looks a year+ ahead instead of a fortnight.
 async function expandSeries(
   deps: QueryRouteDeps,
-  series: { title: string; appliesTo: string; description: string; searchKeywords: string },
+  series: { title: string; appliesTo: string; description: string; searchKeywords: string; cadence?: RecurrenceInterval | null },
   recurrenceInterval: RecurrenceInterval
 ): Promise<ExtractionResult> {
   if (deps.runSeriesExpansion) {
@@ -53,7 +54,7 @@ async function expandSeries(
       appliesTo: series.appliesTo,
       description: series.description,
       searchKeywords: series.searchKeywords,
-      window: plausibleDateWindow(recurrenceInterval),
+      window: plausibleDateWindowForSeries(recurrenceInterval, series.cadence ?? null),
     };
     return deps.runSeriesExpansion(scope);
   }
@@ -266,7 +267,7 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       enqueueSearch(async () => {
         try {
           const extracted = await expandSeries(deps, series, recurrenceInterval);
-          await completeSeriesExpansion(deps.db, queryObjectId, seriesObjectId, extracted.events);
+          await completeSeriesExpansion(deps.db, queryObjectId, seriesObjectId, extracted.events, extracted.cadence);
         } catch (err) {
           console.error(`Series expansion failed for series ${series.id}:`, err);
         } finally {
@@ -302,8 +303,9 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
           appliesTo: series.applies_to ?? series.title,
           description: series.description,
           searchKeywords: series.search_keywords,
+          cadence: series.cadence ?? null,
         }, recurrenceInterval);
-        const inserted = await completeSeriesExpansion(deps.db, queryObjectId, series._id, extracted.events);
+        const inserted = await completeSeriesExpansion(deps.db, queryObjectId, series._id, extracted.events, extracted.cadence);
         return reply.send(inserted);
       } catch (err) {
         console.error(`Series expansion failed for series ${series._id.toString()}:`, err);
