@@ -274,7 +274,18 @@ export const MAX_SERIES = 12;
 // falling back to `title` for older replies/fixtures that predate it.
 export function seriesIdentityKey(entry: { title: string; appliesTo?: string }): string {
   const raw = entry.appliesTo?.trim() || entry.title;
-  return raw.toLowerCase().replace(/\s+/g, ' ').trim();
+  // Parenthetical qualifiers drift between discovery runs of the same
+  // entity ("Stadtfest Minden, Minden" vs "Stadtfest Minden, Minden
+  // (Westfalen)"), so they are dropped before normalizing — otherwise a
+  // re-discovery wording change nails a fresh twin row onto an existing
+  // one. Region qualifiers also belong to the entity's parentheses, not
+  // its place suffix, so stripping them keeps identities stable while the
+  // unambiguous base name still distinguishes real variants.
+  return raw
+    .replace(/\s*\([^)]*\)/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function buildSeriesPrompt(query: string, results: SearchResult[]): string {
@@ -287,6 +298,7 @@ function buildSeriesPrompt(query: string, results: SearchResult[]): string {
     `Work in two steps per series. Step 1: find out what the series applies to — the canonical recurring entity with its place (e.g. "Auer Dult" in Munich, "Stadtfest Minden" in Minden). Step 2: only then give the search keywords and sources for dates in THIS series.`,
     `Respond with only JSON, no prose: {"series":[{"title":string,"appliesTo":string,"description":string,"searchKeywords":string,"sourceUrls":string[]}]}`,
     `Rules: at most ${MAX_SERIES} series, most prominent first; title is the series display name; appliesTo is the canonical recurring entity it applies to, including place (e.g. "Auer Dult, Munich"); description is one line saying what recurs where; searchKeywords is a focused searxng query that would find dates of exactly this entity (include place/theme, e.g. "Auer Dult Munich Termine"); sourceUrls lists 1-2 URLs from the results above that mention this entity.`,
+    `appliesTo must be canonical and stable across runs: the same recurring entity always gets the exact same string. Use one consistent entity name plus place, and drop variant qualifiers that only one source adds (e.g. write "Stadtfest Minden, Minden", never "Stadtfest Minden, Minden (Westfalen)") — two runs of the same query must produce identical appliesTo values, because that string is the identity the series is stored and deduped on.`,
     `If the query already resolves to one series (e.g. "Auer Dult Munich"), return exactly 1 series for it, with appliesTo naming that entity.`,
     `If nothing is found, respond {"series":[]}.`,
     '',

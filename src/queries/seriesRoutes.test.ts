@@ -325,7 +325,16 @@ describe('series review routes', () => {
       headers: authHeaders(sessionId),
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json().map((s: { title: string }) => s.title)).toEqual(['New Series']);
+    // The dismissed row merges in place (no twin) and comes back as an
+    // updated row; only the genuinely new title is inserted.
+    expect(response.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ title: 'Oktoberfest', status: 'dismissed' }),
+        expect.objectContaining({ title: 'New Series', status: 'candidate' }),
+      ])
+    );
+    expect(response.json()).toHaveLength(2);
+    expect(await db.collection('series').countDocuments({ query_id: new ObjectId(query.queryId) })).toBe(2);
     expect(discoverSeries).toHaveBeenCalledTimes(1);
   });
 });

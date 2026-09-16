@@ -56,11 +56,17 @@ function toObjectId(id: string): ObjectId | null {
 }
 
 // Inserts newly discovered series as `candidate` rows. Dedupe is by
-// normalized title against ALL existing rows for the query — including
-// `dismissed` ones, so a dismissed series is never re-created on re-run.
-// Returns the newly inserted series in discovery order. Deterministically
-// capped at MAX_SERIES (first N win) as a second line of defense behind the
-// orchestrator/LLM cap.
+// normalized identity against ALL existing rows for the query — including
+// `dismissed` ones: a dismissed series is never re-created on re-run, and
+// repeated discoveries of the same entity collapse to one row.
+//
+// A re-discovery that matches an existing row updates that row in place
+// (description, keywords, source URLs drift between runs) and keeps its
+// title, status, and cadence — the discovery wording must never spawn a
+// twin of an already-stored series.
+// Returns all stored (existing-merged and newly inserted) touched series in
+// discovery order. Deterministically capped at MAX_SERIES (first N win) as
+// a second line of defense behind the orchestrator/LLM cap.
 export async function insertDiscoveredSeries(
   db: Db,
   queryId: ObjectId,
@@ -69,21 +75,25 @@ export async function insertDiscoveredSeries(
 ): Promise<CandidateSeries[]> {
   const existing = await db
     .collection<SeriesRow>('series')
-    .find({ query_id: queryId }, { projection: { normalized_title: 1, applies_to: 1, title: 1 } })
+    .find({ query_id: queryId })
     .toArray();
   // Index both the stored normalized key and the identity recomputed from
   // applies_to: pre-009 rows normalized their bare title, while new
   // discoveries key on what the series applies to ("Auer Dult" vs
   // "Auer Dult, Munich" must still collide).
-  const seen = new Set<string>();
+  const byKey = new Map<string, SeriesRow>();
   for (const row of existing) {
-    if (row.normalized_title) seen.add(row.normalized_title);
+    if (row.normalized_title) byKey.set(row.normalized_title, row);
     const identity = seriesIdentityKey({ title: row.title, appliesTo: row.applies_to });
-    if (identity) seen.add(identity);
+    if (identity) byKey.set(identity, row);
   }
 
   const now = new Date();
-  const docs: SeriesRow[] = [];
+  const newDocs: SeriesRow[] = [];
+  const pending = new WeakSet<SeriesRow>();
+  // In discovery order: updated rows first (their position in `series`
+  // decides), then inserts — the dashboard refreshes on this order.
+  const touched: CandidateSeries[] = [];
   for (const entry of series) {
     const title = entry.title.trim();
     const appliesTo = (entry.appliesTo ?? '').trim() || title;
@@ -91,9 +101,38 @@ export async function insertDiscoveredSeries(
     const sourceUrls = entry.sourceUrls.map(u => u.trim()).filter(u => u.length > 0);
     if (!title || !appliesTo || !searchKeywords || sourceUrls.length === 0) continue;
     const key = seriesIdentityOf({ title, appliesTo });
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    docs.push({
+    if (!key) continue;
+    const match = byKey.get(key);
+    if (match) {
+      // Re-discovery of a known entity. One already queued for insert in
+      // this same batch is just a duplicate within the reply — it skips
+      // silently (it is inserted exactly once and returned exactly once,
+      // carrying the first occurrence's fields).
+      if (pending.has(match)) continue;
+      // A stored row is refreshed in place — volatile fields only; the
+      // user's title, status, and a learned cadence are kept.
+      await db
+        .collection<SeriesRow>('series')
+        .updateOne(
+          { _id: match._id },
+          {
+            $set: {
+              description: entry.description.trim(),
+              search_keywords: searchKeywords,
+              source_urls: sourceUrls,
+              normalized_title: key,
+            },
+          }
+        );
+      match.description = entry.description.trim();
+      match.search_keywords = searchKeywords;
+      match.source_urls = sourceUrls;
+      match.normalized_title = key;
+      touched.push(toCandidateSeries(match));
+      continue;
+    }
+    if (newDocs.length >= MAX_SERIES) break;
+    const doc: SeriesRow = {
       _id: new ObjectId(),
       query_id: queryId,
       user_id: userId,
@@ -105,13 +144,17 @@ export async function insertDiscoveredSeries(
       source_urls: sourceUrls,
       status: 'candidate',
       created_at: now,
-    });
-    if (docs.length >= MAX_SERIES) break;
+    };
+    byKey.set(key, doc);
+    pending.add(doc);
+    newDocs.push(doc);
   }
 
-  if (docs.length === 0) return [];
-  await db.collection('series').insertMany(docs);
-  return docs.map(toCandidateSeries);
+  if (newDocs.length > 0) {
+    await db.collection('series').insertMany(newDocs);
+    for (const doc of newDocs) touched.push(toCandidateSeries(doc));
+  }
+  return touched;
 }
 
 export async function listSeriesForQuery(
