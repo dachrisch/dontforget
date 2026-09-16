@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.28.9](https://github.com/dachrisch/dontforget/compare/v0.28.8...v0.28.9) (2026-09-16)
+
+
+### Bug Fixes
+
+* collapse within-batch duplicate series before first insert lands ([e984fbc](https://github.com/dachrisch/dontforget/commit/e984fbc3c41d986dc428171d89354bc307dca349))
+* merge re-discovered series twins by canonical identity ([a8e0fdc](https://github.com/dachrisch/dontforget/commit/a8e0fdcbda5c9d808c4930d7d12775236af36bc7))
+* merge re-discovered series twins by canonical identity ([c2071b2](https://github.com/dachrisch/dontforget/commit/c2071b2b2346ac2f55fdc9dda9814dbe6f4b8166))
+
 ## [0.28.8](https://github.com/dachrisch/dontforget/compare/v0.28.7...v0.28.8) (2026-09-16)
 
 
