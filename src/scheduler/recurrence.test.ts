@@ -70,9 +70,14 @@ describe('plausibleDateWindow', () => {
 describe('plausibleDateWindowForSeries', () => {
   const now = new Date('2026-08-01T12:00:00Z');
 
-  it('falls back to the query interval before a series cadence is learned', () => {
-    expect(plausibleDateWindowForSeries('weekly', null, now)).toEqual({ from: '2026-08-01', to: '2026-08-15' });
-    expect(plausibleDateWindowForSeries('weekly', undefined, now)).toEqual({ from: '2026-08-01', to: '2026-08-15' });
+  it('defaults to the widest window before a series cadence is learned (issue #209)', () => {
+    // Stadtfest Minden under "Every week" with cadence not yet learned: a
+    // narrow query-interval fallback (14 days) omits the real annual date
+    // on every run and the empty run never learns the cadence either — a
+    // stuck loop. Unknown cadences look two years ahead instead.
+    expect(plausibleDateWindowForSeries('weekly', null, now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+    expect(plausibleDateWindowForSeries('weekly', undefined, now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
+    expect(plausibleDateWindowForSeries('monthly', null, now)).toEqual({ from: '2026-08-01', to: '2028-08-01' });
   });
 
   it('widens to the series cadence when it outlasts the query interval (annual under weekly)', () => {

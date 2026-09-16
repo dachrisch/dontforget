@@ -51,9 +51,17 @@ export function plausibleDateWindow(interval: RecurrenceInterval, now: Date = ne
 // cadence and the series' own judged cadence (issue #199). A weekly-polled
 // annual festival must still look a year+ ahead, or its date is outside the
 // window on every run and the series sits at "No dates yet" for months.
-// Before a cadence has been learned (null/undefined) we fall back to the
-// query interval alone; once learned via completeSeriesExpansion we never
-// narrow below the query interval, only widen.
+//
+// Before a cadence has been learned (null/undefined) we default to the
+// WIDEST window (yearly, issue #209) — not the query interval. The narrow
+// fallback created a stuck loop: with a 14-day window the prompt instructs
+// the model to omit the real (e.g. annual) date and the orchestrator drops
+// it again via filterByWindow, so the run yields events:[] — and an empty
+// run typically also yields cadence:null (zero searxng hits skip the LLM
+// entirely), which leaves the cadence unlearned and the window narrow on
+// the next run too. An unknown cadence must not narrow the lookup; once the
+// first wide run judges and persists a cadence via completeSeriesExpansion,
+// later runs size down to the longer of the two known cadences.
 const INTERVAL_RANK: Record<RecurrenceInterval, number> = {
   weekly: 0,
   monthly: 1,
@@ -66,7 +74,7 @@ export function plausibleDateWindowForSeries(
   seriesCadence?: RecurrenceInterval | null,
   now: Date = new Date()
 ): DateWindow {
-  if (!seriesCadence) return plausibleDateWindow(queryInterval, now);
+  if (!seriesCadence) return plausibleDateWindow('yearly', now);
   const wider =
     INTERVAL_RANK[seriesCadence] >= INTERVAL_RANK[queryInterval] ? seriesCadence : queryInterval;
   return plausibleDateWindow(wider, now);

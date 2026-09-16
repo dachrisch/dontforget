@@ -78,10 +78,27 @@ async function runScheduledSeriesExpansion(
           ? await deps.runSeriesExpansion(scope)
           : await deps.runQuery(series.search_keywords);
         const inserted = await completeSeriesExpansion(db, query._id, series._id, extracted.events, extracted.cadence);
+        // Observability (issue #209): a settled "No dates yet" series is
+        // otherwise indistinguishable from a silently failing run. Log the
+        // window and outcome per series so scheduler logs show what the
+        // last expansion actually searched and found.
+        const window = scope.window;
+        console.log(
+          `Series expansion for query ${query._id.toString()} series ${series._id.toString()} ` +
+            `(${scope.appliesTo}) window ${window ? `${window.from}..${window.to}` : 'unbounded'}: ` +
+            `${extracted.events.length} extracted, ${inserted.length} new, cadence ${extracted.cadence ?? 'null'}`
+        );
         if (inserted.length > 0) {
           totalNew += inserted.length;
           expandedNames.push(series.applies_to ?? series.title);
         }
+      } catch (err) {
+        console.error(
+          `Series expansion failed for query ${query._id.toString()} series ${series._id.toString()} ` +
+            `(${series.applies_to ?? series.title}):`,
+          err
+        );
+        throw err;
       } finally {
         await setSeriesExpanding(db, query._id, [series._id], false).catch(() => undefined);
       }
