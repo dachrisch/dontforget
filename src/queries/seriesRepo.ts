@@ -90,6 +90,7 @@ export async function insertDiscoveredSeries(
 
   const now = new Date();
   const newDocs: SeriesRow[] = [];
+  const pending = new WeakSet<SeriesRow>();
   // In discovery order: updated rows first (their position in `series`
   // decides), then inserts — the dashboard refreshes on this order.
   const touched: CandidateSeries[] = [];
@@ -103,8 +104,13 @@ export async function insertDiscoveredSeries(
     if (!key) continue;
     const match = byKey.get(key);
     if (match) {
-      // Re-discovery of a known entity: refresh the volatile fields in
-      // place, keep everything the user (or a learned cadence) owns.
+      // Re-discovery of a known entity. One already queued for insert in
+      // this same batch is just a duplicate within the reply — it skips
+      // silently (it is inserted exactly once and returned exactly once,
+      // carrying the first occurrence's fields).
+      if (pending.has(match)) continue;
+      // A stored row is refreshed in place — volatile fields only; the
+      // user's title, status, and a learned cadence are kept.
       await db
         .collection<SeriesRow>('series')
         .updateOne(
@@ -140,6 +146,7 @@ export async function insertDiscoveredSeries(
       created_at: now,
     };
     byKey.set(key, doc);
+    pending.add(doc);
     newDocs.push(doc);
   }
 

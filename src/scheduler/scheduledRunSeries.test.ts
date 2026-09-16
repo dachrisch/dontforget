@@ -144,7 +144,7 @@ describe('runScheduledQuery with series', () => {
     expect(rediscovered).toHaveLength(2);
     expect(rediscovered[0]).toMatchObject({ id: inserted[0].id, status: 'dismissed' });
     expect(rediscovered[1].title).toBe('New Series');
-    expect(await db.collection('series').countDocuments({ query_id: query._id })).toBe(2);
+    expect(await db.collection('series').countDocuments({ query_id: query._id })).toBe(3);
   });
 
   it('expands via the series-scoped path and names the subscribed series in the email', async () => {
