@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.8](https://github.com/dachrisch/dontforget/compare/v0.28.7...v0.28.8) (2026-09-16)
+
+
+### Bug Fixes
+
+* default series date window to yearly while cadence is unlearned ([c94b9b1](https://github.com/dachrisch/dontforget/commit/c94b9b1de5d5682512f9fde90a8a6ddb0e394c17))
+* default series date window to yearly while cadence is unlearned ([e7293ac](https://github.com/dachrisch/dontforget/commit/e7293ac4074d26e1ae028ba0ee0d7725c96c8a6f))
+
 ## [0.28.7](https://github.com/dachrisch/dontforget/compare/v0.28.6...v0.28.7) (2026-09-16)
 
 
