@@ -130,7 +130,7 @@ describe('runScheduledQuery with series', () => {
     expect(row?.status).toBe('ready');
   });
 
-  it('does not re-create a dismissed series title on refresh-style re-discovery', async () => {
+  it('merges a refresh-style re-discovery of a dismissed series in place', async () => {
     const { query, inserted } = await setupQueryWithSeries('events in munich');
     await reviewSeries(db, userId, query.queryId, [], [inserted[0].id]);
 
@@ -139,7 +139,12 @@ describe('runScheduledQuery with series', () => {
       { title: 'New Series', appliesTo: 'New Series, Munich', description: 'd', searchKeywords: 'New Series Munich', sourceUrls: ['https://c.example'] },
     ]);
 
-    expect(rediscovered.map(s => s.title)).toEqual(['New Series']);
+    // Dismissed row updated in place (still dismissed), no twin created;
+    // only the genuinely new discovery is inserted.
+    expect(rediscovered).toHaveLength(2);
+    expect(rediscovered[0]).toMatchObject({ id: inserted[0].id, status: 'dismissed' });
+    expect(rediscovered[1].title).toBe('New Series');
+    expect(await db.collection('series').countDocuments({ query_id: query._id })).toBe(2);
   });
 
   it('expands via the series-scoped path and names the subscribed series in the email', async () => {

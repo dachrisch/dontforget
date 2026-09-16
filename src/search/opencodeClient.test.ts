@@ -14,7 +14,13 @@ vi.mock('undici', async importOriginal => {
   return { ...actual, fetch: fetchMock };
 });
 
-import { extractDates, extractSeries, extractSeriesDates, MAX_SERIES } from './opencodeClient.js';
+import {
+  extractDates,
+  extractSeries,
+  extractSeriesDates,
+  MAX_SERIES,
+  seriesIdentityKey,
+} from './opencodeClient.js';
 
 afterEach(() => {
   fetchMock.mockReset();
@@ -292,6 +298,28 @@ describe('extractDates', () => {
   });
 });
 
+describe('seriesIdentityKey', () => {
+  it('collapses parenthetical variant qualifiers so discovery drift merges twins', () => {
+    expect(
+      seriesIdentityKey({ title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden (Westfalen)' })
+    ).toBe(seriesIdentityKey({ title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden' }));
+  });
+
+  it('normalizes case and whitespace for the fallback title key', () => {
+    expect(seriesIdentityKey({ title: '  Oktoberfest   Munich ' })).toBe('oktoberfest munich');
+  });
+
+  it('keeps distinct entities distinct', () => {
+    expect(
+      seriesIdentityKey({ title: 'X', appliesTo: 'Auer Dult, Munich' })
+    ).not.toBe(seriesIdentityKey({ title: 'X', appliesTo: 'Oktoberfest, Munich' }));
+  });
+
+  it('collapses a parenthesized place into the base entity', () => {
+    expect(seriesIdentityKey({ title: 'Stadtfest (Minden)' })).toBe('stadtfest');
+  });
+});
+
 describe('extractSeries', () => {
   it('sends a series-grouping prompt that first resolves what each series applies to', async () => {
     fetchMock
@@ -310,6 +338,8 @@ describe('extractSeries', () => {
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(promptBody.prompt.text).toMatch(/applies to/i);
     expect(promptBody.prompt.text).toMatch(/appliesTo/);
+    expect(promptBody.prompt.text).toMatch(/canonical and stable across runs/);
+    expect(promptBody.prompt.text).toMatch(/identical appliesTo values/);
     expect(promptBody.prompt.text).toMatch(/searchKeywords/);
     expect(result).toEqual({
       series: [

@@ -62,7 +62,7 @@ describe('series repo', () => {
     expect(inserted.map(s => s.title)).toEqual(['Oktoberfest']);
   });
 
-  it('never re-creates a dismissed series on re-discovery', async () => {
+  it('merges a re-discovered dismissed series in place instead of re-creating it', async () => {
     const { _id } = await createQuery(db, userId, 'events in munich');
     const [first] = await insertDiscoveredSeries(db, _id, userId, [
       { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
@@ -70,13 +70,51 @@ describe('series repo', () => {
     await reviewSeries(db, userId, _id.toString(), [], [first.id]);
 
     const second = await insertDiscoveredSeries(db, _id, userId, [
-      { title: 'OKTOBERFEST', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich', sourceUrls: ['https://a.example'] },
-      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://b.example'] },
+      { title: 'OKTOBERFEST', appliesTo: 'Oktoberfest, Munich', description: 'updated', searchKeywords: 'Oktoberfest Munich 2027', sourceUrls: ['https://b.example'] },
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich', sourceUrls: ['https://c.example'] },
     ]);
 
-    expect(second.map(s => s.title)).toEqual(['Auer Dult']);
+    // The dismissed row is merged in place — no twin, no re-creation — and
+    // is returned as an updated row alongside the genuine new discovery.
+    expect(second).toHaveLength(2);
+    expect(second[0]).toMatchObject({ id: first.id, status: 'dismissed', description: 'updated', searchKeywords: 'Oktoberfest Munich 2027' });
+    expect(second[1].title).toBe('Auer Dult');
     const rows = await db.collection('series').find({ query_id: _id }).toArray();
     expect(rows).toHaveLength(2);
+  });
+
+  it('normalizes parenthetical qualifiers so identity drift never spawns twins', async () => {
+    const { _id } = await createQuery(db, userId, 'Stadtfest Minden');
+    const [first] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden (Westfalen)', description: 'd', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://a.example'] },
+    ]);
+    await reviewSeries(db, userId, _id.toString(), [first.id]);
+
+    const rediscovered = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'refreshed', searchKeywords: 'Stadtfest Minden 2027 Termine', sourceUrls: ['https://b.example'] },
+    ]);
+
+    expect(rediscovered).toHaveLength(1);
+    expect(rediscovered[0]).toMatchObject({ id: first.id, status: 'approved', description: 'refreshed' });
+    const rows = await db.collection('series').find({ query_id: _id }).toArray();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].status).toBe('approved');
+  });
+
+  it('keeps a learned cadence and title when merging a re-discovered series', async () => {
+    const { _id } = await createQuery(db, userId, 'Stadtfest Minden');
+    const [first] = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Stadtfest Minden', appliesTo: 'Stadtfest Minden, Minden', description: 'd', searchKeywords: 'Stadtfest Minden Termine', sourceUrls: ['https://a.example'] },
+    ]);
+    await db.collection('series').updateOne({ _id: new ObjectId(first.id) }, { $set: { cadence: 'yearly' } });
+
+    const rediscovered = await insertDiscoveredSeries(db, _id, userId, [
+      { title: 'Mindener Stadtfest', appliesTo: 'Stadtfest Minden, Minden (Westfalen)', description: 'refreshed', searchKeywords: 'Stadtfest Minden 2027 Termine', sourceUrls: ['https://b.example'] },
+    ]);
+
+    const row = await db.collection('series').findOne({ _id: new ObjectId(first.id) });
+    expect(row).toMatchObject({ status: 'candidate', cadence: 'yearly', description: 'refreshed' });
+    expect(rediscovered[0]).toMatchObject({ id: first.id, cadence: 'yearly' });
   });
 
   it('reviews series with dismiss winning on overlap, scoped to the owner', async () => {
