@@ -189,6 +189,39 @@ describe('runScheduledQuery with series', () => {
     expect(to - from).toBeGreaterThan(600 * 24 * 60 * 60 * 1000);
   });
 
+  it('uses a wide window for a series whose cadence was never learned (issue #209)', async () => {
+    // Stadtfest Minden state: subscribed annual series under a weekly
+    // query, cadence still null (row predates #200 or no run ever judged
+    // one). The next scheduled run must look years ahead — not a fortnight
+    // — so the published date falls inside the window, and the judged
+    // cadence is persisted for the run after that.
+    const { query, inserted } = await setupQueryWithSeries('events in munich');
+    await reviewSeries(db, userId, query.queryId, [inserted[1].id], [inserted[0].id]);
+
+    const runSeriesExpansion = vi.fn().mockResolvedValue({ events: [], cadence: 'yearly' });
+    const deps: ScheduledRunDeps = {
+      runQuery: vi.fn(),
+      runSeriesExpansion,
+      emailSender: new CapturingEmailSender(),
+      publicBaseUrl: 'http://localhost:3000',
+    };
+
+    await runScheduledQuery(db, dueQueryFrom(query.queryId, 'events in munich'), deps);
+
+    expect(runSeriesExpansion).toHaveBeenCalledTimes(1);
+    const scope = runSeriesExpansion.mock.calls[0][0] as { window: { from: string; to: string } };
+    // Wide (yearly) window despite the weekly query and null series
+    // cadence — spans two years, not the weekly fortnight.
+    const from = new Date(`${scope.window.from}T00:00:00Z`).getTime();
+    const to = new Date(`${scope.window.to}T00:00:00Z`).getTime();
+    expect(to - from).toBeGreaterThan(600 * 24 * 60 * 60 * 1000);
+
+    // The empty run still learned the cadence, so the following run sizes
+    // its window from the stored series cadence.
+    const row = await db.collection('series').findOne({ _id: new ObjectId(inserted[1].id) });
+    expect(row?.cadence).toBe('yearly');
+  });
+
   it('persists the judged cadence from a scheduled expansion for the next run', async () => {
     const { query, inserted } = await setupQueryWithSeries('events in munich');
     await reviewSeries(db, userId, query.queryId, [inserted[1].id], [inserted[0].id]);
