@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.18](https://github.com/dachrisch/dontforget/compare/v0.28.17...v0.28.18) (2026-09-25)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v5.0.2 ([#231](https://github.com/dachrisch/dontforget/issues/231)) ([e2bec04](https://github.com/dachrisch/dontforget/commit/e2bec04c7157759073026f0af01c10d8bed3da6d))
+
 ## [0.28.17](https://github.com/dachrisch/dontforget/compare/v0.28.16...v0.28.17) (2026-09-24)
 
 
