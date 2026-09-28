@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.22](https://github.com/dachrisch/dontforget/compare/v0.28.21...v0.28.22) (2026-09-28)
+
+
+### Bug Fixes
+
+* **deps:** update dependency mongodb to v7.7.0 ([#240](https://github.com/dachrisch/dontforget/issues/240)) ([879ed46](https://github.com/dachrisch/dontforget/commit/879ed461deeae11bfd4468bb9767be2a5c8cfe2a))
+* **deps:** update dependency nodemailer to v10.0.12 ([#239](https://github.com/dachrisch/dontforget/issues/239)) ([d50ec50](https://github.com/dachrisch/dontforget/commit/d50ec502ca6c4268006ec622d2bf036d3d5c5b05))
+
 ## [0.28.21](https://github.com/dachrisch/dontforget/compare/v0.28.20...v0.28.21) (2026-09-27)
 
 
