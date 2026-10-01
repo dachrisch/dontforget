@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.25](https://github.com/dachrisch/dontforget/compare/v0.28.24...v0.28.25) (2026-10-01)
+
+
+### Bug Fixes
+
+* **deps:** update dependency ics to v3.12.1 ([#247](https://github.com/dachrisch/dontforget/issues/247)) ([2f7c144](https://github.com/dachrisch/dontforget/commit/2f7c144f0dbd5dd82551e5b21e046d271ed5b398))
+* **deps:** update dependency vite to v8.3.2 ([#248](https://github.com/dachrisch/dontforget/issues/248)) ([4ba9e6c](https://github.com/dachrisch/dontforget/commit/4ba9e6c3f22bd3bcc447b2fb414dfcdf544d8117))
+
 ## [0.28.24](https://github.com/dachrisch/dontforget/compare/v0.28.23...v0.28.24) (2026-10-01)
 
 
