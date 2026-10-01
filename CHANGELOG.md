@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.24](https://github.com/dachrisch/dontforget/compare/v0.28.23...v0.28.24) (2026-10-01)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vitest to v5.0.3 ([#244](https://github.com/dachrisch/dontforget/issues/244)) ([6833ff4](https://github.com/dachrisch/dontforget/commit/6833ff461124fee4b7a17d07efdd4b6207f54e74))
+* **deps:** update mongo docker tag to v9 ([#245](https://github.com/dachrisch/dontforget/issues/245)) ([c746ed0](https://github.com/dachrisch/dontforget/commit/c746ed0f588944875be4204f9d6cf89d10af2ff1))
+
 ## [0.28.23](https://github.com/dachrisch/dontforget/compare/v0.28.22...v0.28.23) (2026-09-30)
 
 
