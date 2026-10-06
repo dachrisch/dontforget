@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.30](https://github.com/dachrisch/dontforget/compare/v0.28.29...v0.28.30) (2026-10-06)
+
+
+### Bug Fixes
+
+* **deps:** update dependency vite to v8.3.3 ([#258](https://github.com/dachrisch/dontforget/issues/258)) ([03066d9](https://github.com/dachrisch/dontforget/commit/03066d9bf20424e0dbd83174ae3d9ed1f2b7c7d6))
+
 ## [0.28.29](https://github.com/dachrisch/dontforget/compare/v0.28.28...v0.28.29) (2026-10-05)
 
 
