@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.32](https://github.com/dachrisch/dontforget/compare/v0.28.31...v0.28.32) (2026-10-08)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/cookie to v11.1.3 ([#262](https://github.com/dachrisch/dontforget/issues/262)) ([d9df6e1](https://github.com/dachrisch/dontforget/commit/d9df6e1966b1ad803c29e6902776ae94580935bf))
+* **deps:** update dependency @fastify/rate-limit to v11.2.1 ([#263](https://github.com/dachrisch/dontforget/issues/263)) ([9881508](https://github.com/dachrisch/dontforget/commit/988150842c91ab9b3a58916b3de6b7709a24f133))
+
 ## [0.28.31](https://github.com/dachrisch/dontforget/compare/v0.28.30...v0.28.31) (2026-10-07)
 
 
