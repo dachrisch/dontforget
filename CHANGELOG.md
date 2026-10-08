@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.34](https://github.com/dachrisch/dontforget/compare/v0.28.33...v0.28.34) (2026-10-08)
+
+
+### Miscellaneous Chores
+
+* release 0.28.34 after Docker Hub token rotation ([08e90e8](https://github.com/dachrisch/dontforget/commit/08e90e8911673cbf25422a8948a38abfd5cbf373))
+
 ## [0.28.33](https://github.com/dachrisch/dontforget/compare/v0.28.32...v0.28.33) (2026-10-08)
 
 
