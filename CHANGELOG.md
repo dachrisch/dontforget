@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.36](https://github.com/dachrisch/dontforget/compare/v0.28.35...v0.28.36) (2026-10-09)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @types/node to v24.19.2 ([#271](https://github.com/dachrisch/dontforget/issues/271)) ([3737ce5](https://github.com/dachrisch/dontforget/commit/3737ce5615662755b8fbdf9a448b075f54763bf0))
+
 ## [0.28.35](https://github.com/dachrisch/dontforget/compare/v0.28.34...v0.28.35) (2026-10-09)
 
 
