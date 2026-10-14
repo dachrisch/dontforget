@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.40](https://github.com/dachrisch/dontforget/compare/v0.28.39...v0.28.40) (2026-10-14)
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v10.1.1 ([#279](https://github.com/dachrisch/dontforget/issues/279)) ([27687a9](https://github.com/dachrisch/dontforget/commit/27687a9f66c80c84730ff1ec83b6f043b79cc7a4))
+* **deps:** update dependency undici to v8.12.1 ([#280](https://github.com/dachrisch/dontforget/issues/280)) ([f964a73](https://github.com/dachrisch/dontforget/commit/f964a730a355ab2bda57d3c44c4253805979dbe7))
+
 ## [0.28.39](https://github.com/dachrisch/dontforget/compare/v0.28.38...v0.28.39) (2026-10-13)
 
 
