@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.43](https://github.com/dachrisch/dontforget/compare/v0.28.42...v0.28.43) (2026-10-15)
+
+
+### Bug Fixes
+
+* **deps:** update dependency undici to v8.12.2 ([#285](https://github.com/dachrisch/dontforget/issues/285)) ([c0a8ce0](https://github.com/dachrisch/dontforget/commit/c0a8ce087b73354fe0dac97434888cb20ae9f9ce))
+* **deps:** update dependency vitest to v5.0.5 ([#286](https://github.com/dachrisch/dontforget/issues/286)) ([4949df3](https://github.com/dachrisch/dontforget/commit/4949df3fc95abba223c6a601777af2d7fcc52387))
+
 ## [0.28.42](https://github.com/dachrisch/dontforget/compare/v0.28.41...v0.28.42) (2026-10-15)
 
 
