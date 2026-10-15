@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.42](https://github.com/dachrisch/dontforget/compare/v0.28.41...v0.28.42) (2026-10-15)
+
+
+### Bug Fixes
+
+* **deps:** update dependency jsdom to v30.1.3 ([#283](https://github.com/dachrisch/dontforget/issues/283)) ([5148a8d](https://github.com/dachrisch/dontforget/commit/5148a8dad82ca023feb3bd604f3dfe34ad052ebc))
+
 ## [0.28.41](https://github.com/dachrisch/dontforget/compare/v0.28.40...v0.28.41) (2026-10-15)
 
 
