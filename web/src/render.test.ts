@@ -397,6 +397,7 @@ describe('renderWorkspace', () => {
           feed: { icsUrl: ICS_URL, rssUrl: 'https://x/f/t.rss', lastFetchedAt: null },
           editing: null,
           reviewing: null,
+          billing: null,
         },
         noopHandlers()
       );
@@ -800,6 +801,7 @@ describe('series nesting', () => {
         feed: null,
         editing: null,
         reviewing: null,
+        billing: null,
       },
       handlers
     );
@@ -828,6 +830,7 @@ describe('series nesting', () => {
         feed: null,
         editing,
         reviewing: null,
+        billing: null,
       },
       handlers
     );
@@ -988,6 +991,7 @@ describe('series nesting', () => {
         feed: null,
         editing: null,
         reviewing: null,
+        billing: null,
       },
       noopHandlers()
     );

@@ -8,6 +8,8 @@ import { SessionService, SESSION_COOKIE } from '../auth/session';
 import { createQuery } from './queriesRepo';
 import { insertDiscoveredSeries } from './seriesRepo';
 import { flushSearches } from './searchQueue';
+import { BillingService } from '../billing/billingService';
+import { FakeBillingGateway } from '../billing/stripeGateway';
 
 async function authenticatedUser(
   db: Db,
@@ -29,6 +31,7 @@ async function authenticatedUser(
     runQuery: (deps.runQuery as never) ?? vi.fn().mockResolvedValue({ events: [], cadence: null }),
     discoverSeries: deps.discoverSeries as never,
     runSeriesExpansion: deps.runSeriesExpansion as never,
+    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
   });
   return { app, userId, sessionId };
 }

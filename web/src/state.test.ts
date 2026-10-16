@@ -77,6 +77,7 @@ describe('reducer', () => {
       feed: null,
       editing: { queryId: 'q1', text: 'A', recurrenceInterval: 'monthly', events: [], series: null },
       reviewing: null,
+      billing: null,
     };
     const next = reducer(state, {
       type: 'EDIT_SERIES_LOADED',
@@ -114,6 +115,7 @@ describe('reducer', () => {
         ],
       },
       reviewing: null,
+      billing: null,
     };
     const events: EventDetail[] = [
       { id: 'e1', label: 'A1', startDate: '2026-04-11', endDate: '2026-04-11', sourceUrl: 'u', status: 'candidate', seriesId: 's1' },
@@ -146,6 +148,7 @@ describe('reducer', () => {
         series: [draft('s1', false)],
       },
       reviewing: null,
+      billing: null,
     };
     const selected = reducer(state, { type: 'TOGGLE_EDIT_SERIES', seriesId: 's1' });
     expect(selected).toMatchObject({
@@ -172,6 +175,7 @@ describe('reducer', () => {
         ],
       },
       reviewing: null,
+      billing: null,
     };
     const closed = reducer(state, { type: 'TOGGLE_EDIT_SERIES_EXPAND', seriesId: 's1' });
     expect(closed).toMatchObject({ editing: { series: [{ id: 's1', selected: true, expanded: false }] } });
@@ -194,6 +198,7 @@ describe('reducer', () => {
         ],
       },
       reviewing: null,
+      billing: null,
     };
     const next = reducer(state, {
       type: 'EDIT_SERIES_EVENTS_LOADED',
@@ -229,6 +234,7 @@ describe('reducer', () => {
         series: [],
       },
       reviewing: null,
+      billing: null,
     };
     const dismissed = reducer(state, { type: 'TOGGLE_EDIT_EVENT', id: 'e1' });
     expect(dismissed).toMatchObject({ editing: { events: [{ id: 'e1', decision: 'dismiss' }] } });
@@ -252,6 +258,7 @@ describe('reducer', () => {
         ],
       },
       reviewing: null,
+      billing: null,
     };
     const refreshed = {
       ...withSeries,
