@@ -74,4 +74,14 @@ describe('findDueQueries', () => {
 
     expect(due.map(q => q._id.toString()).sort()).toEqual([mine, theirs].sort());
   });
+
+  it('does not return a deactivated query even if its interval is due', async () => {
+    const { queryId } = await createQueryWithCandidates(db, userId, 'Paused', [], 'weekly');
+    await backdateLastRunAt(queryId, 8);
+    await db.collection('queries').updateOne({ _id: new ObjectId(queryId) }, { $set: { active: false } });
+
+    const due = await findDueQueries(db, new Date());
+
+    expect(due).toEqual([]);
+  });
 });

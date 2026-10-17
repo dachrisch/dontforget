@@ -1,11 +1,32 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import type { Db, MongoClient } from 'mongodb';
+import { ObjectId } from 'mongodb';
 import { setupTestDb, cleanTestDb, teardownTestDb } from '../testSupport';
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
 import { SessionService, SESSION_COOKIE } from '../auth/session';
 import { FakeBillingGateway, NullBillingGateway, BillingUnavailableError } from './stripeGateway';
 import { BillingService } from './billingService';
+
+async function authenticatedUser(db: Db, email = 'u@example.com') {
+  const { insertedId } = await db.collection('users').insertOne({ email });
+  const userId = insertedId.toString();
+  const sessionId = await new SessionService(db).createSession(userId);
+  const app = await buildApp({
+    db,
+    emailSender: new CapturingEmailSender(),
+    publicBaseUrl: 'http://localhost:3000',
+    frontendUrl: 'http://localhost:5173',
+    runQuery: async () => ({ events: [], cadence: null }),
+    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
+    webhookSecret: 'whsec_test',
+  });
+  return { app, userId, sessionId };
+}
+
+function authHeaders(sessionId: string): Record<string, string> {
+  return { cookie: `${SESSION_COOKIE}=${sessionId}` };
+}
 
 describe('billing routes', () => {
   let client: MongoClient;
@@ -102,5 +123,32 @@ describe('billing routes', () => {
     });
     expect(response.statusCode).toBe(503);
     expect(BillingUnavailableError).toBeDefined();
+  });
+
+  it('POST /api/billing/add-slots increases the subscription quantity', async () => {
+    const { app, userId, sessionId } = await authenticatedUser(db);
+    await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_quantity: 1 },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/billing/add-slots',
+      headers: authHeaders(sessionId),
+      payload: { count: 2 },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ purchasedSlots: 3 });
+  });
+
+  it('POST /api/billing/add-slots returns 503 without a subscription', async () => {
+    const { app, sessionId } = await authenticatedUser(db);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/billing/add-slots',
+      headers: authHeaders(sessionId),
+      payload: { count: 2 },
+    });
+    expect(response.statusCode).toBe(503);
   });
 });
