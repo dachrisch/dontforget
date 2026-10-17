@@ -340,4 +340,79 @@ describe('series review routes', () => {
     expect(await db.collection('series').countDocuments({ query_id: new ObjectId(query.queryId) })).toBe(2);
     expect(discoverSeries).toHaveBeenCalledTimes(1);
   });
+
+  it('POST review is rejected while the query is paused', async () => {
+    const runSeriesExpansion = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { runSeriesExpansion });
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Auer Dult', appliesTo: 'Auer Dult, Munich', description: 'd', searchKeywords: 'Auer Dult Munich Termine', sourceUrls: ['https://a.example'] },
+    ]);
+    await db.collection('queries').updateOne({ _id: query._id }, { $set: { active: false } });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/queries/${query.queryId}/series/review`,
+      headers: authHeaders(sessionId),
+      payload: { approveIds: [series.id] },
+    });
+    expect(response.statusCode).toBe(409);
+    await flushSearches();
+    // No costed expansion fired, and the approval never stuck.
+    expect(runSeriesExpansion).not.toHaveBeenCalled();
+    const row = await db.collection('series').findOne({ _id: new ObjectId(series.id) });
+    expect(row?.status).toBe('candidate');
+  });
+
+  it('POST refresh is rejected while the query is paused', async () => {
+    const discoverSeries = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { discoverSeries });
+    const query = await createQuery(db, userId, 'events in munich');
+    await db.collection('queries').updateOne({ _id: query._id }, { $set: { active: false } });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/queries/${query.queryId}/series/refresh`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(discoverSeries).not.toHaveBeenCalled();
+  });
+
+  it('POST expand is rejected while the query is paused', async () => {
+    const runQuery = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { runQuery });
+    const query = await createQuery(db, userId, 'events in munich');
+    const [series] = await insertDiscoveredSeries(db, query._id, userId, [
+      { title: 'Oktoberfest', appliesTo: 'Oktoberfest, Munich', description: 'd', searchKeywords: 'Oktoberfest Munich dates', sourceUrls: ['https://a.example'] },
+    ]);
+    await db.collection('queries').updateOne({ _id: query._id }, { $set: { active: false } });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/api/queries/${query.queryId}/series/${series.id}/expand`,
+      headers: authHeaders(sessionId),
+    });
+    expect(response.statusCode).toBe(409);
+    expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it('PATCH text is rejected while the query is paused', async () => {
+    const discoverSeries = vi.fn();
+    const { app, userId, sessionId } = await authenticatedUser(db, { discoverSeries });
+    const query = await createQuery(db, userId, 'events in munich');
+    await db.collection('queries').updateOne({ _id: query._id }, { $set: { active: false } });
+
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/api/queries/${query.queryId}`,
+      headers: authHeaders(sessionId),
+      payload: { text: 'events in berlin' },
+    });
+    expect(response.statusCode).toBe(409);
+    await flushSearches();
+    expect(discoverSeries).not.toHaveBeenCalled();
+    const row = await db.collection('queries').findOne({ _id: query._id });
+    expect(row?.query_text).toBe('events in munich');
+  });
 });

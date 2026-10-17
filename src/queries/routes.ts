@@ -71,6 +71,20 @@ async function queryRecurrenceInterval(db: Db, queryId: ObjectId): Promise<Recur
   return row?.recurrence_interval ?? DEFAULT_RECURRENCE_INTERVAL;
 }
 
+// The costed series operations (discovery refresh, review-triggered
+// expansion, on-demand expansion) each spend opencode's paid extraction, so
+// they share the query's slot gate: only an active query — one currently
+// occupying a paid slot — may trigger them. A paused query must be
+// reactivated first; a blocked one (which never held a slot) must be retried.
+// Returns the owner's active flag, or null when the query isn't the caller's.
+async function queryIsActive(db: Db, userId: string, queryId: ObjectId): Promise<boolean | null> {
+  const row = await db
+    .collection<{ active?: boolean }>('queries')
+    .findOne({ _id: queryId, user_id: userId }, { projection: { active: 1 } });
+  if (!row) return null;
+  return row.active !== false;
+}
+
 export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps): void {
   app.post<{ Body: { text: string; recurrenceInterval?: string } }>(
     '/api/queries',
@@ -118,6 +132,22 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       }
       if (body.text !== undefined && !body.text.trim()) {
         return reply.code(400).send({ error: 'text must not be empty' });
+      }
+
+      // Changing the text re-runs costed series discovery, so a paused query
+      // must be resumed first. Interval-only edits stay cost-free and allowed.
+      if (body.text !== undefined) {
+        const queryObjectId = ObjectId.isValid(request.params.id) ? new ObjectId(request.params.id) : null;
+        if (!queryObjectId) {
+          return reply.code(403).send({ error: 'not your query' });
+        }
+        const active = await queryIsActive(deps.db, request.userId!, queryObjectId);
+        if (active === null) {
+          return reply.code(403).send({ error: 'not your query' });
+        }
+        if (!active) {
+          return reply.code(409).send({ error: 'query is paused', reason: 'resume the query before editing its text' });
+        }
       }
 
       const updated = await updateQuery(deps.db, request.userId!, request.params.id, {
@@ -261,6 +291,15 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
     if (!queryObjectId) {
       return reply.code(403).send({ error: 'not your query' });
     }
+    // Subscribing to a series queues a costed expansion, so a paused query
+    // must be resumed (and hold a slot) before its series can be reviewed.
+    const active = await queryIsActive(deps.db, request.userId!, queryObjectId);
+    if (active === null) {
+      return reply.code(403).send({ error: 'not your query' });
+    }
+    if (!active) {
+      return reply.code(409).send({ error: 'query is paused', reason: 'resume the query before reviewing its series' });
+    }
     const updated = await reviewSeries(
       deps.db,
       request.userId!,
@@ -307,6 +346,14 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
       if (!queryObjectId) {
         return reply.code(403).send({ error: 'not your query' });
       }
+      // On-demand expansion is a costed agent run on the query's slot.
+      const active = await queryIsActive(deps.db, request.userId!, queryObjectId);
+      if (active === null) {
+        return reply.code(403).send({ error: 'not your query' });
+      }
+      if (!active) {
+        return reply.code(409).send({ error: 'query is paused', reason: 'resume the query before expanding its series' });
+      }
       const series = await getSeriesById(deps.db, request.userId!, queryObjectId, request.params.seriesId);
       if (!series) {
         return reply.code(403).send({ error: 'not your query' });
@@ -349,10 +396,15 @@ export function registerQueryRoutes(app: FastifyInstance, deps: QueryRouteDeps):
         return reply.code(403).send({ error: 'not your query' });
       }
       const row = await deps.db
-        .collection<{ _id: ObjectId; user_id: string; query_text: string }>('queries')
+        .collection<{ _id: ObjectId; user_id: string; query_text: string; active?: boolean }>('queries')
         .findOne({ _id: queryObjectId, user_id: request.userId! });
       if (!row) {
         return reply.code(403).send({ error: 'not your query' });
+      }
+      // Refresh runs a costed discovery pass on the query's slot; a paused
+      // query must be resumed first.
+      if (row.active === false) {
+        return reply.code(409).send({ error: 'query is paused', reason: 'resume the query before refreshing its series' });
       }
       try {
         const { series } = await deps.discoverSeries(row.query_text);
