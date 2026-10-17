@@ -31,6 +31,7 @@ describe('runMigrations', () => {
       '007_review_tokens.ts',
       '008_series.ts',
       '009_series_applies_to.ts',
+      '010_billing_users.ts',
     ]);
 
     const collections = await db.listCollections().toArray();
@@ -47,6 +48,7 @@ describe('runMigrations', () => {
         'model_metrics',
         'search_metrics',
         'series',
+        'stripe_events',
       ])
     );
 
@@ -72,6 +74,9 @@ describe('runMigrations', () => {
     expect(seriesIndexes.map(i => i.name)).toEqual(
       expect.arrayContaining(['query_id_1', 'query_id_1_normalized_title_1'])
     );
+
+    const usersIndexes = await db.collection('users').indexes();
+    expect(usersIndexes.map(i => i.name)).toEqual(expect.arrayContaining(['email_1', 'stripe_customer_id_1']));
 
     const secondRun = await runMigrations(db);
     expect(secondRun).toEqual([]);
