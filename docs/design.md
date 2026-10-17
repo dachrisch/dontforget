@@ -218,20 +218,38 @@ need answers before the detailed implementation spec:
 
 ## 9. Pricing & billing
 
-Decided model (see `docs/superpowers/plans/2026-08-18-stripe-billing.md`):
-**1 free query per account**, **€0.50/query after that**, billed monthly on
-however many queries are active. Implemented as one Stripe **graduated-tiered
-monthly Price** (tier 1 = first unit free, tier 2 = every further unit at
-€0.50); the subscription's **quantity equals the account's active query
-count** and dontforget only keeps it in sync — Stripe computes the bill.
+Decided model (see `docs/superpowers/specs/2026-08-20-query-credits-design.md`
+and its plan): **1 free query slot per account**, **€0.50 per extra slot per
+month**. Implemented as one Stripe **graduated-tiered monthly Price** (tier 1 =
+first unit free, tier 2 = every further unit at €0.50); the subscription's
+**quantity is the number of slots the account has paid for** — quota is bought
+in advance, not metered per run.
 
-- **Hard free-tier gate:** `POST /api/queries` returns `402` with a checkout
-  URL when the user has no active subscription and already holds ≥1 query,
-  checked **before** the search runs so searxng/opencode is never burned on a
-  query that cannot be created.
+- **Searching is free; only the agent is gated.** `POST /api/queries` always
+  saves the query. If a slot is free it runs immediately; otherwise it is saved
+  `blocked` and `runQuery` (searxng + opencode extraction) never fires for it.
+- **A slot = one active (non-deactivated) query.** `active` governs slot
+  occupancy, feed inclusion, and scheduler eligibility, independent of
+  `status`. Slot availability is `active count < purchased quantity`.
+- **Pausing frees a slot without changing what you pay.** `deactivate` flips
+  `active:false` (never touches billing); its events disappear from the
+  calendar/RSS feed and it is skipped by the scheduler. `reactivate` is
+  slot-gated and never triggers a run by itself — a `ready` query's events
+  reappear, a `failed` one shows its "Try again". Only `blocked` queries go
+  through `POST /api/queries/:id/run` (retry), the one path that can trigger a
+  costed run.
+- **Buying credits = raising the subscription quantity.** `POST
+  /api/billing/add-slots` (subscribed users) and the `quantity` param on
+  checkout (first-time subscribers) prepay for more slots. `DELETE
+  /api/queries/:id` auto-shrinks the quantity for a slot that was actually
+  occupied; free/paused queries release nothing.
+- **Costed series operations share the slot gate.** Series discovery
+  (refresh), review-triggered expansion, and on-demand expansion each spend
+  opencode extraction, so they are only accepted while the query is active.
 - **Checkout/Portal on Stripe's domains:** the backend only ever stores and
   forwards Stripe object ids (`cus_…`, `sub_…`); no card data touches our
-  servers. The webhook is signature-verified and dedupes by event id.
+  servers. The webhook is signature-verified, updates status/quantity, and
+  claims event-id idempotency only after its work succeeds.
 - **Follow-up knobs:** annual cadence is a one-line config swap
   (`STRIPE_PRICE_ID`); scheduler-side enforcement for lapsed subscriptions
   (a canceled subscription stops *new* queries but not re-runs of existing
