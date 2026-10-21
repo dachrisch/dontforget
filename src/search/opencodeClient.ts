@@ -21,17 +21,21 @@ import type { MetricsService } from './metrics.js';
 const insecureDispatcher =
   process.env.OPENCODE_ALLOW_INSECURE_TLS === 'true' ? new Agent({ connect: { rejectUnauthorized: false } }) : undefined;
 
-// Contract confirmed live against code.lehel.xyz on 2026-08-09 — the
-// plan's original guess (single POST .../message returning parts[] inline)
-// was wrong on every point. The real shape:
-//   POST /api/session            -> {"data": {"id": "ses_...", ...}}
-//   POST /api/session/:id/prompt -> {"data": {"id":"msg_...", "delivery":"steer", ...}} (an ack, not the reply)
-//   GET  /api/session/:id/wait   -> 503 "Session wait is not available yet" (not usable)
-//   GET  /api/session/:id/message -> {"data": [<newest message first>, ...]}
-// So the reply has to be polled for: keep GETting .../message until the
-// newest entry is an assistant message with `finish` set (or `finish:
-// "error"`, e.g. a transient upstream 503 from the model provider — seen
-// live during this same verification).
+// Contract confirmed live against opencode 2.1.2 (V2 API):
+//   POST /api/session              -> {"data": {"id": "ses_...", ...}}
+//   POST /api/session/:id/prompt   -> {"text": "..."} in, ack out (not the reply)
+//   GET  /api/session/:id/message  -> {"data": [...], "cursor": {...}}, newest
+//                                     first; ?limit=N&order=desc pages it
+//   POST /api/session/:id/interrupt -> {"interrupted": bool} (stops the run;
+//                                     V2 has no /abort — that 404s)
+//   DELETE /api/session/:id        -> drops the session
+// The reply still has to be polled for: keep GETting .../message until an
+// assistant message has finished. V2 appends non-assistant entries after a
+// turn — `idle` (with outcome), `system`, `synthetic` and the next `user`
+// prompt — so the newest entry is NOT reliably the assistant reply and the
+// poller must scan the page for it. A step that ends `tool-calls` is not
+// terminal (opencode keeps going); `error` carries the upstream failure
+// (e.g. a transient 503 from the model provider).
 const POLL_INTERVAL_MS = 1000;
 // Generous on purpose: agent-mode models on opencode routinely spend 60-90s
 // reasoning before their first text token (deepseek-v4-flash-free measured
@@ -41,8 +45,11 @@ const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 120_000;
 
 interface OpencodeMessage {
-  type: 'user' | 'assistant';
+  // V2 also emits non-assistant entries (idle/system/synthetic/user) around
+  // the assistant turn — only assistant entries carry the reply.
+  type: 'user' | 'assistant' | 'idle' | 'system' | 'synthetic';
   finish?: string;
+  outcome?: string;
   content?: Array<{ type: string; text?: string }>;
   error?: { message: string };
 }
@@ -114,8 +121,9 @@ async function runExtraction<T>(
   for (const model of models) {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       const started = Date.now();
+      let sessionId: string | undefined;
       try {
-        const sessionId = await createSession(baseUrl, apiKey, model);
+        sessionId = await createSession(baseUrl, apiKey, model);
         await sendPrompt(baseUrl, apiKey, sessionId, build(query, results));
         const replyText = await pollForReply(baseUrl, apiKey, sessionId);
         const parsed = parse(replyText);
@@ -127,6 +135,9 @@ async function runExtraction<T>(
         });
         return parsed;
       } catch (err) {
+        if (sessionId) {
+          await discardSession(baseUrl, apiKey, sessionId);
+        }
         lastError = err;
         await metrics.recordModelCall({
           modelId: model.id,
@@ -197,7 +208,7 @@ async function sendPrompt(baseUrl: string, apiKey: string, sessionId: string, te
   const response = await undiciFetch(`${baseUrl}/api/session/${sessionId}/prompt`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': apiKey },
-    body: JSON.stringify({ prompt: { text } }),
+    body: JSON.stringify({ text }),
     dispatcher: insecureDispatcher,
   });
   if (!response.ok) {
@@ -205,11 +216,37 @@ async function sendPrompt(baseUrl: string, apiKey: string, sessionId: string, te
   }
 }
 
+// A failed attempt leaves its opencode session running server-side: opencode
+// keeps computing a reply we have given up on, which burns quota for nothing.
+// V2 has no /abort — POST /interrupt stops the run, DELETE drops the session.
+// Best-effort by design: cleanup must never throw over the real error that
+// sent us here.
+async function discardSession(baseUrl: string, apiKey: string, sessionId: string): Promise<void> {
+  try {
+    await undiciFetch(`${baseUrl}/api/session/${sessionId}/interrupt`, {
+      method: 'POST',
+      headers: { 'X-Api-Key': apiKey },
+      dispatcher: insecureDispatcher,
+    });
+  } catch {
+    // ignore — best effort
+  }
+  try {
+    await undiciFetch(`${baseUrl}/api/session/${sessionId}`, {
+      method: 'DELETE',
+      headers: { 'X-Api-Key': apiKey },
+      dispatcher: insecureDispatcher,
+    });
+  } catch {
+    // ignore — best effort
+  }
+}
+
 async function pollForReply(baseUrl: string, apiKey: string, sessionId: string): Promise<string> {
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
-    const response = await undiciFetch(`${baseUrl}/api/session/${sessionId}/message`, {
+    const response = await undiciFetch(`${baseUrl}/api/session/${sessionId}/message?limit=50&order=desc`, {
       headers: { 'X-Api-Key': apiKey },
       dispatcher: insecureDispatcher,
     });
@@ -217,9 +254,13 @@ async function pollForReply(baseUrl: string, apiKey: string, sessionId: string):
       throw new Error(`opencode message poll failed: ${response.status}`);
     }
     const data = (await response.json()) as { data: OpencodeMessage[] };
-    const latest = data.data[0];
+    // Newest first, but the newest entry is not necessarily the reply: V2
+    // appends idle/system/synthetic/user entries after the assistant turn.
+    // Take the newest assistant entry (skipping anything else in the page);
+    // `tool-calls` means the run continues into another step.
+    const latest = data.data.find(m => m.type === 'assistant');
 
-    if (latest?.type === 'assistant' && latest.finish) {
+    if (latest?.finish && latest.finish !== 'tool-calls') {
       if (latest.finish === 'error') {
         throw new Error(`opencode generation failed: ${latest.error?.message ?? 'unknown error'}`);
       }
