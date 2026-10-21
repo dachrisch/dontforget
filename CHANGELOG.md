@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.28.51](https://github.com/dachrisch/dontforget/compare/v0.28.50...v0.28.51) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/static to v10.1.7 ([#305](https://github.com/dachrisch/dontforget/issues/305)) ([1dcce33](https://github.com/dachrisch/dontforget/commit/1dcce339ec6bfb6d55c51471681398628d74b888))
+* **opencode:** migrate client to OpenCode V2 API ([0201284](https://github.com/dachrisch/dontforget/commit/02012849b4468676391c7eefbb381f5cdd3f09cf))
+* **opencode:** migrate client to OpenCode V2 API ([e251066](https://github.com/dachrisch/dontforget/commit/e251066dbacc79092b1ad96e70081cb80b1db58e)), closes [#302](https://github.com/dachrisch/dontforget/issues/302)
+
 ## [0.28.50](https://github.com/dachrisch/dontforget/compare/v0.28.49...v0.28.50) (2026-10-21)
 
 
