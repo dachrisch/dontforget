@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 
-const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
+const { fetchMock, cleanupFetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn(), cleanupFetchMock: vi.fn() }));
 
 // opencodeClient.ts imports fetch/Agent from 'undici' directly (not the
 // global fetch) — passing an Agent from the standalone `undici` package to
@@ -9,9 +9,21 @@ const { fetchMock } = vi.hoisted(() => ({ fetchMock: vi.fn() }));
 // replace undici's own `fetch` export, not global fetch. vi.mock calls are
 // hoisted above imports, so this takes effect before opencodeClient.ts
 // (imported below) resolves its own `import { fetch } from 'undici'`.
+//
+// Session-cleanup calls (interrupt/DELETE) go to their own mock: they are
+// best-effort side effects of a failed attempt, so routing them away from
+// `fetchMock` keeps each test's once-queue in step with the
+// session/prompt/poll sequence it describes.
 vi.mock('undici', async importOriginal => {
   const actual = await importOriginal<typeof import('undici')>();
-  return { ...actual, fetch: fetchMock };
+  return {
+    ...actual,
+    fetch: (url: string, init?: { method?: string }) => {
+      const method = init?.method ?? 'GET';
+      if (method === 'DELETE' || url.endsWith('/interrupt')) return cleanupFetchMock(url, init);
+      return fetchMock(url, init);
+    },
+  };
 });
 
 import {
@@ -24,6 +36,12 @@ import {
 
 afterEach(() => {
   fetchMock.mockReset();
+  cleanupFetchMock.mockReset();
+});
+
+beforeEach(() => {
+  // Cleanup is best-effort: a successful interrupt/DELETE is the normal case.
+  cleanupFetchMock.mockResolvedValue({ ok: true, json: async () => ({ interrupted: true }) });
 });
 
 function sessionResponse(id: string) {
@@ -80,11 +98,11 @@ describe('extractDates', () => {
       expect.objectContaining({ method: 'POST' })
     );
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(typeof promptBody.prompt.text).toBe('string');
-    expect(promptBody.prompt.text).toMatch(/cadence/);
+    expect(typeof promptBody.text).toBe('string');
+    expect(promptBody.text).toMatch(/cadence/);
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      'https://code.lehel.xyz/api/session/ses_123/message',
+      'https://code.lehel.xyz/api/session/ses_123/message?limit=50&order=desc',
       expect.objectContaining({ headers: expect.objectContaining({ 'X-Api-Key': 'test-key' }) })
     );
     expect(result).toEqual({
@@ -131,6 +149,67 @@ describe('extractDates', () => {
       ],
       cadence: null,
     });
+  });
+
+  // V2 appends non-assistant entries (idle/system/synthetic/user) AFTER the
+  // assistant turn, so the newest entry is usually NOT the reply. Reading
+  // data[0] as the assistant message made the poller run until timeout.
+  it('finds the assistant reply when newer idle/system entries follow it', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_idle'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { type: 'idle', outcome: 'succeeded' },
+            { type: 'system', text: 'session idle' },
+            { type: 'assistant', finish: 'stop', content: [{ type: 'text', text: '{"events":[],"cadence":"yearly"}' }] },
+            { type: 'user', text: 'the prompt' },
+          ],
+        }),
+      });
+
+    const result = await extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
+    expect(result).toEqual({ events: [], cadence: 'yearly' });
+  });
+
+  it('keeps polling while the newest assistant step is a tool call, then parses the final reply', async () => {
+    fetchMock
+      .mockResolvedValueOnce(sessionResponse('ses_tools'))
+      .mockResolvedValueOnce(promptAckResponse())
+      // Mid-turn: the newest assistant entry is still streaming (no finish),
+      // and the completed step below it only asked for tools.
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { type: 'assistant', content: [{ type: 'text', text: '' }] },
+            { type: 'assistant', finish: 'tool-calls', content: [{ type: 'tool', text: 'search' }] },
+            { type: 'user', text: 'the prompt' },
+          ],
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          data: [
+            { type: 'idle', outcome: 'succeeded' },
+            { type: 'assistant', finish: 'stop', content: [{ type: 'text', text: '{"events":[],"cadence":null}' }] },
+            { type: 'assistant', finish: 'tool-calls', content: [{ type: 'tool', text: 'search' }] },
+            { type: 'user', text: 'the prompt' },
+          ],
+        }),
+      });
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
+    await vi.advanceTimersByTimeAsync(1000);
+    const result = await promise;
+
+    vi.useRealTimers();
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result).toEqual({ events: [], cadence: null });
   });
 
   function generationErrorResponse(message: string) {
@@ -296,6 +375,52 @@ describe('extractDates', () => {
       model: { id: 'primary', providerID: 'opencode' },
     });
   });
+
+  it('interrupts and deletes the abandoned session when an attempt fails', async () => {
+    fetchMock
+      // Attempt 1: the prompt was accepted, then generation errored out.
+      .mockResolvedValueOnce(sessionResponse('ses_leak'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'))
+      // Attempt 2 succeeds, so the run itself still completes.
+      .mockResolvedValueOnce(sessionResponse('ses_ok'))
+      .mockResolvedValueOnce(promptAckResponse())
+      .mockResolvedValueOnce(assistantMessageResponse('{"events":[],"cadence":null}'));
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', []);
+    await vi.runAllTimersAsync();
+    await promise;
+    vi.useRealTimers();
+
+    // V2 has no /abort: interrupt the in-flight run, then drop the session.
+    expect(cleanupFetchMock.mock.calls.map(([url, init]) => `${init?.method} ${url}`)).toEqual([
+      'POST https://code.lehel.xyz/api/session/ses_leak/interrupt',
+      'DELETE https://code.lehel.xyz/api/session/ses_leak',
+    ]);
+    const allUrls = [...cleanupFetchMock.mock.calls, ...fetchMock.mock.calls].map(([url]) => String(url));
+    expect(allUrls.some(url => url.includes('/abort'))).toBe(false);
+  });
+
+  it('does not let a failing cleanup mask the original error', async () => {
+    cleanupFetchMock.mockRejectedValue(new Error('cleanup exploded'));
+    const models = [{ id: 'primary', providerID: 'opencode' }];
+    for (let i = 0; i < 3; i++) {
+      fetchMock
+        .mockResolvedValueOnce(sessionResponse(`ses_${i}`))
+        .mockResolvedValueOnce(promptAckResponse())
+        .mockResolvedValueOnce(generationErrorResponse('Upstream request failed: Endpoint is unavailable.'));
+    }
+    vi.useFakeTimers();
+
+    const promise = extractDates('https://code.lehel.xyz', 'test-key', 'query', [], { models });
+    const assertion = expect(promise).rejects.toThrow('Endpoint is unavailable');
+    await vi.runAllTimersAsync();
+    await assertion;
+
+    vi.useRealTimers();
+    expect(cleanupFetchMock).toHaveBeenCalledTimes(6);
+  });
 });
 
 describe('seriesIdentityKey', () => {
@@ -336,11 +461,11 @@ describe('extractSeries', () => {
     ]);
 
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(promptBody.prompt.text).toMatch(/applies to/i);
-    expect(promptBody.prompt.text).toMatch(/appliesTo/);
-    expect(promptBody.prompt.text).toMatch(/canonical and stable across runs/);
-    expect(promptBody.prompt.text).toMatch(/identical appliesTo values/);
-    expect(promptBody.prompt.text).toMatch(/searchKeywords/);
+    expect(promptBody.text).toMatch(/applies to/i);
+    expect(promptBody.text).toMatch(/appliesTo/);
+    expect(promptBody.text).toMatch(/canonical and stable across runs/);
+    expect(promptBody.text).toMatch(/identical appliesTo values/);
+    expect(promptBody.text).toMatch(/searchKeywords/);
     expect(result).toEqual({
       series: [
         {
@@ -449,9 +574,9 @@ describe('extractSeriesDates', () => {
     );
 
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(promptBody.prompt.text).toMatch(/Stadtfest Minden, Minden/);
-    expect(promptBody.prompt.text).toMatch(/only concrete dates that are occurrences of THIS series/i);
-    expect(promptBody.prompt.text).toMatch(/Ignore dates belonging to any other event/i);
+    expect(promptBody.text).toMatch(/Stadtfest Minden, Minden/);
+    expect(promptBody.text).toMatch(/only concrete dates that are occurrences of THIS series/i);
+    expect(promptBody.text).toMatch(/Ignore dates belonging to any other event/i);
     expect(result).toEqual({
       events: [
         {
@@ -485,8 +610,8 @@ describe('extractSeriesDates', () => {
     );
 
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
-    expect(promptBody.prompt.text).toMatch(/between 2026-08-01 and 2026-08-15/);
-    expect(promptBody.prompt.text).toMatch(/current cadence and the next/i);
+    expect(promptBody.text).toMatch(/between 2026-08-01 and 2026-08-15/);
+    expect(promptBody.text).toMatch(/current cadence and the next/i);
   });
 
   it('still asks for the series cadence even when no dates fall in the window (issue #199)', async () => {
@@ -511,8 +636,8 @@ describe('extractSeriesDates', () => {
     const promptBody = JSON.parse(fetchMock.mock.calls[1][1].body);
     // The window limits events only — cadence is judged from the results as
     // a whole, even when the events list is empty.
-    expect(promptBody.prompt.text).toMatch(/still judge the series' own cadence|judge how often/i);
-    expect(promptBody.prompt.text).toMatch(/never force cadence to null just because the events list is empty/i);
+    expect(promptBody.text).toMatch(/still judge the series' own cadence|judge how often/i);
+    expect(promptBody.text).toMatch(/never force cadence to null just because the events list is empty/i);
     expect(result).toEqual({ events: [], cadence: 'yearly' });
   });
 });
