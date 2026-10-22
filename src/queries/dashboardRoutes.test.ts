@@ -9,20 +9,22 @@ import { approveEvents } from './approveEvents';
 import { flushSearches } from './searchQueue';
 import { FakeBillingGateway } from '../billing/stripeGateway';
 import { BillingService } from '../billing/billingService';
+import type { ExtractionResult } from '../types';
 
 async function authenticatedUser(db: Db, email = 'u@example.com') {
   const { insertedId } = await db.collection('users').insertOne({ email });
   const userId = insertedId.toString();
   const sessionId = await new SessionService(db).createSession(userId);
+  const gateway = new FakeBillingGateway();
   const app = await buildApp({
     db,
     emailSender: new CapturingEmailSender(),
     publicBaseUrl: 'http://localhost:3000',
     frontendUrl: 'http://localhost:5173',
     runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
-    billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
+    billingService: new BillingService(db, gateway, 'price_graduated'),
   });
-  return { app, userId, sessionId };
+  return { app, userId, sessionId, gateway };
 }
 
 function authHeaders(sessionId: string): Record<string, string> {
@@ -360,6 +362,178 @@ describe('query dashboard routes', () => {
     expect(response.statusCode).toBe(403);
   });
 
+  describe('POST /api/queries/:id/run — blocked queries', () => {
+    it('claims a free slot and runs when one is available', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []); // occupies the one free slot
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+      await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+        $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 2 },
+      });
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/run`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(202);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+      expect(row?.status).toBe('running');
+    });
+
+    it('returns 409 when still no free slot', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/run`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(false);
+      expect(row?.status).toBe('blocked');
+    });
+  });
+
+  describe('POST /api/queries/:id/run — paused queries', () => {
+    it('rejects a paused ready query with a distinct reason — retry never doubles as resume', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const deactivateResponse = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(deactivateResponse.statusCode).toBe(204);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/run`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+      expect(response.json()).toEqual({ error: 'query is paused', reason: 'resume this query first' });
+
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(false);
+      expect(row?.status).toBe('ready'); // not flipped to running
+    });
+  });
+
+  describe('POST /api/queries/:id/deactivate', () => {
+    it('requires auth', async () => {
+      const { app } = await authenticatedUser(db);
+      const response = await app.inject({ method: 'POST', url: '/api/queries/000000000000000000000000/deactivate' });
+      expect(response.statusCode).toBe(401);
+    });
+
+    it('pauses a ready query without touching billing', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(false);
+      expect(row?.status).toBe('ready'); // status untouched
+    });
+
+    it('rejects pausing a running query', async () => {
+      const { insertedId } = await db.collection('users').insertOne({ email: 'stillrunning@example.com' });
+      const userId = insertedId.toString();
+      const sessionId = await new SessionService(db).createSession(userId);
+      const app = await buildApp({
+        db,
+        emailSender: new CapturingEmailSender(),
+        publicBaseUrl: 'http://localhost:3000',
+        frontendUrl: 'http://localhost:5173',
+        runQuery: vi.fn((): Promise<ExtractionResult> => new Promise(() => {})), // never resolves — query stays 'running'
+        billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
+      });
+
+      const response1 = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Oktoberfest' },
+      });
+      const { queryId } = response1.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+    });
+
+    it('returns 403 for a query the user does not own', async () => {
+      const { app, sessionId } = await authenticatedUser(db);
+      const { userId: otherUserId } = await authenticatedUser(db, 'other2@example.com');
+      const { queryId } = await createQueryWithCandidates(db, otherUserId, 'Not yours', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  describe('POST /api/queries/:id/reactivate', () => {
+    it('resumes a paused query when a slot is free — no agent run', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', [
+        { label: 'Fest', startDate: '2026-09-01', endDate: '2026-09-01', sourceUrl: 'u' },
+      ]);
+      await app.inject({ method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId) });
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      const row = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(row?.active).toBe(true);
+      expect(row?.status).toBe('ready'); // unchanged — it already had results
+    });
+
+    it('returns 409 when no slot is free', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      await app.inject({ method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId) });
+      await createQueryWithCandidates(db, userId, 'Something else', []); // takes the now-free slot
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+
+    it('rejects reactivating a blocked query — it never held a slot', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+
+    it('rejects reactivating an already-active query', async () => {
+      const { app, userId, sessionId } = await authenticatedUser(db);
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+      const response = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/reactivate`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(409);
+    });
+  });
+
   it('POST rejects an invalid recurrence interval', async () => {
     const { app, sessionId } = await authenticatedUser(db);
     const response = await app.inject({
@@ -498,7 +672,7 @@ describe('query dashboard routes', () => {
     expect(response.statusCode).toBe(202);
   });
 
-  it('POST /api/queries returns 402 for a second query without a subscription', async () => {
+  it('POST /api/queries always creates the query, even at capacity', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db);
     await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
 
@@ -508,15 +682,18 @@ describe('query dashboard routes', () => {
       headers: authHeaders(sessionId),
       payload: { text: 'Auer Dult' },
     });
-    expect(response.statusCode).toBe(402);
-    expect(response.json().checkoutUrl).toBe('/api/billing/checkout');
+    expect(response.statusCode).toBe(202);
+
+    const row = await db.collection('queries').findOne({ user_id: userId, query_text: 'Auer Dult' });
+    expect(row?.status).toBe('blocked');
+    expect(row?.active).toBe(false);
   });
 
-  it('POST /api/queries allows a second query for a subscribed user and syncs quantity', async () => {
+  it('POST /api/queries allows a second query for a subscribed user with a free slot', async () => {
     const { app, userId, sessionId } = await authenticatedUser(db);
     await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
     await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
-      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active' },
+      $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 2 },
     });
 
     const response = await app.inject({
@@ -526,6 +703,9 @@ describe('query dashboard routes', () => {
       payload: { text: 'Auer Dult' },
     });
     expect(response.statusCode).toBe(202);
+    const row = await db.collection('queries').findOne({ user_id: userId, query_text: 'Auer Dult' });
+    expect(row?.status).toBe('running');
+    expect(row?.active).toBe(true);
   });
 
   it('DELETE syncs the subscription quantity down', async () => {
@@ -541,5 +721,59 @@ describe('query dashboard routes', () => {
       headers: authHeaders(sessionId),
     });
     expect(response.statusCode).toBe(204);
+  });
+
+  describe('DELETE /api/queries/:id — only releases a slot the query actually held', () => {
+    it('still releases a slot when deleting a normal active query', async () => {
+      const { app, userId, sessionId, gateway } = await authenticatedUser(db);
+      await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+        $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 3 },
+      });
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+
+      const response = await app.inject({
+        method: 'DELETE', url: `/api/queries/${queryId}`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      expect(gateway.quantityUpdates).toEqual([{ subscriptionId: 'sub_1', quantity: 2 }]);
+    });
+
+    it('does not release a slot when deleting a blocked query — it never held one', async () => {
+      const { app, userId, sessionId, gateway } = await authenticatedUser(db);
+      await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+        $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 1 },
+      });
+      await createQueryWithCandidates(db, userId, 'Oktoberfest', []); // occupies the one purchased slot
+      const blockedResponse = await app.inject({
+        method: 'POST', url: '/api/queries', headers: authHeaders(sessionId), payload: { text: 'Auer Dult' },
+      });
+      const { queryId } = blockedResponse.json();
+      const blockedRow = await db.collection('queries').findOne({ _id: new ObjectId(queryId) });
+      expect(blockedRow?.status).toBe('blocked');
+
+      const response = await app.inject({
+        method: 'DELETE', url: `/api/queries/${queryId}`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      expect(gateway.quantityUpdates).toHaveLength(0);
+    });
+
+    it('does not release a slot when deleting a paused query', async () => {
+      const { app, userId, sessionId, gateway } = await authenticatedUser(db);
+      await db.collection('users').updateOne({ _id: new ObjectId(userId) }, {
+        $set: { stripe_subscription_id: 'sub_1', stripe_subscription_status: 'active', stripe_subscription_quantity: 2 },
+      });
+      const { queryId } = await createQueryWithCandidates(db, userId, 'Oktoberfest', []);
+      const deactivateResponse = await app.inject({
+        method: 'POST', url: `/api/queries/${queryId}/deactivate`, headers: authHeaders(sessionId),
+      });
+      expect(deactivateResponse.statusCode).toBe(204);
+
+      const response = await app.inject({
+        method: 'DELETE', url: `/api/queries/${queryId}`, headers: authHeaders(sessionId),
+      });
+      expect(response.statusCode).toBe(204);
+      expect(gateway.quantityUpdates).toHaveLength(0);
+    });
   });
 });
