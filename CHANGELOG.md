@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.53](https://github.com/dachrisch/dontforget/compare/v0.28.52...v0.28.53) (2026-10-27)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/cookie to v11.1.5 ([#308](https://github.com/dachrisch/dontforget/issues/308)) ([a210cf1](https://github.com/dachrisch/dontforget/commit/a210cf1c99d080193cce2270ec34f516eeb9a66b))
+
 ## [0.28.52](https://github.com/dachrisch/dontforget/compare/v0.28.51...v0.28.52) (2026-10-22)
 
 
