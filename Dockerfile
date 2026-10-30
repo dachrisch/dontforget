@@ -5,7 +5,7 @@
 # registers @fastify/static against ../web/dist relative to dist/server.js).
 
 # ---- deps: install all dependencies (incl. dev) for both npm packages ----
-FROM node:24-alpine AS deps
+FROM node:26-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -19,13 +19,13 @@ RUN npm run build
 RUN npm --prefix web run build
 
 # ---- prod-deps: production-only backend dependencies (no typescript/vitest/etc) ----
-FROM node:24-alpine AS prod-deps
+FROM node:26-alpine AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 # ---- runtime: slim image with only what's needed to run the server ----
-FROM node:24-alpine AS runtime
+FROM node:26-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
