@@ -9,6 +9,8 @@ import { registerReviewRoutes } from './routes';
 import { registerFeedRoutes } from '../feed/routes';
 import { buildApp } from '../app';
 import { CapturingEmailSender } from '../email/EmailSender';
+import { BillingService } from '../billing/billingService';
+import { FakeBillingGateway } from '../billing/stripeGateway';
 
 describe('review tokens', () => {
   let client: MongoClient;
@@ -372,6 +374,7 @@ describe('review callback route', () => {
       publicBaseUrl: 'http://localhost:3000',
       frontendUrl: 'http://localhost:5173',
       runQuery: vi.fn().mockResolvedValue({ events: [], cadence: null }),
+      billingService: new BillingService(db, new FakeBillingGateway(), 'price_graduated'),
     });
     const response = await app.inject({
       method: 'GET',
