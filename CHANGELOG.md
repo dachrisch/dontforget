@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.61](https://github.com/dachrisch/dontforget/compare/v0.28.60...v0.28.61) (2026-11-03)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/rate-limit to v11.2.2 ([#324](https://github.com/dachrisch/dontforget/issues/324)) ([d78befe](https://github.com/dachrisch/dontforget/commit/d78befe147b35cb04071308dabf352487e6e667d))
+
 ## [0.28.60](https://github.com/dachrisch/dontforget/compare/v0.28.59...v0.28.60) (2026-11-02)
 
 
