@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.64](https://github.com/dachrisch/dontforget/compare/v0.28.63...v0.28.64) (2026-11-05)
+
+
+### Bug Fixes
+
+* **deps:** update dependency undici to v8.12.4 ([#330](https://github.com/dachrisch/dontforget/issues/330)) ([1e82f4d](https://github.com/dachrisch/dontforget/commit/1e82f4da9f2f691ecd5c15d779ce5a6601cc9b7b))
+* **deps:** update dependency vite to v8.3.6 ([#331](https://github.com/dachrisch/dontforget/issues/331)) ([3c9cce5](https://github.com/dachrisch/dontforget/commit/3c9cce537626209886e7979c909865600387813a))
+
 ## [0.28.63](https://github.com/dachrisch/dontforget/compare/v0.28.62...v0.28.63) (2026-11-04)
 
 
