@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.69](https://github.com/dachrisch/dontforget/compare/v0.28.68...v0.28.69) (2026-11-10)
+
+
+### Bug Fixes
+
+* **deps:** update dependency nodemailer to v10.5.0 ([#342](https://github.com/dachrisch/dontforget/issues/342)) ([5915244](https://github.com/dachrisch/dontforget/commit/5915244e9549afb85f40e788e3684f65cbe4ce89))
+
 ## [0.28.68](https://github.com/dachrisch/dontforget/compare/v0.28.67...v0.28.68) (2026-11-10)
 
 
