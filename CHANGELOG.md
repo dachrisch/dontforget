@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.71](https://github.com/dachrisch/dontforget/compare/v0.28.70...v0.28.71) (2026-11-12)
+
+
+### Bug Fixes
+
+* **deps:** update dependency mongodb to v7.9.0 ([#346](https://github.com/dachrisch/dontforget/issues/346)) ([c2c0c36](https://github.com/dachrisch/dontforget/commit/c2c0c3691f40f4d9f0233b52abd3caa32c63d4cb))
+
 ## [0.28.70](https://github.com/dachrisch/dontforget/compare/v0.28.69...v0.28.70) (2026-11-11)
 
 
