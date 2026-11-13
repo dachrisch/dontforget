@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.73](https://github.com/dachrisch/dontforget/compare/v0.28.72...v0.28.73) (2026-11-13)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/static to v10.1.11 ([#350](https://github.com/dachrisch/dontforget/issues/350)) ([5b37fc1](https://github.com/dachrisch/dontforget/commit/5b37fc1b818b4d606c00d6ae85f81c2c029ddd48))
+
 ## [0.28.72](https://github.com/dachrisch/dontforget/compare/v0.28.71...v0.28.72) (2026-11-13)
 
 
