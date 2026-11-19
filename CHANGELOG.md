@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.77](https://github.com/dachrisch/dontforget/compare/v0.28.76...v0.28.77) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/static to v10.1.12 ([#357](https://github.com/dachrisch/dontforget/issues/357)) ([02eccd4](https://github.com/dachrisch/dontforget/commit/02eccd44493a123088cc632afca7c01e1974627a))
+* **deps:** update dependency mongodb to v7.9.1 ([#358](https://github.com/dachrisch/dontforget/issues/358)) ([6694c82](https://github.com/dachrisch/dontforget/commit/6694c8264b296726f68c249cfea978cff78825d8))
+
 ## [0.28.76](https://github.com/dachrisch/dontforget/compare/v0.28.75...v0.28.76) (2026-11-19)
 
 
