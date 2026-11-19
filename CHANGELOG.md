@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.76](https://github.com/dachrisch/dontforget/compare/v0.28.75...v0.28.76) (2026-11-19)
+
+
+### Bug Fixes
+
+* **deps:** update dependency undici to v8.12.4 ([#333](https://github.com/dachrisch/dontforget/issues/333)) ([eb3306b](https://github.com/dachrisch/dontforget/commit/eb3306beda3c48760213c26b5dc686cc77f18da3))
+
 ## [0.28.75](https://github.com/dachrisch/dontforget/compare/v0.28.74...v0.28.75) (2026-11-18)
 
 
