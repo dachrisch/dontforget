@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.28.80](https://github.com/dachrisch/dontforget/compare/v0.28.79...v0.28.80) (2026-11-20)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @fastify/rate-limit to v11.3.0 ([#365](https://github.com/dachrisch/dontforget/issues/365)) ([f4d3c11](https://github.com/dachrisch/dontforget/commit/f4d3c11bdeb852087c9208bd596df2fc7fc82bf0))
+* **deps:** update dependency undici to v8.13.1 ([#364](https://github.com/dachrisch/dontforget/issues/364)) ([aa9d8c4](https://github.com/dachrisch/dontforget/commit/aa9d8c4a3b4651ae96c3b3add1d30aa217b71ce4))
+
 ## [0.28.79](https://github.com/dachrisch/dontforget/compare/v0.28.78...v0.28.79) (2026-11-20)
 
 
